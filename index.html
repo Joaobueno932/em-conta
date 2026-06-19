@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EM CONTA | Assistente do Projeto Lixo Zero</title>
+  <meta name="description" content="Assistente do Projeto Lixo Zero do CSI para tirar dúvidas sobre descarte correto de resíduos." />
+  <style>
+    :root {
+      --verde: #4caf2f;
+      --verde-escuro: #1f5d38;
+      --verde-profundo: #123823;
+      --azul: #0c3048;
+      --azul-claro: #eaf4f8;
+      --branco: #ffffff;
+      --cinza: #f5f8f4;
+      --texto: #173324;
+      --muted: #5d7166;
+      --sombra: 0 18px 50px rgba(18, 56, 35, 0.14);
+      --radius: 26px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: Inter, Arial, Helvetica, sans-serif;
+      color: var(--texto);
+      background: linear-gradient(180deg, #ffffff 0%, #f5faf3 48%, #eef7ec 100%);
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .page {
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .blob {
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(4px);
+      opacity: .16;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .blob.one {
+      width: 520px;
+      height: 520px;
+      background: var(--verde);
+      top: -230px;
+      right: -180px;
+    }
+
+    .blob.two {
+      width: 380px;
+      height: 380px;
+      background: #88d35f;
+      bottom: 120px;
+      left: -190px;
+    }
+
+    header {
+      position: relative;
+      z-index: 2;
+      padding: 22px clamp(20px, 5vw, 72px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-weight: 900;
+      letter-spacing: .6px;
+      color: var(--verde-escuro);
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: var(--verde);
+      color: white;
+      box-shadow: 0 8px 22px rgba(76, 175, 47, .28);
+      font-size: 23px;
+    }
+
+    .brand small {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--verde-escuro);
+      font-weight: 700;
+    }
+
+    .top-actions a {
+      padding: 11px 16px;
+      border: 1px solid rgba(31, 93, 56, .14);
+      background: rgba(255, 255, 255, .72);
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero {
+      padding: 34px clamp(20px, 5vw, 72px) 42px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+      gap: clamp(28px, 5vw, 72px);
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #eaf8e5;
+      color: var(--verde-escuro);
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(44px, 8vw, 94px);
+      line-height: .92;
+      letter-spacing: -4px;
+      color: var(--verde-escuro);
+    }
+
+    .hero h2 {
+      margin: 18px 0 0;
+      max-width: 720px;
+      color: var(--azul);
+      font-size: clamp(23px, 3.2vw, 42px);
+      line-height: 1.12;
+      letter-spacing: -1.2px;
+    }
+
+    .hero p {
+      margin: 22px 0 0;
+      max-width: 670px;
+      font-size: clamp(17px, 1.5vw, 21px);
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 30px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 0;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 15px 22px;
+      font-weight: 900;
+      font-size: 15px;
+      transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-primary {
+      color: white;
+      background: linear-gradient(135deg, var(--verde), #70c847);
+      box-shadow: 0 14px 34px rgba(76, 175, 47, .32);
+    }
+
+    .btn-secondary {
+      color: var(--verde-escuro);
+      background: white;
+      border: 1px solid rgba(31, 93, 56, .16);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 38px rgba(31, 93, 56, .17);
+    }
+
+    .hero-card {
+      position: relative;
+      min-height: 580px;
+      background: linear-gradient(160deg, #e9f9e4 0%, #ffffff 55%, #eaf4f8 100%);
+      border: 1px solid rgba(31, 93, 56, .08);
+      border-radius: 46px;
+      box-shadow: var(--sombra);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 20px 24px 0;
+    }
+
+    .hero-card::before {
+      content: "♻️";
+      position: absolute;
+      top: 28px;
+      left: 28px;
+      width: 64px;
+      height: 64px;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      background: white;
+      box-shadow: 0 10px 26px rgba(31, 93, 56, .12);
+      font-size: 30px;
+    }
+
+    .hero-card::after {
+      content: "Na dúvida, pergunte antes de descartar";
+      position: absolute;
+      top: 34px;
+      right: 28px;
+      max-width: 230px;
+      padding: 14px 16px;
+      border-radius: 20px;
+      background: var(--verde-escuro);
+      color: white;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1.35;
+      box-shadow: 0 12px 26px rgba(31, 93, 56, .18);
+    }
+
+    .mascot {
+      width: min(92%, 510px);
+      max-height: 590px;
+      object-fit: contain;
+      object-position: bottom center;
+      filter: drop-shadow(0 20px 24px rgba(31, 93, 56, .12));
+    }
+
+    .quick-examples {
+      margin-top: 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      padding: 10px 13px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .8);
+      border: 1px solid rgba(31, 93, 56, .12);
+      color: var(--verde-escuro);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .section {
+      padding: 34px clamp(20px, 5vw, 72px);
+    }
+
+    .section-head {
+      max-width: 780px;
+      margin-bottom: 24px;
+    }
+
+    .section-head h3 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 50px);
+      line-height: 1.05;
+      letter-spacing: -1.6px;
+      color: var(--verde-escuro);
+    }
+
+    .section-head p {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(180px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, .88);
+      border: 1px solid rgba(31, 93, 56, .10);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: 0 10px 28px rgba(31, 93, 56, .08);
+      min-height: 230px;
+    }
+
+    .card .icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: #eff9eb;
+      font-size: 26px;
+      margin-bottom: 18px;
+    }
+
+    .card h4 {
+      margin: 0 0 10px;
+      color: var(--verde-escuro);
+      font-size: 20px;
+      letter-spacing: -.4px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .how {
+      display: grid;
+      grid-template-columns: .85fr 1.15fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: var(--verde-escuro);
+      color: white;
+      border-radius: 34px;
+      padding: clamp(24px, 4vw, 42px);
+      box-shadow: var(--sombra);
+    }
+
+    .panel h3 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.05;
+      letter-spacing: -1.5px;
+    }
+
+    .panel p {
+      color: rgba(255, 255, 255, .82);
+      line-height: 1.6;
+      font-size: 17px;
+    }
+
+    .steps {
+      display: grid;
+      gap: 14px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 20px;
+      border-radius: 24px;
+      background: white;
+      border: 1px solid rgba(31, 93, 56, .10);
+      box-shadow: 0 10px 24px rgba(31, 93, 56, .07);
+    }
+
+    .num {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: var(--verde);
+      color: white;
+      font-weight: 900;
+      font-size: 20px;
+    }
+
+    .step h4 { margin: 0 0 6px; font-size: 19px; color: var(--verde-escuro); }
+    .step p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+    .footer {
+      padding: 34px clamp(20px, 5vw, 72px) 52px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .footer strong { color: var(--verde-escuro); }
+
+    @media (max-width: 1150px) {
+      .cards { grid-template-columns: repeat(3, 1fr); }
+      .hero { grid-template-columns: 1fr; }
+      .hero-card { min-height: 520px; }
+    }
+
+    @media (max-width: 760px) {
+      header { align-items: flex-start; }
+      .top-actions { display: none; }
+      .hero { padding-top: 18px; }
+      h1 { letter-spacing: -2px; }
+      .hero-card { min-height: 430px; border-radius: 32px; }
+      .hero-card::after { display: none; }
+      .cards { grid-template-columns: 1fr; }
+      .how { grid-template-columns: 1fr; }
+      .cta-row .btn { width: 100%; justify-content: center; }
+      .quick-examples { margin-bottom: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="blob one"></div>
+    <div class="blob two"></div>
+
+    <header>
+      <a class="brand" href="#top" aria-label="EM CONTA">
+        <span class="brand-icon">⚡</span>
+        <span>EM CONTA <small>Projeto Lixo Zero | CSI</small></span>
+      </a>
+      <nav class="top-actions" aria-label="Navegação">
+        <a href="#categorias">Categorias</a>
+        <a href="#como-usar">Como usar</a>
+        <a href="javascript:void(0)" onclick="openBotpressChat()">Tirar dúvida</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div>
+          <span class="pill">♻️ Assistente do Projeto Lixo Zero</span>
+          <h1>EM CONTA</h1>
+          <h2>Descartar certo também conta.</h2>
+          <p>
+            Tire dúvidas sobre o descarte correto de resíduos no CSI. Pergunte onde descartar copos,
+            latinhas, papel toalha, pilhas, embalagens, orgânicos, recicláveis e rejeitos.
+          </p>
+
+          <div class="cta-row">
+            <button class="btn btn-primary" onclick="openBotpressChat()">💬 Tirar dúvida agora</button>
+            <a class="btn btn-secondary" href="#categorias">Ver exemplos</a>
+          </div>
+
+          <div class="quick-examples" aria-label="Exemplos de perguntas">
+            <span class="chip">Onde jogo copo de café?</span>
+            <span class="chip">Latinha vai onde?</span>
+            <span class="chip">Papel toalha é reciclável?</span>
+            <span class="chip">Onde descarto pilha?</span>
+          </div>
+        </div>
+
+        <div class="hero-card" aria-label="Mascote do EM CONTA">
+          <img class="mascot" src="assets/mascote-em-conta.png" alt="Mascote do EM CONTA" />
+        </div>
+      </section>
+
+      <section class="section" id="categorias">
+        <div class="section-head">
+          <h3>O que o EM CONTA pode te ajudar a separar</h3>
+          <p>
+            Antes de descartar, confira se o material está limpo, seco e se precisa de uma destinação específica.
+          </p>
+        </div>
+
+        <div class="cards">
+          <article class="card">
+            <div class="icon">🍌</div>
+            <h4>Orgânicos</h4>
+            <p>Restos de alimentos, cascas, borra de café, sachês de chá, flores, plantas e resíduos de jardim.</p>
+          </article>
+
+          <article class="card">
+            <div class="icon">♻️</div>
+            <h4>Recicláveis</h4>
+            <p>Papéis, plásticos, metais, vidros, papelão e embalagens limpas e secas antes do descarte.</p>
+          </article>
+
+          <article class="card">
+            <div class="icon">🗑️</div>
+            <h4>Rejeitos</h4>
+            <p>Papel toalha usado, copo de café, papéis sujos, embalagens metalizadas, isopor sujo e cupom fiscal.</p>
+          </article>
+
+          <article class="card">
+            <div class="icon">🔋</div>
+            <h4>Especiais</h4>
+            <p>Pilhas, baterias, lâmpadas, cabos, carregadores, mouses, teclados e fones devem ir para ponto específico.</p>
+          </article>
+
+          <article class="card">
+            <div class="icon">🥫</div>
+            <h4>Latinhas</h4>
+            <p>Esvazie o líquido e descarte no ponto específico das latinhas da Dona Ione.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section how" id="como-usar">
+        <div class="panel">
+          <h3>Como usar no dia a dia</h3>
+          <p>
+            O EM CONTA foi criado para ajudar de forma rápida, principalmente perto dos pontos de descarte.
+            Na dúvida, pergunte antes de jogar fora.
+          </p>
+          <button class="btn btn-primary" onclick="openBotpressChat()">Abrir chat</button>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <div class="num">1</div>
+            <div>
+              <h4>Digite o nome do resíduo</h4>
+              <p>Exemplo: “copo de café”, “embalagem de salgadinho”, “garrafa PET” ou “papel toalha usado”.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="num">2</div>
+            <div>
+              <h4>Receba a orientação</h4>
+              <p>O bot informa o destino correto, o preparo antes do descarte e o motivo da separação.</p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="num">3</div>
+            <div>
+              <h4>Descarte corretamente</h4>
+              <p>Evite misturar recicláveis com rejeitos, restos de comida ou líquidos. Isso melhora a reciclagem e reduz contaminações.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <strong>EM CONTA</strong> · Assistente do Projeto Lixo Zero do CSI · Separar corretamente é um compromisso de todos.
+    </footer>
+  </div>
+
+  <script>
+    function openBotpressChat() {
+      const tryOpen = () => {
+        try {
+          if (window.botpress && typeof window.botpress.open === 'function') {
+            window.botpress.open();
+            return true;
+          }
+          if (window.botpressWebChat && typeof window.botpressWebChat.sendEvent === 'function') {
+            window.botpressWebChat.sendEvent({ type: 'show' });
+            return true;
+          }
+        } catch (error) {
+          console.warn('Não foi possível abrir o Webchat automaticamente.', error);
+        }
+        return false;
+      };
+
+      if (!tryOpen()) {
+        setTimeout(tryOpen, 800);
+      }
+    }
+  </script>
+
+  <!-- Botpress Webchat -->
+  <script src="https://cdn.botpress.cloud/webchat/v3.6/inject.js"></script>
+  <script src="https://files.bpcontent.cloud/2026/06/19/19/20260619194804-CFRQ5MN5.js" defer></script>
+</body>
+</html>
