@@ -60,6 +60,16 @@
       padding: 0; margin: -1px; overflow: hidden;
       clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
+    /* Impede que itens de grid 1fr "estourem" a largura no mobile
+       (1fr não encolhe abaixo do min-content sem isto) */
+    .lixo-intro > *,
+    .stat-row > *,
+    .rs-grid > *,
+    .cat-grid > *,
+    .chars-grid > *,
+    .errors-list > *,
+    .chat-grid > *,
+    .footer-grid > * { min-width: 0; }
 
     /* ── Nav ── */
     #navbar {
@@ -93,6 +103,7 @@
       font-size: 17px;
       color: var(--green-dark);
       letter-spacing: -.3px;
+      white-space: nowrap;
     }
     .brand-icon {
       width: 44px; height: 44px;
@@ -127,6 +138,7 @@
       transition: color .2s, background .2s;
     }
     .nav-links a:hover { color: var(--green-dark); background: var(--green-light); }
+    .nav-mobile-cta { display: none; } /* só aparece no menu mobile aberto */
     .nav-cta {
       display: inline-flex;
       align-items: center;
@@ -1018,20 +1030,40 @@
       .nav-links.open {
         display: flex;
         flex-direction: column;
-        position: fixed;
-        top: 77px; left: 0; right: 0;
+        align-items: stretch;
+        position: absolute;
+        top: 100%; left: 0; right: 0;
         background: rgba(246, 250, 247, .98);
         backdrop-filter: blur(16px);
-        padding: 16px 24px 24px;
+        -webkit-backdrop-filter: blur(16px);
+        padding: 12px clamp(20px, 5vw, 64px) 16px;
+        border-top: 1px solid var(--border);
         border-bottom: 1px solid var(--border);
         box-shadow: var(--shadow-md);
-        gap: 4px;
+        gap: 6px;
       }
-      .nav-links.open + .nav-cta { display: flex; }
+      .nav-links.open a {
+        display: block;
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-size: 16px;
+        color: var(--green-dark);
+      }
+      .nav-links.open .nav-mobile-cta { display: block; margin-top: 4px; }
+      .nav-links.open .nav-mobile-cta a {
+        background: var(--green);
+        color: #fff;
+        font-weight: 700;
+        text-align: center;
+        box-shadow: 0 8px 20px rgba(45, 138, 92, .28);
+      }
+      .nav-links.open .nav-mobile-cta a:hover { background: var(--green-dark); }
       .rs-grid           { grid-template-columns: repeat(2, 1fr); }
       .cat-grid          { grid-template-columns: 1fr; }
       .errors-list       { grid-template-columns: 1fr; }
       .errors-strip      { grid-template-columns: 1fr; text-align: center; }
+      .errors-list       { text-align: left; max-width: 360px; margin: 0 auto; }
       .errors-icon       { font-size: 48px; }
       .footer-grid       { grid-template-columns: 1fr; gap: 28px; }
       .hero-actions      { flex-direction: column; }
@@ -1046,6 +1078,12 @@
       }
       .chat-actions .btn { width: 100%; }
       .esg-pill          { max-width: 100%; }
+
+      /* Stats mais confortáveis no celular */
+      .lixo-stat-box { padding: 24px 22px; }
+      .stat-row      { gap: 12px; margin-top: 22px; }
+      .stat-item     { padding: 18px 16px; }
+      .stat-num      { font-size: 28px; }
     }
 
     @media (max-width: 480px) {
@@ -1071,6 +1109,9 @@
     <ul class="nav-links" id="nav-links" role="list">
       <li><a href="#lixo-zero">Lixo Zero</a></li>
       <li><a href="#personagens">Eva, Sofia e Gabi</a></li>
+      <li class="nav-mobile-cta">
+        <a href="#personagens" onclick="openChat()">💬 Converse com a Eva</a>
+      </li>
     </ul>
 
     <a class="nav-cta" href="#personagens" onclick="openChat()">
