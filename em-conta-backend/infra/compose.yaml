@@ -1,0 +1,112 @@
+# Infraestrutura local do Em Conta (desenvolvimento). Uso: ver infra/README.md
+#   cp .env.example .env   &&   docker compose up -d
+# Todas as portas são publicadas apenas em 127.0.0.1.
+name: em-conta
+
+services:
+  mysql:
+    image: mysql:8.4.13
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina no .env}
+      MYSQL_DATABASE: ${DB_NAME:-emconta}
+      MYSQL_USER: ${DB_USERNAME:-emconta}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?defina no .env}
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3310}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  rabbitmq:
+    image: rabbitmq:4.2.9-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-emconta}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina no .env}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  minio:
+    # As imagens públicas minio/minio deixaram de ser distribuídas; usa-se o build da Chainguard,
+    # fixado por digest (MinIO RELEASE.2026-10-23T20-06-51Z). Ver infra/README.md.
+    image: cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-emconta}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina no .env}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # A imagem não tem curl, wget nem grep; usa apenas recursos do bash para consultar o MinIO.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /minio/health/live HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          read -r status <&3 && [[ "$$status" == *" 200 "* ]]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # Execução única: cria o bucket local de forma idempotente e encerra.
+  minio-init:
+    image: cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null &&
+        mc mb --ignore-existing "local/$$MINIO_BUCKET" &&
+        echo "bucket $$MINIO_BUCKET pronto"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-emconta}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina no .env}
+      MINIO_BUCKET: ${MINIO_BUCKET:-emconta-local}
+      MC_CONFIG_DIR: /tmp/mc
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    volumes:
+      - mailpit-data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  minio-data:
+  mailpit-data:

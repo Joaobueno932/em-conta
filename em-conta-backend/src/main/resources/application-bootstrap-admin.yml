@@ -1,0 +1,14 @@
+# Modo de bootstrap do primeiro administrador. Ver docs/seguranca.md.
+#   --spring.profiles.active=local,bootstrap-admin --emconta.bootstrap.nome="..." --emconta.bootstrap.email=...
+# Executa as migrations, cria o administrador (se não houver nenhum) e encerra. Sem servidor HTTP.
+spring:
+  main:
+    web-application-type: none
+    keep-alive: false
+    banner-mode: "off"
+
+emconta:
+  bootstrap:
+    habilitado: true
+  agendamentos:
+    habilitados: false

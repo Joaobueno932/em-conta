@@ -1,0 +1,24 @@
+# Função de processo: API HTTP.
+spring:
+  main:
+    web-application-type: servlet
+  session:
+    timeout: 30m # inatividade; a duração máxima absoluta fica em emconta.acesso.sessao.duracao-maxima
+
+server:
+  port: ${SERVER_PORT:8080}
+  # Atrás do proxy reverso: o Tomcat (RemoteIpValve) só aceita X-Forwarded-For/-Proto vindos de
+  # proxies confiáveis (server.tomcat.remoteip.internal-proxies; padrão: redes privadas e loopback).
+  # Cabeçalhos enviados diretamente por clientes externos são ignorados.
+  forward-headers-strategy: native
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        name: EMCONTA_SESSION
+        http-only: true
+        secure: ${EMCONTA_COOKIE_SECURE:true}
+        same-site: lax
+  error:
+    include-message: never
+    include-stacktrace: never

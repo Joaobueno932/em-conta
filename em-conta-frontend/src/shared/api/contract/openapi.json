@@ -1,0 +1,3823 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Em Conta API",
+    "version": "0.1.0-SNAPSHOT"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticação",
+      "description": "Sessão, CSRF e credenciais do usuário"
+    },
+    {
+      "name": "Sistema",
+      "description": "Verificações técnicas"
+    },
+    {
+      "name": "Associados",
+      "description": "Associados PF/PJ, contatos e unidades consumidoras"
+    },
+    {
+      "name": "Usuários",
+      "description": "Administração de usuários internos"
+    },
+    {
+      "name": "Usinas",
+      "description": "Fazendas, usinas e vínculos cadastrais com UCs"
+    }
+  ],
+  "paths": {
+    "/api/v1/usuarios/{id}/perfis": {
+      "put": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Substitui os perfis (usuarios:atribuir-perfis)",
+        "operationId": "definirPerfis",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerfisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usinas/{id}": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Dados e contagens de vínculos da usina (usinas:consultar)",
+        "operationId": "obterUsina",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usina"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Edita a usina (usinas:editar)",
+        "operationId": "editarUsina",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoUsinaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Usina atualizada, com a nova versão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usina"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE ou NOME_POSSIVEL_DUPLICIDADE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usina"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fazendas/{id}": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Dados da fazenda (usinas:consultar)",
+        "operationId": "obterFazenda",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fazenda"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Edita a fazenda (usinas:editar)",
+        "operationId": "editarFazenda",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoFazendaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Fazenda atualizada, com a nova versão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fazenda"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE ou NOME_POSSIVEL_DUPLICIDADE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fazenda"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}": {
+      "get": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Ficha cadastral com contatos (associados:consultar)",
+        "operationId": "obterAssociado",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Associado"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Edita nome/razão social e nome fantasia; tipo e documento não mudam (associados:editar)",
+        "operationId": "editarAssociado",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoAssociadoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dados atualizados, com a nova versão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Associado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE: versão desatualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Associado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}/ucs/{ucId}": {
+      "get": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Dados de uma UC do associado (ucs:consultar)",
+        "operationId": "obterUc",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "ucId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnidadeConsumidora"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Edita denominação e endereço; concessionária, número e titular não mudam (ucs:editar)",
+        "operationId": "editarUc",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "ucId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoUcRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dados atualizados, com a nova versão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnidadeConsumidora"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE: versão desatualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnidadeConsumidora"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}/contatos/{contatoId}": {
+      "put": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Edita contato (associados:editar)",
+        "operationId": "editarContato",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "contatoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoContatoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dados atualizados, com a nova versão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contato"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE: versão desatualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contato"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios": {
+      "get": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Lista paginada, ordenada por nome (usuarios:consultar)",
+        "operationId": "listarUsuarios",
+        "parameters": [
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaUsuarios"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Cria usuário convidado e envia o convite (usuarios:convidar)",
+        "operationId": "convidarUsuario",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConviteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Usuário convidado; conviteEnviado indica se o e-mail foi enviado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConviteCriado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "EMAIL_EM_USO, CONVITE_PENDENTE ou USUARIO_DESATIVADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConviteCriado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios/{id}/reativacao": {
+      "post": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Reativa: volta a ATIVO se já tinha senha, senão a CONVIDADO (usuarios:alterar-situacao)",
+        "operationId": "reativarUsuario",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios/{id}/desativacao": {
+      "post": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Desativa e encerra as sessões do usuário (usuarios:alterar-situacao)",
+        "operationId": "desativarUsuario",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios/{id}/convite": {
+      "post": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Reenvia o convite, invalidando o link anterior (usuarios:convidar)",
+        "operationId": "reenviarConvite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Novo link emitido; conviteEnviado indica se o e-mail foi enviado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReenvioConvite"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "MUITAS_TENTATIVAS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReenvioConvite"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usinas": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Lista paginada; busca por nome, fazenda ou código USN; filtros fazenda e UF (usinas:consultar)",
+        "operationId": "listarUsinas",
+        "parameters": [
+          {
+            "name": "busca",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "fazendaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "uf",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "ordenacao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "NOME",
+              "enum": [
+                "NOME",
+                "CADASTRO_RECENTE",
+                "UCS_VINCULADAS"
+              ]
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaUsinas"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Cadastra usina (usinas:cadastrar)",
+        "operationId": "cadastrarUsina",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsinaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Usina cadastrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usina"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NOME_POSSIVEL_DUPLICIDADE (com existentes); reenviar confirmando",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usina"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usinas/{id}/vinculos": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Vínculos da usina, vigentes primeiro (vinculos-usina:consultar)",
+        "operationId": "listarVinculosUsina",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "situacao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "VIGENTES",
+              "enum": [
+                "VIGENTES",
+                "ENCERRADOS",
+                "TODOS"
+              ]
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaVinculosUsina"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Vincula uma UC existente à usina (vinculos-usina:criar)",
+        "operationId": "vincularUc",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoVinculoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Vínculo cadastral criado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VinculoUsina"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UC_VINCULADA_A_OUTRA_USINA, VINCULO_JA_EXISTE ou UC_JA_VINCULADA, com o vínculo atual",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VinculoUsina"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usinas/{id}/vinculos/{vinculoId}/encerramento": {
+      "post": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Encerra o vínculo com data e motivo; o registro é mantido (vinculos-usina:encerrar)",
+        "operationId": "encerrarVinculo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "vinculoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EncerramentoVinculoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Vínculo encerrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VinculoUsina"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE ou VINCULO_JA_ENCERRADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VinculoUsina"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fazendas": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Lista paginada; busca por nome ou código FZD (usinas:consultar)",
+        "operationId": "listarFazendas",
+        "parameters": [
+          {
+            "name": "busca",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaFazendas"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Cadastra fazenda (usinas:cadastrar)",
+        "operationId": "cadastrarFazenda",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FazendaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Fazenda cadastrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fazenda"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NOME_POSSIVEL_DUPLICIDADE (com existentes); reenviar confirmando",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fazenda"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/tokens/validacao": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Confere um link de convite ou redefinição sem consumi-lo",
+        "operationId": "validarToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacaoTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Link válido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenValido"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "TOKEN_INVALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenValido"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/senha/redefinicao": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Define nova senha pelo link; encerra todas as sessões",
+        "operationId": "redefinirSenha",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedefinicaoSenhaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Senha redefinida"
+          },
+          "400": {
+            "description": "TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/senha/recuperacao": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Solicita link de redefinição (resposta genérica)",
+        "operationId": "solicitarRecuperacaoSenha",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecuperacaoSenhaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Sempre a mesma resposta, exista ou não a conta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensagem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "MUITAS_TENTATIVAS a partir deste IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensagem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/senha/alteracao": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Troca a senha confirmando a atual; mantém esta sessão e encerra as demais",
+        "operationId": "alterarSenha",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlteracaoSenhaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Senha alterada"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Encerra a sessão e limpa os cookies de sessão e CSRF",
+        "operationId": "sair",
+        "responses": {
+          "204": {
+            "description": "Sessão encerrada (também quando não havia sessão)"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Autentica e cria a sessão (cookie HttpOnly)",
+        "operationId": "entrar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Sessão criada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAtual"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "CREDENCIAIS_INVALIDAS (resposta genérica)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAtual"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "MUITAS_TENTATIVAS, com Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAtual"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/convites/aceitacao": {
+      "post": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Define a senha pelo convite e ativa a conta",
+        "operationId": "aceitarConvite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AceiteConviteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Conta ativada; o usuário pode entrar"
+          },
+          "400": {
+            "description": "TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA"
+          }
+        }
+      }
+    },
+    "/api/v1/associados": {
+      "get": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Lista paginada; busca por nome, razão social, nome fantasia ou CPF/CNPJ (associados:consultar)",
+        "operationId": "listarAssociados",
+        "parameters": [
+          {
+            "name": "busca",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PF",
+                "PJ"
+              ]
+            }
+          },
+          {
+            "name": "ordenacao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "NOME",
+              "enum": [
+                "NOME",
+                "CADASTRO_RECENTE"
+              ]
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaAssociados"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Cadastra associado PF ou PJ e contatos (associados:cadastrar)",
+        "operationId": "cadastrarAssociado",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoAssociadoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Associado cadastrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Associado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "DOCUMENTO_JA_CADASTRADO, com associadoExistenteId quando localizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Associado"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}/ucs": {
+      "get": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "UCs do associado (ucs:consultar)",
+        "operationId": "listarUcs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UnidadeConsumidora"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Cadastra UC vinculada ao associado (ucs:cadastrar)",
+        "operationId": "cadastrarUc",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovaUcRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "UC cadastrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnidadeConsumidora"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UC_JA_CADASTRADA na mesma concessionária",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnidadeConsumidora"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}/contatos": {
+      "post": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Adiciona contato (associados:editar)",
+        "operationId": "adicionarContato",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContatoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Contato adicionado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contato"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}/contatos/{contatoId}/remocao": {
+      "post": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Remove o contato da ficha; o registro é mantido para o histórico (associados:editar)",
+        "operationId": "removerContato",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "contatoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Contato removido"
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios/{id}": {
+      "get": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Dados de um usuário (usuarios:consultar)",
+        "operationId": "obterUsuario",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Edita o nome (usuarios:editar)",
+        "operationId": "editarUsuario",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoUsuarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vinculos-usina/ucs-candidatas": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Busca UCs existentes por número, titular ou CPF/CNPJ, com o vínculo vigente de cada uma (vinculos-usina:criar)",
+        "operationId": "buscarUcsParaVinculo",
+        "parameters": [
+          {
+            "name": "busca",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 2
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UcCandidata"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usinas/{id}/historico": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Histórico da usina e dos seus vínculos (usinas:consultar-historico)",
+        "operationId": "historicoUsina",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaHistoricoUsinas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/status": {
+      "get": {
+        "tags": [
+          "Sistema"
+        ],
+        "summary": "Situação técnica da API e da conexão com o banco",
+        "operationId": "getSystemStatus",
+        "responses": {
+          "200": {
+            "description": "API e banco disponíveis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API ativa, mas banco indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/perfis": {
+      "get": {
+        "tags": [
+          "Usuários"
+        ],
+        "summary": "Perfis atribuíveis e suas permissões (usuarios:consultar)",
+        "operationId": "listarPerfis",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PerfilDisponivel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fazendas/{id}/historico": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Histórico da fazenda (usinas:consultar-historico)",
+        "operationId": "historicoFazenda",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaHistoricoUsinas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sessao": {
+      "get": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Usuário autenticado e permissões vigentes",
+        "operationId": "obterSessao",
+        "responses": {
+          "200": {
+            "description": "Sessão válida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAtual"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "NAO_AUTENTICADO, SESSAO_EXPIRADA ou SESSAO_ENCERRADA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAtual"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/csrf": {
+      "get": {
+        "tags": [
+          "Autenticação"
+        ],
+        "summary": "Emite o cookie XSRF-TOKEN; o valor deve voltar no cabeçalho indicado em requisições mutáveis",
+        "operationId": "obterCsrf",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Csrf"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{id}/historico": {
+      "get": {
+        "tags": [
+          "Associados"
+        ],
+        "summary": "Histórico do associado, contatos e UCs, mais recente primeiro (associados:consultar-historico)",
+        "operationId": "consultarHistorico",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CADASTRO",
+                "CONTATOS",
+                "UNIDADES_CONSUMIDORAS"
+              ]
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaHistorico"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/associados/{associadoId}/vinculos-usina": {
+      "get": {
+        "tags": [
+          "Usinas"
+        ],
+        "summary": "Vínculos (vigentes e encerrados) das UCs do associado (vinculos-usina:consultar)",
+        "operationId": "vinculosUsinaDoAssociado",
+        "parameters": [
+          {
+            "name": "associadoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VinculoUsina"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PerfisRequest": {
+        "type": "object",
+        "properties": {
+          "perfis": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ADMINISTRADOR"
+              ]
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "perfis"
+        ]
+      },
+      "Usuario": {
+        "type": "object",
+        "description": "Dados administrativos de um usuário",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "situacao": {
+            "type": "string",
+            "enum": [
+              "CONVIDADO",
+              "ATIVO",
+              "DESATIVADO"
+            ]
+          },
+          "perfis": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ADMINISTRADOR"
+              ]
+            }
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ativadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "desativadoEm": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "criadoEm",
+          "email",
+          "id",
+          "nome",
+          "perfis",
+          "situacao"
+        ]
+      },
+      "EdicaoUsinaRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "fazendaId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cep": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 0
+          },
+          "endereco": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "cidade": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "uf": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 0
+          },
+          "observacoes": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "confirmarNomeRepetido": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nome",
+          "versao"
+        ]
+      },
+      "AutorUsinas": {
+        "type": "object",
+        "description": "Usuário interno que realizou a operação",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nome"
+        ]
+      },
+      "ReferenciaCadastro": {
+        "type": "object",
+        "description": "Fazenda ou usina referenciada",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string",
+            "example": "USN-0001"
+          },
+          "nome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "id",
+          "nome"
+        ]
+      },
+      "Usina": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string",
+            "example": "USN-0001"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "fazenda": {
+            "$ref": "#/components/schemas/ReferenciaCadastro"
+          },
+          "cep": {
+            "type": "string",
+            "example": "79000-000"
+          },
+          "endereco": {
+            "type": "string"
+          },
+          "cidade": {
+            "type": "string"
+          },
+          "uf": {
+            "type": "string"
+          },
+          "observacoes": {
+            "type": "string"
+          },
+          "ucsVinculadas": {
+            "type": "integer",
+            "format": "int64",
+            "description": "UCs com vínculo cadastral vigente"
+          },
+          "associadosDistintos": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Titulares distintos das UCs vigentes"
+          },
+          "vinculosEncerrados": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "criadoPor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "atualizadoPor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "associadosDistintos",
+          "atualizadoEm",
+          "atualizadoPor",
+          "codigo",
+          "criadoEm",
+          "criadoPor",
+          "id",
+          "nome",
+          "ucsVinculadas",
+          "versao",
+          "vinculosEncerrados"
+        ]
+      },
+      "EdicaoFazendaRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "cidade": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "uf": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 0
+          },
+          "observacoes": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "confirmarNomeRepetido": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nome",
+          "versao"
+        ]
+      },
+      "Fazenda": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string",
+            "example": "FZD-0001"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "cidade": {
+            "type": "string"
+          },
+          "uf": {
+            "type": "string"
+          },
+          "observacoes": {
+            "type": "string"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "criadoPor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "atualizadoPor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "atualizadoEm",
+          "atualizadoPor",
+          "codigo",
+          "criadoEm",
+          "criadoPor",
+          "id",
+          "nome",
+          "versao"
+        ]
+      },
+      "EdicaoAssociadoRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Versão lida na consulta"
+          },
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "nomeFantasia": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "nome",
+          "versao"
+        ]
+      },
+      "Associado": {
+        "type": "object",
+        "description": "Ficha cadastral completa, para usuários com associados:consultar",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "PF",
+              "PJ"
+            ]
+          },
+          "documento": {
+            "type": "string",
+            "description": "Documento formatado"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "nomeFantasia": {
+            "type": "string"
+          },
+          "contatos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Contato"
+            }
+          },
+          "quantidadeUcs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "criadoPor": {
+            "$ref": "#/components/schemas/Autor"
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "atualizadoPor": {
+            "$ref": "#/components/schemas/Autor"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Enviar de volta nas edições"
+          }
+        },
+        "required": [
+          "atualizadoEm",
+          "atualizadoPor",
+          "contatos",
+          "criadoEm",
+          "criadoPor",
+          "documento",
+          "id",
+          "nome",
+          "quantidadeUcs",
+          "tipo",
+          "versao"
+        ]
+      },
+      "Autor": {
+        "type": "object",
+        "description": "Usuário interno que realizou a operação",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nome"
+        ]
+      },
+      "Contato": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "telefone": {
+            "type": "string",
+            "description": "Somente dígitos"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "nome",
+          "versao"
+        ]
+      },
+      "EdicaoUcRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "denominacao": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "endereco": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "versao"
+        ]
+      },
+      "UnidadeConsumidora": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "associadoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "concessionaria": {
+            "type": "string",
+            "enum": [
+              "ENERGISA_MS"
+            ]
+          },
+          "concessionariaNome": {
+            "type": "string",
+            "example": "Energisa MS"
+          },
+          "numero": {
+            "type": "string",
+            "example": "0012345678"
+          },
+          "denominacao": {
+            "type": "string"
+          },
+          "endereco": {
+            "type": "string"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "associadoId",
+          "atualizadoEm",
+          "concessionaria",
+          "concessionariaNome",
+          "criadoEm",
+          "id",
+          "numero",
+          "versao"
+        ]
+      },
+      "EdicaoContatoRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "telefone": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "nome",
+          "versao"
+        ]
+      },
+      "ConviteRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 0
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 0
+          },
+          "perfis": {
+            "type": "array",
+            "description": "Perfis iniciais; exige usuarios:atribuir-perfis",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ADMINISTRADOR"
+              ]
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "email",
+          "nome"
+        ]
+      },
+      "ConviteCriado": {
+        "type": "object",
+        "properties": {
+          "usuario": {
+            "$ref": "#/components/schemas/Usuario"
+          },
+          "conviteEnviado": {
+            "type": "boolean",
+            "description": "false quando o e-mail não pôde ser enviado"
+          }
+        },
+        "required": [
+          "conviteEnviado",
+          "usuario"
+        ]
+      },
+      "ReenvioConvite": {
+        "type": "object",
+        "properties": {
+          "conviteEnviado": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conviteEnviado"
+        ]
+      },
+      "UsinaRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "fazendaId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cep": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 0
+          },
+          "endereco": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "cidade": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "uf": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 0
+          },
+          "observacoes": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "confirmarNomeRepetido": {
+            "type": "boolean",
+            "description": "true para salvar mesmo com aviso NOME_POSSIVEL_DUPLICIDADE"
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "NovoVinculoRequest": {
+        "type": "object",
+        "properties": {
+          "ucId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date",
+            "description": "Início da vigência; não pode ser futuro"
+          }
+        },
+        "required": [
+          "inicio",
+          "ucId"
+        ]
+      },
+      "UcDoVinculo": {
+        "type": "object",
+        "description": "UC e titular, com documento parcialmente mascarado",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "numero": {
+            "type": "string"
+          },
+          "concessionariaNome": {
+            "type": "string"
+          },
+          "denominacao": {
+            "type": "string"
+          },
+          "associadoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "associadoNome": {
+            "type": "string"
+          },
+          "associadoTipo": {
+            "type": "string"
+          },
+          "associadoDocumentoMascarado": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "associadoDocumentoMascarado",
+          "associadoId",
+          "associadoNome",
+          "associadoTipo",
+          "concessionariaNome",
+          "id",
+          "numero"
+        ]
+      },
+      "VinculoUsina": {
+        "type": "object",
+        "description": "Vínculo cadastral; não representa rateio nem ativação",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "usina": {
+            "$ref": "#/components/schemas/ReferenciaCadastro"
+          },
+          "uc": {
+            "$ref": "#/components/schemas/UcDoVinculo"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date"
+          },
+          "fim": {
+            "type": "string",
+            "format": "date"
+          },
+          "vigente": {
+            "type": "boolean"
+          },
+          "motivoEncerramento": {
+            "type": "string"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "criadoPor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "encerradoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "encerradoPor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "criadoEm",
+          "criadoPor",
+          "id",
+          "inicio",
+          "uc",
+          "usina",
+          "versao",
+          "vigente"
+        ]
+      },
+      "EncerramentoVinculoRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fim": {
+            "type": "string",
+            "format": "date",
+            "description": "Fim da vigência (≥ início, não futuro)"
+          },
+          "motivo": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "fim",
+          "motivo",
+          "versao"
+        ]
+      },
+      "FazendaRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "cidade": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "uf": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 0
+          },
+          "observacoes": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "confirmarNomeRepetido": {
+            "type": "boolean",
+            "description": "true para salvar mesmo com aviso NOME_POSSIVEL_DUPLICIDADE"
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "ValidacaoTokenRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "finalidade": {
+            "type": "string",
+            "enum": [
+              "CONVITE",
+              "REDEFINICAO_SENHA"
+            ]
+          }
+        },
+        "required": [
+          "finalidade",
+          "token"
+        ]
+      },
+      "TokenValido": {
+        "type": "object",
+        "properties": {
+          "finalidade": {
+            "type": "string",
+            "enum": [
+              "CONVITE",
+              "REDEFINICAO_SENHA"
+            ]
+          },
+          "nome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finalidade",
+          "nome"
+        ]
+      },
+      "RedefinicaoSenhaRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "novaSenha": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 1024,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "novaSenha",
+          "token"
+        ]
+      },
+      "RecuperacaoSenhaRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "Mensagem": {
+        "type": "object",
+        "properties": {
+          "mensagem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mensagem"
+        ]
+      },
+      "AlteracaoSenhaRequest": {
+        "type": "object",
+        "properties": {
+          "senhaAtual": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 1024,
+            "minLength": 0
+          },
+          "novaSenha": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 1024,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "novaSenha",
+          "senhaAtual"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "maria@exemplo.com.br",
+            "maxLength": 320,
+            "minLength": 0
+          },
+          "senha": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 1024,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "email",
+          "senha"
+        ]
+      },
+      "UsuarioAtual": {
+        "type": "object",
+        "description": "Usuário da sessão e suas permissões vigentes",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "perfis": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ADMINISTRADOR"
+              ]
+            }
+          },
+          "permissoes": {
+            "type": "array",
+            "example": [
+              "usuarios:consultar"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "email",
+          "id",
+          "nome",
+          "perfis",
+          "permissoes"
+        ]
+      },
+      "AceiteConviteRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "senha": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 1024,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "senha",
+          "token"
+        ]
+      },
+      "ContatoRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "telefone": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "NovoAssociadoRequest": {
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "PF",
+              "PJ"
+            ]
+          },
+          "documento": {
+            "type": "string",
+            "description": "CPF ou CNPJ, com ou sem pontuação",
+            "maxLength": 40,
+            "minLength": 0
+          },
+          "nome": {
+            "type": "string",
+            "description": "Nome completo (PF) ou razão social (PJ)",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "nomeFantasia": {
+            "type": "string",
+            "description": "Somente PJ",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "contatos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContatoRequest"
+            },
+            "maxItems": 50,
+            "minItems": 0
+          }
+        },
+        "required": [
+          "documento",
+          "nome",
+          "tipo"
+        ]
+      },
+      "NovaUcRequest": {
+        "type": "object",
+        "properties": {
+          "concessionaria": {
+            "type": "string",
+            "enum": [
+              "ENERGISA_MS"
+            ]
+          },
+          "numero": {
+            "type": "string",
+            "description": "Número da UC na concessionária, como texto",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "denominacao": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "endereco": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "concessionaria",
+          "numero"
+        ]
+      },
+      "VersaoRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "versao"
+        ]
+      },
+      "EdicaoUsuarioRequest": {
+        "type": "object",
+        "description": "Somente o nome é editável nesta etapa",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "UcCandidata": {
+        "type": "object",
+        "description": "UC encontrada para vínculo, com o vínculo vigente se houver",
+        "properties": {
+          "uc": {
+            "$ref": "#/components/schemas/UcDoVinculo"
+          },
+          "vinculoVigente": {
+            "$ref": "#/components/schemas/VinculoVigenteResumo"
+          }
+        },
+        "required": [
+          "uc"
+        ]
+      },
+      "VinculoVigenteResumo": {
+        "type": "object",
+        "properties": {
+          "vinculoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "usina": {
+            "$ref": "#/components/schemas/ReferenciaCadastro"
+          },
+          "inicio": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "inicio",
+          "usina",
+          "vinculoId"
+        ]
+      },
+      "PaginaUsuarios": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Usuario"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "PaginaUsinas": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsinaResumo"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "UsinaResumo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "fazendaNome": {
+            "type": "string"
+          },
+          "cidade": {
+            "type": "string"
+          },
+          "uf": {
+            "type": "string"
+          },
+          "ucsVinculadas": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "associadosDistintos": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "associadosDistintos",
+          "codigo",
+          "criadoEm",
+          "id",
+          "nome",
+          "ucsVinculadas"
+        ]
+      },
+      "PaginaVinculosUsina": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VinculoUsina"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "AlteracaoHistoricoUsinas": {
+        "type": "object",
+        "properties": {
+          "campo": {
+            "type": "string"
+          },
+          "antes": {
+            "type": "string"
+          },
+          "depois": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campo"
+        ]
+      },
+      "PaginaHistoricoUsinas": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistroHistoricoUsinas"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "RegistroHistoricoUsinas": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ocorridoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acao": {
+            "type": "string",
+            "enum": [
+              "FAZENDA_CADASTRADA",
+              "FAZENDA_ALTERADA",
+              "USINA_CADASTRADA",
+              "USINA_ALTERADA",
+              "VINCULO_CRIADO",
+              "VINCULO_ENCERRADO"
+            ]
+          },
+          "vinculoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "referencia": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string"
+          },
+          "autor": {
+            "$ref": "#/components/schemas/AutorUsinas"
+          },
+          "alteracoes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlteracaoHistoricoUsinas"
+            }
+          }
+        },
+        "required": [
+          "acao",
+          "alteracoes",
+          "autor",
+          "id",
+          "ocorridoEm"
+        ]
+      },
+      "SystemStatus": {
+        "type": "object",
+        "properties": {
+          "application": {
+            "type": "string",
+            "description": "Nome da aplicação",
+            "example": "em-conta-backend"
+          },
+          "version": {
+            "type": "string",
+            "description": "Versão da aplicação",
+            "example": "0.1.0-SNAPSHOT"
+          },
+          "status": {
+            "type": "string",
+            "description": "Situação geral",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "database": {
+            "type": "string",
+            "description": "Situação da conexão com o banco",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Horário do servidor em UTC (ISO-8601)"
+          }
+        },
+        "required": [
+          "application",
+          "database",
+          "serverTime",
+          "status",
+          "version"
+        ]
+      },
+      "PerfilDisponivel": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "enum": [
+              "ADMINISTRADOR"
+            ]
+          },
+          "nome": {
+            "type": "string"
+          },
+          "permissoes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "codigo",
+          "nome",
+          "permissoes"
+        ]
+      },
+      "FazendaResumo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "cidade": {
+            "type": "string"
+          },
+          "uf": {
+            "type": "string"
+          },
+          "usinas": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "codigo",
+          "id",
+          "nome",
+          "usinas"
+        ]
+      },
+      "PaginaFazendas": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FazendaResumo"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "Csrf": {
+        "type": "object",
+        "properties": {
+          "cabecalho": {
+            "type": "string",
+            "example": "X-XSRF-TOKEN"
+          }
+        },
+        "required": [
+          "cabecalho"
+        ]
+      },
+      "AssociadoResumo": {
+        "type": "object",
+        "description": "Linha da listagem; documento parcialmente mascarado",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "PF",
+              "PJ"
+            ]
+          },
+          "documentoMascarado": {
+            "type": "string",
+            "example": "123.***.***-00"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "nomeFantasia": {
+            "type": "string"
+          },
+          "quantidadeUcs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "criadoEm",
+          "documentoMascarado",
+          "id",
+          "nome",
+          "quantidadeUcs",
+          "tipo"
+        ]
+      },
+      "PaginaAssociados": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssociadoResumo"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "AlteracaoHistorico": {
+        "type": "object",
+        "description": "Valores nulos: vazio ou não exibido (dado pessoal)",
+        "properties": {
+          "campo": {
+            "type": "string"
+          },
+          "antes": {
+            "type": "string"
+          },
+          "depois": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campo"
+        ]
+      },
+      "PaginaHistorico": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistroHistorico"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalItens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "itens",
+          "pagina",
+          "tamanho",
+          "totalItens",
+          "totalPaginas"
+        ]
+      },
+      "RegistroHistorico": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ocorridoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acao": {
+            "type": "string",
+            "enum": [
+              "ASSOCIADO_CADASTRADO",
+              "ASSOCIADO_ALTERADO",
+              "CONTATO_ADICIONADO",
+              "CONTATO_ALTERADO",
+              "CONTATO_REMOVIDO",
+              "UC_CADASTRADA",
+              "UC_ALTERADA"
+            ]
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "CADASTRO",
+              "CONTATOS",
+              "UNIDADES_CONSUMIDORAS"
+            ]
+          },
+          "ucId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contatoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "referencia": {
+            "type": "string",
+            "description": "Contato ou UC afetados"
+          },
+          "autor": {
+            "$ref": "#/components/schemas/Autor"
+          },
+          "alteracoes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlteracaoHistorico"
+            }
+          }
+        },
+        "required": [
+          "acao",
+          "alteracoes",
+          "autor",
+          "categoria",
+          "id",
+          "ocorridoEm"
+        ]
+      }
+    }
+  }
+}

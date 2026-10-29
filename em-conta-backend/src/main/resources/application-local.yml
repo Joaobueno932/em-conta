@@ -1,0 +1,28 @@
+# Ambiente local (Docker Compose em em-conta-backend/infra). Valores de exemplo, sem segredo real.
+spring:
+  datasource:
+    # Porta 3310: MySQL do Docker Compose (infra/), sem conflito com instalações locais em 3306.
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3310}/${DB_NAME:emconta}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:emconta}
+    password: ${DB_PASSWORD:emconta_local_dev}
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025} # Mailpit (infra/compose.yaml)
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: ${EMCONTA_COOKIE_SECURE:false} # HTTP local; em HTTPS permanece true
+
+emconta:
+  acesso:
+    url-publica: ${EMCONTA_URL_PUBLICA:http://localhost:5173}
+  security:
+    openapi-public: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

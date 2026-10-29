@@ -1,0 +1,29 @@
+# Build
+target/
+!.mvn/wrapper/maven-wrapper.properties
+
+# Ambiente local: nunca versionar arquivos reais de ambiente
+.env
+.env.*
+!.env.example
+infra/.env
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+bin/
+out/
+
+# Sistema e logs
+.DS_Store
+Thumbs.db
+*.log
+logs/

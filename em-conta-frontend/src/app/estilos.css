@@ -1,0 +1,259 @@
+/*
+ * Estilos globais. Cores, raios e tipografia seguem as variáveis `cor/*` do protótipo no Figma
+ * ("Em Conta — Protótipo", telas de Associados). A fonte Inter é usada quando instalada no sistema;
+ * não é baixada pela aplicação.
+ */
+:root {
+  --cor-texto: #1e2420;
+  --cor-texto-2: #7a817c;
+  --cor-texto-3: #9aa19c;
+  --cor-borda: #e8ece9;
+  --cor-superficie: #fff;
+  --cor-superficie-2: #f2f4f2;
+  --cor-fundo: #f4f6f4;
+  --cor-destaque: #1f9d45;
+  --cor-destaque-forte: #1b7f3a;
+  --cor-destaque-suave: #e3f5e7;
+  --cor-destaque-borda: #c9e7cf;
+  --cor-alerta: #a86a12;
+  --cor-erro: #b42318;
+  --cor-foco: #1b7f3a;
+  --raio: 8px;
+
+  accent-color: var(--cor-destaque);
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: var(--cor-destaque-forte);
+}
+
+.pagina {
+  max-width: 48rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.pagina--estreita {
+  max-width: 28rem;
+}
+
+/* Páginas da área autenticada com conteúdo largo (listagens, fichas). */
+.pagina--larga {
+  max-width: 76rem;
+}
+
+.subtitulo {
+  margin: 0 0 1.5rem;
+  color: var(--cor-texto-2);
+}
+
+.cartao {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0 1rem;
+}
+
+label,
+legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.obrigatorio {
+  color: var(--cor-erro);
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='tel'],
+select,
+textarea {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #c9cfcb;
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: inherit;
+}
+
+input[readonly] {
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-2);
+}
+
+input[aria-invalid='true'],
+select[aria-invalid='true'] {
+  border-color: var(--cor-erro);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--cor-foco);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--cor-destaque-forte);
+  border-radius: var(--raio);
+  background: var(--cor-destaque);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Link com aparência de botão principal (ex.: "Novo associado"). */
+a.botao {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: var(--raio);
+  background: var(--cor-destaque);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+a.botao-secundario {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  text-decoration: none;
+}
+
+button.secundario {
+  border-color: var(--cor-borda);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+}
+
+button.perigo {
+  border-color: var(--cor-erro);
+  background: var(--cor-erro);
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--cor-destaque-forte);
+  text-decoration: underline;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ajuda {
+  margin: 0;
+  color: var(--cor-texto-2);
+  font-size: 0.85rem;
+}
+
+.ajuda--erro {
+  color: var(--cor-erro);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--cor-borda);
+  font-size: 0.9rem;
+}
+
+thead th {
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-2);
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.tabela-rolavel {
+  overflow-x: auto;
+}
+
+td a {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+td a:hover {
+  text-decoration: underline;
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.acoes--fim {
+  justify-content: flex-end;
+}
+
+.etiqueta {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-2);
+  font-size: 0.8rem;
+}
+
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

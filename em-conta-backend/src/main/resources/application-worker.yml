@@ -1,0 +1,6 @@
+# Função de processo: worker, sem servidor HTTP.
+# Ainda não há consumidores ou jobs; o processo apenas mantém a aplicação ativa e conectada ao banco.
+spring:
+  main:
+    web-application-type: none
+    keep-alive: true

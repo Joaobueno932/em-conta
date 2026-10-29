@@ -1,0 +1,8 @@
+{
+  "producer": "em-conta-backend",
+  "apiTitle": "Em Conta API",
+  "apiVersion": "0.1.0-SNAPSHOT",
+  "openapi": "3.1.0",
+  "generator": "openapi-typescript@7.13.0",
+  "updatedAt": "2026-10-29T14:15:09.505Z"
+}

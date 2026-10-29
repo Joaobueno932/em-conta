@@ -1,0 +1,11 @@
+target/
+infra/
+contract/
+docs/
+scripts/
+.git/
+.idea/
+.vscode/
+*.iml
+.env
+**/.env

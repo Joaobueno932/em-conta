@@ -1,0 +1,52 @@
+package br.com.emconta.acesso.usuarios;
+
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.Set;
+
+/**
+ * Permissões por ação e recurso ({@code recurso:acao}). Somente as operações implementadas têm
+ * permissão; permissões de módulos de negócio serão criadas junto com eles.
+ */
+public enum Permissao {
+    USUARIOS_CONSULTAR("usuarios:consultar"),
+    USUARIOS_CONVIDAR("usuarios:convidar"),
+    USUARIOS_EDITAR("usuarios:editar"),
+    USUARIOS_ATRIBUIR_PERFIS("usuarios:atribuir-perfis"),
+    USUARIOS_ALTERAR_SITUACAO("usuarios:alterar-situacao"),
+    ASSOCIADOS_CONSULTAR("associados:consultar"),
+    ASSOCIADOS_CADASTRAR("associados:cadastrar"),
+    /** Dados cadastrais e contatos. */
+    ASSOCIADOS_EDITAR("associados:editar"),
+    ASSOCIADOS_CONSULTAR_HISTORICO("associados:consultar-historico"),
+    UCS_CONSULTAR("ucs:consultar"),
+    UCS_CADASTRAR("ucs:cadastrar"),
+    UCS_EDITAR("ucs:editar"),
+    /** Usinas e fazendas. */
+    USINAS_CONSULTAR("usinas:consultar"),
+    USINAS_CADASTRAR("usinas:cadastrar"),
+    USINAS_EDITAR("usinas:editar"),
+    /** Histórico de usinas e fazendas, inclusive dos vínculos. */
+    USINAS_CONSULTAR_HISTORICO("usinas:consultar-historico"),
+    /** Vínculos cadastrais UC → usina (pela usina e pela ficha do associado). */
+    VINCULOS_USINA_CONSULTAR("vinculos-usina:consultar"),
+    VINCULOS_USINA_CRIAR("vinculos-usina:criar"),
+    VINCULOS_USINA_ENCERRAR("vinculos-usina:encerrar");
+
+    private final String autoridade;
+
+    Permissao(String autoridade) {
+        this.autoridade = autoridade;
+    }
+
+    /** Valor usado como {@code GrantedAuthority} no Spring Security. */
+    public String autoridade() {
+        return autoridade;
+    }
+
+    public static Set<Permissao> de(Collection<Perfil> perfis) {
+        Set<Permissao> permissoes = EnumSet.noneOf(Permissao.class);
+        perfis.forEach(perfil -> permissoes.addAll(perfil.permissoes()));
+        return permissoes;
+    }
+}

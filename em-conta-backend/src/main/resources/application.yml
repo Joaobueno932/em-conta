@@ -1,0 +1,74 @@
+# Configuração base, segura para produção. Combine com um profile de ambiente (ex.: local)
+# e um de função de processo (api ou worker):  --spring.profiles.active=local,api
+spring:
+  application:
+    name: em-conta-backend
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:emconta}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate # o schema é responsabilidade exclusiva do Flyway
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+  session:
+    jdbc:
+      initialize-schema: never # tabelas criadas pela migration V1, não pelo Spring Session
+  jackson:
+    time-zone: UTC
+    deserialization:
+      # Campos desconhecidos no JSON são recusados (400): o cliente não consegue enviar, por exemplo,
+      # situação ou perfis num endpoint que só edita o nome.
+      fail-on-unknown-properties: true
+  mail:
+    # Host, porta e credenciais SMTP vêm do ambiente: SPRING_MAIL_HOST, SPRING_MAIL_PORT,
+    # SPRING_MAIL_USERNAME, SPRING_MAIL_PASSWORD (ver docs/seguranca.md). Sem host, nenhum e-mail é enviado.
+    properties:
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
+
+emconta:
+  acesso:
+    # URL pública do frontend usada nos links de convite e redefinição. Obrigatória; https fora do localhost.
+    url-publica: ${EMCONTA_URL_PUBLICA:}
+    email:
+      remetente: ${EMCONTA_EMAIL_REMETENTE:Em Conta <nao-responda@localhost>}
+  security:
+    # Libera /v3/api-docs e /swagger-ui sem autenticação. Ligado apenas no profile local.
+    openapi-public: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+  paths-to-match: /api/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    # Nunca habilitar DEBUG/TRACE destes pacotes em produção: podem registrar cabeçalhos e parâmetros.
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN
+    # Em violação de unicidade o Hibernate registra em WARN a mensagem do MySQL com o valor duplicado
+    # (ex.: CPF/CNPJ). Essas violações já são tratadas como 409 com código estável; não vão para o log.
+    org.hibernate.orm.jdbc.error: ERROR
