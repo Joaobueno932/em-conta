@@ -6,8 +6,10 @@ verificados com Spring Modulith). Banco MySQL/InnoDB `utf8mb4`, schema exclusiva
 > Estado: fundação técnica + **acesso de usuários internos** (login, sessão, convite, recuperação
 > e troca de senha, administração de usuários, perfis e permissões) + **cadastro de associados PF/PJ,
 > contatos e unidades consumidoras**, com histórico + **fazendas, usinas e vínculos cadastrais UC →
-> usina**. Detalhes em [docs/seguranca.md](docs/seguranca.md), [docs/associados.md](docs/associados.md)
-> e [docs/usinas.md](docs/usinas.md).
+> usina** + **atendimento via WhatsApp** (Cloud API direta; canal "não configurado" enquanto as
+> variáveis não forem preenchidas). Detalhes em [docs/seguranca.md](docs/seguranca.md),
+> [docs/associados.md](docs/associados.md), [docs/usinas.md](docs/usinas.md) e
+> [docs/atendimento.md](docs/atendimento.md).
 
 ## Requisitos
 
@@ -109,8 +111,14 @@ e-mails de convite e de recuperação aparecem no Mailpit: http://localhost:8025
 | `POST /api/v1/usinas/{id}/vinculos` | `vinculos-usina:criar` | vincula UC (`ucId`, `inicio`) |
 | `POST /api/v1/usinas/{id}/vinculos/{vinculoId}/encerramento` | `vinculos-usina:encerrar` | encerra (`versao`, `fim`, `motivo`) |
 
+### Endpoints de atendimento
+
+Base `/api/v1/atendimento` (fila, conversa, resposta, transferência, encerramento, vínculo com
+associado, histórico) e o webhook público `/api/v1/integracoes/whatsapp/webhook`. Lista completa,
+permissões, variáveis `WHATSAPP_*` e homologação: [docs/atendimento.md](docs/atendimento.md).
+
 Erros vêm em Problem Details com o campo `codigo` (ex.: `CREDENCIAIS_INVALIDAS`,
-`MUITAS_TENTATIVAS`, `SESSAO_EXPIRADA`, `TOKEN_INVALIDO`, `ULTIMO_ADMINISTRADOR`,
+`MUITAS_TENTATIVAS`, `SESSAO_EXPIRADA`, `TOKEN_INVALIDO`, `ULTIMO_ADMINISTRADOR`, `CREDENCIAL_ALTERADA`,
 `DOCUMENTO_JA_CADASTRADO`, `UC_JA_CADASTRADA`, `CONFLITO_CONCORRENTE`).
 
 ## Profiles
@@ -179,6 +187,12 @@ O que `verify` cobre:
 - `AutorizacaoParcialIntegrationTests`: permissões parciais por chamada direta à API (usinas,
   vínculos, histórico, associados e UCs), com sessão e regras de rota reais.
 - `MigracaoV4IntegrationTests`: base em V3 com dados migrada até a versão atual sem perda.
+- `acesso/CredenciaisConcorrenciaIntegrationTests`: corridas controladas por latches (troca × redefinição,
+  duas trocas, troca × desativação, requisição da mesma sessão durante a troca), rollback sem
+  consumo de token nem auditoria, tokens inválidos sem Argon2, uso simultâneo do mesmo token e limite
+  por IP dos links públicos (inclusive em paralelo).
+- `acesso/AutorizacaoPadraoIntegrationTests`: negação por padrão para rota sem regra, métodos não
+  declarados e rotas públicas.
 - `associados/DocumentosTests`: CPF, CNPJ numérico e alfanumérico (exemplo oficial) e máscaras.
 - `RegrasAcessoTests`: política de senha (caracteres e bytes), normalização de e-mail e validação
   da URL pública.
@@ -222,4 +236,5 @@ docs/            arquitetura, segurança, versões, CI
 
 Detalhes: [docs/arquitetura.md](docs/arquitetura.md) · [docs/seguranca.md](docs/seguranca.md) ·
 [docs/associados.md](docs/associados.md) · [docs/usinas.md](docs/usinas.md) ·
+[docs/atendimento.md](docs/atendimento.md) ·
 [docs/versoes.md](docs/versoes.md) · [docs/ci.md](docs/ci.md) · [infra/README.md](infra/README.md)

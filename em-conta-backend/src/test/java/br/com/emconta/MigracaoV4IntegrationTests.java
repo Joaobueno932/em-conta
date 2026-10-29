@@ -53,8 +53,9 @@ class MigracaoV4IntegrationTests extends ApiIntegracao {
                     .locations("classpath:db/migration")
                     .load()
                     .migrate();
-            assertThat(resultado.migrationsExecuted).isEqualTo(1);
-            assertThat(resultado.targetSchemaVersion).isEqualTo("4");
+            // V4 (usinas) e as posteriores, até a versão atual.
+            assertThat(resultado.migrationsExecuted).isGreaterThanOrEqualTo(1);
+            assertThat(Integer.parseInt(resultado.targetSchemaVersion)).isGreaterThanOrEqualTo(4);
 
             assertThat(db.sql("select numero from unidade_consumidora where id = 1")
                             .query(String.class)

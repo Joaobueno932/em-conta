@@ -38,7 +38,12 @@ public record AcessoProperties(
 
     /** Limites de tentativas. Valores ausentes usam o padrão de {@link TipoLimite}. */
     public record Limites(
-            Regra loginConta, Regra loginIp, Regra recuperacaoConta, Regra recuperacaoIp, Regra reenvioConvite) {
+            Regra loginConta,
+            Regra loginIp,
+            Regra recuperacaoConta,
+            Regra recuperacaoIp,
+            Regra reenvioConvite,
+            Regra usoTokenIp) {
 
         public Regra regra(TipoLimite tipo) {
             Regra configurada = switch (tipo) {
@@ -47,6 +52,7 @@ public record AcessoProperties(
                 case RECUPERACAO_CONTA -> recuperacaoConta;
                 case RECUPERACAO_IP -> recuperacaoIp;
                 case REENVIO_CONVITE -> reenvioConvite;
+                case USO_TOKEN_IP -> usoTokenIp;
             };
             return configurada != null ? configurada : tipo.padrao();
         }

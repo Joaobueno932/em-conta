@@ -64,7 +64,7 @@ public class Autenticacao {
         limitador.limpar(TipoLimite.LOGIN_CONTA, chaveConta);
         limitador.devolver(TipoLimite.LOGIN_IP, ip);
         auditoria.registrar(TipoEvento.LOGIN_SUCESSO, usuario.getId(), usuario.getId(), ip, null);
-        return new SessaoUsuario(usuario.getId(), usuario.getVersaoSeguranca(), clock.instant());
+        return SessaoUsuario.nova(usuario.getId(), usuario.getVersaoSeguranca(), clock.instant());
     }
 
     private void exigirDentroDoLimite(TipoLimite tipo, String valor, String ip) {

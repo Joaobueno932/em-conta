@@ -43,6 +43,8 @@ class SecurityConfiguration {
         "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
     };
 
+    private static final String WEBHOOK_WHATSAPP = "/api/v1/integracoes/whatsapp/webhook";
+
     private static final String[] AUTH_PUBLICOS = {
         "/api/v1/auth/login",
         "/api/v1/auth/logout",
@@ -138,9 +140,50 @@ class SecurityConfiguration {
             auth.requestMatchers("/api/v1/fazendas/**", "/api/v1/usinas/**", "/api/v1/vinculos-usina/**")
                     .denyAll();
 
-            auth.anyRequest().authenticated();
+            // Atendimento pelo WhatsApp.
+            auth.requestMatchers(
+                            HttpMethod.GET,
+                            "/api/v1/atendimento/canal",
+                            "/api/v1/atendimento/presenca",
+                            "/api/v1/atendimento/atendimentos",
+                            "/api/v1/atendimento/atendimentos/*",
+                            "/api/v1/atendimento/atendimentos/*/linha-do-tempo",
+                            "/api/v1/atendimento/historico")
+                    .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/presenca")
+                    .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/assuncao")
+                    .hasAuthority(Permissao.ATENDIMENTO_ASSUMIR.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/mensagens")
+                    .hasAuthority(Permissao.ATENDIMENTO_RESPONDER.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/transferencia")
+                    .hasAuthority(Permissao.ATENDIMENTO_TRANSFERIR.autoridade());
+            auth.requestMatchers(HttpMethod.GET, "/api/v1/atendimento/responsaveis")
+                    .hasAuthority(Permissao.ATENDIMENTO_TRANSFERIR.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/encerramento")
+                    .hasAuthority(Permissao.ATENDIMENTO_ENCERRAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/atendimentos/*/associado")
+                    .hasAuthority(Permissao.ATENDIMENTO_VINCULAR_ASSOCIADO.autoridade());
+            auth.requestMatchers(
+                            HttpMethod.GET,
+                            "/api/v1/atendimento/atendimentos/*/associados-sugeridos",
+                            "/api/v1/atendimento/associados")
+                    .hasAuthority(Permissao.ATENDIMENTO_VINCULAR_ASSOCIADO.autoridade());
+            auth.requestMatchers(HttpMethod.GET, "/api/v1/atendimento/webhook-falhas")
+                    .hasAuthority(Permissao.ATENDIMENTO_REPROCESSAR.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/webhook-eventos/*/reprocessamento")
+                    .hasAuthority(Permissao.ATENDIMENTO_REPROCESSAR.autoridade());
+
+            // Webhook da Meta: sem sessão; cada evento é autenticado pela assinatura no controller.
+            auth.requestMatchers(HttpMethod.GET, WEBHOOK_WHATSAPP).permitAll();
+            auth.requestMatchers(HttpMethod.POST, WEBHOOK_WHATSAPP).permitAll();
+
+            // Negação por padrão: rota nova sem regra explícita acima não é acessível nem para administrador.
+            auth.anyRequest().denyAll();
         });
-        http.csrf(csrf -> csrf.spa().csrfTokenRepository(csrfTokenRepository));
+        // CSRF vale para tudo, exceto o webhook (chamado pela Meta, autenticado por assinatura HMAC).
+        http.csrf(
+                csrf -> csrf.spa().csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(WEBHOOK_WHATSAPP));
         http.addFilterBefore(new SessaoUsuarioFilter(sessoes), AuthorizationFilter.class);
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, e) -> naoAutenticado(jsonMapper, request, response))

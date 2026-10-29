@@ -96,6 +96,8 @@ também é convertida para minúsculas.
 `csrf.spa()` com o `CookieCsrfTokenRepository`: o cookie legível `XSRF-TOKEN` volta no cabeçalho
 `X-XSRF-TOKEN` em métodos mutáveis, inclusive no login (contra login CSRF). `GET /api/v1/auth/csrf`
 emite o cookie quando ele não existe. O token é renovado no login e removido no logout.
+Única exceção: o webhook do WhatsApp (`/api/v1/integracoes/whatsapp/webhook`), chamado pela Meta
+sem sessão nem cookie; cada evento é autenticado pela assinatura `X-Hub-Signature-256`.
 
 ## Limite de tentativas
 
@@ -113,9 +115,16 @@ Uma limpeza horária remove contadores inativos há mais de 1 dia, e tokens venc
 | Recuperação por IP | 20 por hora | 429 |
 | Recuperação por conta | 3 por hora | ignorada em silêncio (a resposta continua genérica) |
 | Reenvio de convite por usuário | 5 por hora | 429 |
+| Uso de links por IP (validação, aceite de convite e redefinição, somados) | 30 em 15 min, bloqueio de 15 min | 429 `MUITAS_TENTATIVAS` com `Retry-After` |
+
+Uso de links é limitado **só por IP**: um limite por conta poderia ser acionado por terceiros com
+informação pública (o e-mail) e impedir a recuperação legítima. Os tokens têm 256 bits, então o
+limite protege o servidor do custo, não contra adivinhação. Ambientes de teste automatizado em que
+todas as requisições chegam pelo mesmo IP podem elevar o máximo
+(`EMCONTA_ACESSO_LIMITES_USOTOKENIP_MAXIMO`, `_JANELA`, `_BLOQUEIO`).
 
 Sucesso no login zera o contador da conta. Os valores podem ser ajustados em
-`emconta.acesso.limites.<login-conta|login-ip|recuperacao-conta|recuperacao-ip|reenvio-convite>`
+`emconta.acesso.limites.<login-conta|login-ip|recuperacao-conta|recuperacao-ip|reenvio-convite|uso-token-ip>`
 (`maximo`, `janela`, `bloqueio`). **(provisório)**
 
 **IP do cliente**: `server.forward-headers-strategy=native`. O Tomcat (RemoteIpValve) só aceita
@@ -146,6 +155,13 @@ em "senha incorreta".
   localhost), nunca de cabeçalhos da requisição.
 - Link inválido, expirado ou usado: 400 `TOKEN_INVALIDO`, com mensagem e caminho para pedir outro.
 
+**Ordem nos fluxos públicos (aceite e redefinição)**: limite por IP → validação do token (consulta
+barata: formato, existência, finalidade, validade, uso e situação da conta) → política da nova senha
+→ Argon2 (fora de transação) → transação que consome o token de forma atômica (UPDATE condicional),
+trava a conta e grava. Token malformado, inexistente, expirado, consumido ou invalidado nunca chega ao
+Argon2. A validação prévia não substitui o consumo atômico: duas requisições com o mesmo token geram
+um único sucesso, e uma falha dentro da transação desfaz o consumo e a auditoria.
+
 ## Convite
 
 1. O administrador informa nome, e-mail e, opcionalmente, perfis (exige `usuarios:atribuir-perfis`).
@@ -164,6 +180,24 @@ perfis.
 - `POST /auth/senha/redefinicao` consome o token, troca a senha e encerra todas as sessões.
 - `POST /auth/senha/alteracao` exige a senha atual. A sessão atual continua e as demais são
   encerradas.
+
+### Concorrência na troca e na redefinição
+
+- **Troca autenticada**: a senha atual é conferida contra um instantâneo (hash e versão de
+  segurança) fora de transação. A gravação acontece numa transação curta, com a linha do usuário
+  travada (`SELECT ... FOR UPDATE`), e só prossegue se a conta continua ativa e o instantâneo ainda é
+  o atual. Se uma redefinição, outra troca ou uma desativação concluiu no intervalo, nada é gravado:
+  409 `CREDENCIAL_ALTERADA`, sem auditoria de sucesso, sem invalidar tokens e sem limpar contadores.
+  O Argon2 nunca roda com a linha travada.
+- **Redefinição por link**: também trava a conta na transação; conta que deixou de estar ativa faz a
+  transação falhar e o token volta a não consumido.
+- **Sessão atual na troca**: cada sessão tem uma chave interna aleatória (guardada só no servidor).
+  Na mesma transação que incrementa a versão de segurança, a troca grava em `sessao_renovada` que
+  *esta* sessão (hash da chave) continua válida na nova versão. Uma requisição da própria sessão que
+  chegue antes de o principal ser regravado é aceita e o filtro promove o principal; as demais
+  sessões não têm esse registro e são recusadas, sem janela de tolerância. Redefinição por link
+  apaga os registros (encerra todas as sessões); desativação continua bloqueando porque a conta
+  deixa de estar ativa.
 
 ## E-mail
 
@@ -209,10 +243,23 @@ envia autoridades: o `Ator` de cada operação é montado das permissões calcul
 | `vinculos-usina:consultar` | `GET /api/v1/usinas/{id}/vinculos`, `GET /api/v1/associados/{id}/vinculos-usina` |
 | `vinculos-usina:criar` | `GET /api/v1/vinculos-usina/ucs-candidatas`, `POST /api/v1/usinas/{id}/vinculos` |
 | `vinculos-usina:encerrar` | `POST /api/v1/usinas/{id}/vinculos/{vinculoId}/encerramento` |
+| `atendimento:consultar` | `GET /api/v1/atendimento/canal`, `GET`/`PUT …/presenca`, `GET …/atendimentos`, `GET …/atendimentos/{id}`, `GET …/atendimentos/{id}/linha-do-tempo`, `GET …/historico` |
+| `atendimento:assumir` | `POST /api/v1/atendimento/atendimentos/{id}/assuncao` |
+| `atendimento:responder` | `POST /api/v1/atendimento/atendimentos/{id}/mensagens` (só o responsável; destino de transferência precisa desta permissão) |
+| `atendimento:transferir` | `POST …/atendimentos/{id}/transferencia`, `GET /api/v1/atendimento/responsaveis` |
+| `atendimento:encerrar` | `POST …/atendimentos/{id}/encerramento` |
+| `atendimento:vincular-associado` | `PUT …/atendimentos/{id}/associado`, `GET …/atendimentos/{id}/associados-sugeridos`, `GET /api/v1/atendimento/associados` |
+| `atendimento:reprocessar` | `GET /api/v1/atendimento/webhook-falhas`, `POST …/webhook-eventos/{id}/reprocessamento` |
+| (público, assinatura HMAC) | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` — ver [atendimento.md](atendimento.md#provedor) |
 | (sessão válida) | `GET /api/v1/auth/sessao`, `POST /api/v1/auth/senha/alteracao` |
 
 Qualquer outra rota sob `/api/v1/associados/**`, `/api/v1/usinas/**`, `/api/v1/fazendas/**` ou
 `/api/v1/vinculos-usina/**` é negada mesmo com sessão.
+
+**Negação por padrão**: a configuração termina em `anyRequest().denyAll()`. Uma rota nova sem regra
+explícita (e qualquer método HTTP não declarado numa rota existente) é negada, inclusive para o
+administrador: 401 sem sessão, 403 com sessão (`AutorizacaoPadraoIntegrationTests`, com um endpoint
+que só existe no contexto de teste).
 
 Perfil técnico inicial: **`ADMINISTRADOR`**, com todas as permissões acima. As permissões de cada
 perfil são listadas explicitamente em `Perfil` (não há `allOf`): permissões novas não são

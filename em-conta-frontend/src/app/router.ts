@@ -5,6 +5,9 @@ import AssociadosPage from '@/features/associados/AssociadosPage.vue'
 import EditarAssociadoPage from '@/features/associados/EditarAssociadoPage.vue'
 import NovoAssociadoPage from '@/features/associados/NovoAssociadoPage.vue'
 import UcFormPage from '@/features/associados/UcFormPage.vue'
+import AtendimentoDetalhePage from '@/features/atendimento/AtendimentoDetalhePage.vue'
+import AtendimentoPage from '@/features/atendimento/AtendimentoPage.vue'
+import HistoricoGeralPage from '@/features/atendimento/HistoricoGeralPage.vue'
 import AcessoNegadoPage from '@/features/auth/AcessoNegadoPage.vue'
 import FazendaFormPage from '@/features/usinas/FazendaFormPage.vue'
 import FazendasPage from '@/features/usinas/FazendasPage.vue'
@@ -127,6 +130,25 @@ export const routes: RouteRecordRaw[] = [
         component: FazendaFormPage,
         props: true,
         meta: { permissao: 'usinas:editar' },
+      },
+      {
+        path: 'atendimento',
+        name: 'atendimento',
+        component: AtendimentoPage,
+        meta: { permissao: 'atendimento:consultar' },
+      },
+      {
+        path: 'atendimento/historico',
+        name: 'atendimento-historico',
+        component: HistoricoGeralPage,
+        meta: { permissao: 'atendimento:consultar' },
+      },
+      {
+        path: 'atendimento/historico/:id(\\d+)',
+        name: 'atendimento-detalhe',
+        component: AtendimentoDetalhePage,
+        props: true,
+        meta: { permissao: 'atendimento:consultar' },
       },
       { path: 'acesso-negado', name: 'acesso-negado', component: AcessoNegadoPage },
     ],

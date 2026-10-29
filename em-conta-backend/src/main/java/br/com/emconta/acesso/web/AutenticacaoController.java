@@ -146,6 +146,9 @@ class AutenticacaoController {
             operationId = "alterarSenha",
             summary = "Troca a senha confirmando a atual; mantém esta sessão e encerra as demais")
     @ApiResponse(responseCode = "204", description = "Senha alterada")
+    @ApiResponse(
+            responseCode = "409",
+            description = "CREDENCIAL_ALTERADA: senha ou sessão mudou durante a operação; nada foi alterado")
     ResponseEntity<Void> alterarSenha(
             @Valid @RequestBody AlteracaoSenhaRequest corpo,
             Authentication autenticacao,
@@ -183,6 +186,7 @@ class AutenticacaoController {
     @Operation(operationId = "redefinirSenha", summary = "Define nova senha pelo link; encerra todas as sessões")
     @ApiResponse(responseCode = "204", description = "Senha redefinida")
     @ApiResponse(responseCode = "400", description = "TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA")
+    @ApiResponse(responseCode = "429", description = "MUITAS_TENTATIVAS a partir deste IP, com Retry-After")
     ResponseEntity<Void> redefinirSenha(@Valid @RequestBody RedefinicaoSenhaRequest corpo, HttpServletRequest request) {
         credenciais.redefinirSenha(corpo.token(), corpo.novaSenha(), Requisicoes.ip(request));
         return ResponseEntity.noContent().build();
@@ -192,8 +196,10 @@ class AutenticacaoController {
     @Operation(operationId = "validarToken", summary = "Confere um link de convite ou redefinição sem consumi-lo")
     @ApiResponse(responseCode = "200", description = "Link válido")
     @ApiResponse(responseCode = "400", description = "TOKEN_INVALIDO")
-    TokenValidoResponse validarToken(@Valid @RequestBody ValidacaoTokenRequest corpo) {
-        Credenciais.TokenValido valido = credenciais.validarToken(corpo.token(), corpo.finalidade());
+    @ApiResponse(responseCode = "429", description = "MUITAS_TENTATIVAS a partir deste IP, com Retry-After")
+    TokenValidoResponse validarToken(@Valid @RequestBody ValidacaoTokenRequest corpo, HttpServletRequest request) {
+        Credenciais.TokenValido valido =
+                credenciais.validarToken(corpo.token(), corpo.finalidade(), Requisicoes.ip(request));
         return new TokenValidoResponse(valido.finalidade(), valido.nome());
     }
 
@@ -201,6 +207,7 @@ class AutenticacaoController {
     @Operation(operationId = "aceitarConvite", summary = "Define a senha pelo convite e ativa a conta")
     @ApiResponse(responseCode = "204", description = "Conta ativada; o usuário pode entrar")
     @ApiResponse(responseCode = "400", description = "TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA")
+    @ApiResponse(responseCode = "429", description = "MUITAS_TENTATIVAS a partir deste IP, com Retry-After")
     ResponseEntity<Void> aceitarConvite(@Valid @RequestBody AceiteConviteRequest corpo, HttpServletRequest request) {
         credenciais.aceitarConvite(corpo.token(), corpo.senha(), Requisicoes.ip(request));
         return ResponseEntity.noContent().build();

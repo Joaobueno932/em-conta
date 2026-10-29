@@ -59,6 +59,27 @@ export async function paginaDoAdministrador(browser: Browser) {
   return page
 }
 
+/**
+ * Abre o usuário na lista paginada (ordenada por nome). O banco isolado de testes acumula usuários
+ * entre execuções, então o usuário pode não estar na primeira página.
+ */
+export async function abrirUsuarioNaLista(admin: Page, nome: string) {
+  const link = admin.getByRole('link', { name: nome, exact: true })
+  const indicador = admin.getByText(/^Página \d+ de \d+$/)
+  await expect(indicador).toBeVisible()
+  while ((await link.count()) === 0) {
+    const atual = (await indicador.textContent()) ?? ''
+    const [, pagina, total] = atual.match(/Página (\d+) de (\d+)/) ?? []
+    if (pagina === total) break
+    // A tabela mantém a página anterior até a resposta chegar: espera a nova página carregar.
+    const resposta = admin.waitForResponse((r) => r.url().includes('/api/v1/usuarios?') && r.ok())
+    await admin.getByRole('button', { name: 'Próxima' }).click()
+    await resposta
+    await expect(indicador).not.toHaveText(atual)
+  }
+  await link.click()
+}
+
 /** Convida pela interface do administrador e ativa o acesso abrindo o link do e-mail. */
 export async function criarUsuarioAtivo(browser: Browser, admin: Page, nome: string) {
   const email = emailUnico('usuario')

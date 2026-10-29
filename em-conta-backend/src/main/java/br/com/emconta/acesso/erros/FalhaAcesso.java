@@ -40,6 +40,14 @@ public class FalhaAcesso extends RuntimeException {
                 "Este link é inválido, expirou ou já foi utilizado. Solicite um novo link.");
     }
 
+    /** A senha ou a versão de segurança mudou entre a validação e a gravação; nada foi alterado. */
+    public static FalhaAcesso credencialAlterada() {
+        return new FalhaAcesso(
+                HttpStatus.CONFLICT,
+                "CREDENCIAL_ALTERADA",
+                "Sua senha ou sua sessão foi alterada por outra operação. Nada foi alterado; entre novamente.");
+    }
+
     public static FalhaAcesso requisicaoInvalida(String codigo, String mensagem) {
         return new FalhaAcesso(HttpStatus.BAD_REQUEST, codigo, mensagem);
     }

@@ -87,10 +87,13 @@ class ApiFoundationIntegrationTests {
         assertThat(xsrf).as("cookie XSRF-TOKEN emitido").isNotNull();
         assertThat(xsrf.isHttpOnly()).isFalse();
 
-        // Com token válido, a requisição chega ao MVC, que responde 405 em Problem Details.
+        // Método sem regra explícita é negado (negação por padrão), mesmo autenticado e com CSRF válido.
         mvc.perform(post("/api/v1/system/status").cookie(xsrf).header("X-XSRF-TOKEN", xsrf.getValue()))
-                .andExpect(status().isMethodNotAllowed())
+                .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+        // Com token válido, a requisição passa pela segurança e chega ao controller (logout: 204).
+        mvc.perform(post("/api/v1/auth/logout").cookie(xsrf).header("X-XSRF-TOKEN", xsrf.getValue()))
+                .andExpect(status().isNoContent());
     }
 
     @Test
@@ -102,7 +105,7 @@ class ApiFoundationIntegrationTests {
         assertThat(jdbc.sql("select version from flyway_schema_history where version is not null")
                         .query(String.class)
                         .list())
-                .contains("1", "2", "3", "4");
+                .contains("1", "2", "3", "4", "5");
         assertThat(jdbc.sql("select table_name from information_schema.tables where table_schema = database()")
                         .query(String.class)
                         .list())
@@ -116,7 +119,8 @@ class ApiFoundationIntegrationTests {
                         "fazenda",
                         "usina",
                         "vinculo_uc_usina",
-                        "historico_usinas");
+                        "historico_usinas",
+                        "sessao_renovada");
         assertThat(jdbc.sql("select default_character_set_name from information_schema.schemata"
                                 + " where schema_name = database()")
                         .query(String.class)

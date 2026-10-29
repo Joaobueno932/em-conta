@@ -65,6 +65,14 @@ async function encerrar() {
               Usinas
             </RouterLink>
           </li>
+          <li v-if="temPermissao(usuario, 'atendimento:consultar')">
+            <RouterLink
+              :to="{ name: 'atendimento' }"
+              :class="{ ativo: route.path.startsWith('/atendimento') }"
+            >
+              Atendimento
+            </RouterLink>
+          </li>
           <li v-if="temPermissao(usuario, 'usuarios:consultar')">
             <RouterLink :to="{ name: 'usuarios' }" active-class="ativo">Usuários</RouterLink>
           </li>

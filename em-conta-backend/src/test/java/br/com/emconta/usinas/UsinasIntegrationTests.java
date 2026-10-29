@@ -336,6 +336,29 @@ class UsinasIntegrationTests extends ApiIntegracao {
                 .isEqualTo(2);
     }
 
+    @Test
+    void fazendasPaginadasNoServidorComMaisDeCem() {
+        Navegador admin = administrador();
+        String marca = marca();
+        for (int i = 1; i <= 105; i++) {
+            admin.post("/api/v1/fazendas", Map.of("nome", "%s %03d".formatted(marca, i)));
+        }
+        JsonNode primeira = corpo(admin.get("/api/v1/fazendas?busca=" + marca + "&tamanho=20"));
+        assertThat(primeira.get("totalItens").asLong()).isEqualTo(105);
+        assertThat(primeira.get("totalPaginas").asInt()).isEqualTo(6);
+        JsonNode ultima = corpo(admin.get("/api/v1/fazendas?busca=" + marca + "&tamanho=20&pagina=5"));
+        assertThat(ultima.get("itens")).hasSize(5);
+        assertThat(ultima.get("itens").get(4).get("nome").asString()).isEqualTo(marca + " 105");
+        long id = ultima.get("itens").get(4).get("id").asLong();
+
+        // A 105ª fazenda é encontrada pela busca por identificador e pode ser vinculada à usina.
+        JsonNode porCodigo = corpo(admin.get("/api/v1/fazendas?busca=FZD-" + id));
+        assertThat(porCodigo.get("itens").get(0).get("id").asLong()).isEqualTo(id);
+        JsonNode usina = corpo(admin.post("/api/v1/usinas", Map.of("nome", "Distante " + marca, "fazendaId", id)));
+        assertThat(usina.get("fazenda").get("id").asLong()).isEqualTo(id);
+        assertThat(admin.get("/api/v1/fazendas?tamanho=101").getStatus()).isEqualTo(400);
+    }
+
     // ---------------------------------------------------------------- histórico
 
     @Test

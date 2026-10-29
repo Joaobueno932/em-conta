@@ -79,6 +79,8 @@ Permissões por rota: [seguranca.md](seguranca.md#autorização).
   cadastral, previsão de alocação e rateio efetivo (nada disso foi implementado além do cadastral).
 - Fuso de referência do negócio: "hoje" usa provisoriamente `America/Campo_Grande`
   (`emconta.negocio.fuso`).
+- Seletor de fazenda no formulário de usina: busca e paginação no servidor (20 por página), a fazenda
+  selecionada continua visível fora dos resultados; não há limite de quantidade de fazendas.
 - Desativação de usina/fazenda e seu efeito sobre vínculos vigentes: sem regra; não implementado.
 - Situação operacional da UC (DP-08/DP-18), transferência de titularidade e múltiplos vínculos
   simultâneos: sem regra; bloqueados.

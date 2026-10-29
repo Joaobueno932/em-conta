@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import {
+  abrirUsuarioNaLista,
   ADMIN_EMAIL,
   ADMIN_SENHA,
   criarUsuarioAtivo,
@@ -94,7 +95,7 @@ test('desativação encerra a sessão aberta e a próxima ação leva ao login',
   await expect(page.getByTestId('usuario-email')).toHaveText(email)
 
   await admin.goto('/admin/usuarios')
-  await admin.getByRole('link', { name: nome, exact: true }).click()
+  await abrirUsuarioNaLista(admin, nome)
   admin.once('dialog', (dialogo) => void dialogo.accept())
   await admin.getByRole('button', { name: 'Desativar' }).click()
   await expect(admin.getByTestId('situacao')).toHaveText('Desativado')

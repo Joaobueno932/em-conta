@@ -1,0 +1,219 @@
+import { fireEvent, screen, waitFor } from '@testing-library/vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { apiFalsa, csrf, montarApp, problema, usuarioAtual, type Rotas } from '@/test/api-falsa'
+import { jsonResponse } from '@/test/render-with-providers'
+
+const TODAS = [
+  'atendimento:consultar',
+  'atendimento:assumir',
+  'atendimento:responder',
+  'atendimento:transferir',
+  'atendimento:encerrar',
+  'atendimento:vincular-associado',
+]
+
+// usuarioAtual usa o tamanho do e-mail como id: 'adm@x.br' → 8.
+const EU = { id: 8, nome: 'Pessoa adm@x.br' }
+const OUTRA = { id: 30, nome: 'Outra Pessoa' }
+const BASE = '/api/v1/atendimento'
+
+function resumo(sobrescrever: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    codigo: 'ATD-000001',
+    situacao: 'AGUARDANDO',
+    contatoNumero: '5567999990000',
+    contatoNome: 'Contato Teste',
+    iniciadoEm: '2026-10-29T12:00:00Z',
+    ...sobrescrever,
+  }
+}
+
+function detalhe(sobrescrever: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) {
+  return {
+    resumo: resumo(sobrescrever),
+    versao: 2,
+    versaoConversa: 4,
+    janelaAbertaAte: new Date(Date.now() + 3_600_000).toISOString(),
+    canalConfigurado: true,
+    ...extra,
+  }
+}
+
+const mensagem = {
+  tipo: 'MENSAGEM',
+  id: 10,
+  ocorridoEm: '2026-10-29T12:00:00Z',
+  atendimentoId: 1,
+  direcao: 'ENTRADA',
+  tipoMensagem: 'TEXTO',
+  texto: 'Olá, preciso de ajuda',
+  situacao: 'RECEBIDA',
+}
+
+function rotas(det: unknown, permissoes = TODAS, adicionais: Rotas = {}): Rotas {
+  return {
+    ...csrf(),
+    'GET /api/v1/auth/sessao': () => jsonResponse(usuarioAtual('adm@x.br', permissoes)),
+    [`GET ${BASE}/canal`]: () => jsonResponse({ canal: 'WHATSAPP', configurado: true }),
+    [`GET ${BASE}/presenca`]: () => jsonResponse({ disponivel: true }),
+    [`GET ${BASE}/atendimentos`]: () =>
+      jsonResponse({
+        itens: [resumo()],
+        pagina: 0,
+        tamanho: 20,
+        totalItens: 1,
+        totalPaginas: 1,
+        contagens: { aguardando: 1, emAndamento: 0, meus: 0 },
+      }),
+    [`GET ${BASE}/atendimentos/1`]: () => jsonResponse(det),
+    [`GET ${BASE}/atendimentos/1/linha-do-tempo`]: () => jsonResponse([mensagem]),
+    [`GET ${BASE}/atendimentos/1/associados-sugeridos`]: () => jsonResponse([]),
+    ...adicionais,
+  }
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+})
+
+describe('Atendimento', () => {
+  it('mostra a fila e a conversa; assumir chama o servidor', async () => {
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas(detalhe(), TODAS, {
+        [`POST ${BASE}/atendimentos/1/assuncao`]: () => new Response(null, { status: 204 }),
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+
+    expect(await screen.findByText('Olá, preciso de ajuda')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Aguardando/ }).textContent).toContain('1')
+    // Ainda não é responsável: não responde.
+    expect((screen.getByLabelText('Mensagem') as HTMLTextAreaElement).disabled).toBe(true)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Assumir' }))
+    await waitFor(() => expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/assuncao`))
+  })
+
+  it('sem canal configurado avisa e não permite enviar', async () => {
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas(
+        detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: EU }, { canalConfigurado: false }),
+        TODAS,
+        { [`GET ${BASE}/canal`]: () => jsonResponse({ canal: 'WHATSAPP', configurado: false }) },
+      ),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+
+    expect((await screen.findAllByText(/Canal não configurado/)).length).toBeGreaterThan(0)
+    expect((screen.getByLabelText('Mensagem') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(chamadas.some((c) => c.startsWith(`POST ${BASE}/atendimentos/1/mensagens`))).toBe(false)
+  })
+
+  it('repetir o envio após falha reutiliza a mesma chave de idempotência', async () => {
+    const chaves: string[] = []
+    let tentativa = 0
+    const { fetchFn } = apiFalsa(
+      rotas(detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: EU }), TODAS, {
+        [`POST ${BASE}/atendimentos/1/mensagens`]: (init) => {
+          chaves.push(JSON.parse(String(init?.body)).chaveIdempotencia)
+          tentativa++
+          return tentativa === 1
+            ? problema(503, 'INDISPONIVEL', 'Serviço indisponível.')
+            : jsonResponse({ mensagemId: 99, situacao: 'PENDENTE' }, 202)
+        },
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+
+    const campo = (await screen.findByLabelText('Mensagem')) as HTMLTextAreaElement
+    await waitFor(() => expect(campo.disabled).toBe(false))
+    await fireEvent.update(campo, 'Bom dia!')
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    expect(await screen.findByText(/tentar de novo não duplica/)).toBeTruthy()
+    expect(campo.value).toBe('Bom dia!')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    await waitFor(() => expect(chaves).toHaveLength(2))
+    expect(chaves[0]).toBe(chaves[1])
+    await waitFor(() => expect(campo.value).toBe(''))
+  })
+
+  it('janela de 24 horas encerrada bloqueia a resposta', async () => {
+    const { fetchFn } = apiFalsa(
+      rotas(
+        detalhe(
+          { situacao: 'EM_ATENDIMENTO', responsavel: EU },
+          { janelaAbertaAte: '2026-01-01T00:00:00Z' },
+        ),
+      ),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    expect(await screen.findByPlaceholderText(/Janela de 24 horas encerrada/)).toBeTruthy()
+  })
+
+  it('atendimento de outra pessoa: sem transferir, encerrar nem responder', async () => {
+    const { fetchFn } = apiFalsa(rotas(detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: OUTRA })))
+    await montarApp(fetchFn, '/atendimento?id=1')
+    expect(await screen.findByText(/Em atendimento com Outra Pessoa/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Transferir' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Encerrar' })).toBeNull()
+    expect(screen.getByPlaceholderText('Assuma o atendimento para responder.')).toBeTruthy()
+  })
+
+  it('"Ver opções" só oferece o Histórico geral', async () => {
+    const { fetchFn } = apiFalsa(rotas(detalhe()))
+    await montarApp(fetchFn, '/atendimento?id=1')
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver opções' }))
+    const menu = screen.getAllByRole('link', { name: 'Histórico geral' })
+    expect(menu.length).toBe(2) // rodapé da fila + menu
+  })
+
+  it('trocar o associado vinculado exige motivo', async () => {
+    const atual = {
+      id: 7,
+      tipo: 'PF',
+      nome: 'Associado Atual',
+      documentoMascarado: '***.456.789-**',
+    }
+    const novo = { id: 8, tipo: 'PF', nome: 'Associado Novo', documentoMascarado: '***.111.222-**' }
+    const corpos: unknown[] = []
+    const { fetchFn } = apiFalsa(
+      rotas(detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: EU, associado: atual }), TODAS, {
+        [`GET ${BASE}/associados`]: () => jsonResponse([novo]),
+        [`PUT ${BASE}/atendimentos/1/associado`]: (init) => {
+          corpos.push(JSON.parse(String(init?.body)))
+          return new Response(null, { status: 204 })
+        },
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Alterar vínculo' }))
+    await fireEvent.update(screen.getByLabelText('Buscar associado'), 'Novo')
+    await fireEvent.submit(screen.getByLabelText('Buscar associado'))
+    await fireEvent.click(await screen.findByRole('radio', { name: /Associado Novo/ }))
+    const vincular = screen.getByRole('button', { name: 'Vincular associado' }) as HTMLButtonElement
+    expect(vincular.disabled).toBe(true)
+
+    await fireEvent.update(
+      screen.getByLabelText('Motivo da alteração'),
+      'Telefone de outro titular',
+    )
+    expect(vincular.disabled).toBe(false)
+    await fireEvent.click(vincular)
+    await waitFor(() =>
+      expect(corpos).toEqual([
+        { versaoConversa: 4, associadoId: 8, motivo: 'Telefone de outro titular' },
+      ]),
+    )
+  })
+
+  it('sem atendimento:consultar a rota leva a acesso negado', async () => {
+    const { fetchFn } = apiFalsa(rotas(detalhe(), ['associados:consultar']))
+    const { router } = await montarApp(fetchFn, '/atendimento')
+    await waitFor(() => expect(router.currentRoute.value.name).toBe('acesso-negado'))
+  })
+})

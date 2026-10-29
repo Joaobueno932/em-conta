@@ -57,6 +57,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/presenca": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Presença manual do próprio atendente (atendimento:consultar) */
+        get: operations["obterPresenca"];
+        /** Marca Disponível/Ausente; sem efeito em distribuição (atendimento:consultar) */
+        put: operations["definirPresenca"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/associado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Vincula, troca ou remove o associado da conversa (atendimento:vincular-associado) */
+        put: operations["vincularAssociadoAtendimento"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/associados/{id}": {
         parameters: {
             query?: never;
@@ -369,6 +404,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/webhook-eventos/{id}/reprocessamento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Devolve um evento em falha à fila (atendimento:reprocessar) */
+        post: operations["reprocessarWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/transferencia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfere para outro responsável ou devolve à fila (atendimento:transferir) */
+        post: operations["transferirAtendimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/mensagens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registra resposta de texto para envio assíncrono (atendimento:responder) */
+        post: operations["responderAtendimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/encerramento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Encerra o atendimento (atendimento:encerrar) */
+        post: operations["encerrarAtendimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/assuncao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assume um atendimento aguardando (atendimento:assumir) */
+        post: operations["assumirAtendimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/associados": {
         parameters: {
             query?: never;
@@ -576,6 +696,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/webhook-falhas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Eventos do webhook em falha definitiva (atendimento:reprocessar) */
+        get: operations["falhasWebhook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/responsaveis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usuários ativos que podem receber atendimentos (atendimento:transferir) */
+        get: operations["responsaveisAtendimento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/historico": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Atendimentos encerrados, com busca e período (atendimento:consultar) */
+        get: operations["historicoAtendimentos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/canal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Se o canal WhatsApp está configurado (atendimento:consultar) */
+        get: operations["estadoCanal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fila paginada por visão, com busca (atendimento:consultar) */
+        get: operations["listarAtendimentos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalhe do atendimento (atendimento:consultar) */
+        get: operations["obterAtendimento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/linha-do-tempo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mensagens e eventos da conversa (ou só deste atendimento) (atendimento:consultar) */
+        get: operations["linhaDoTempo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/associados-sugeridos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Associados com contato no mesmo telefone; só sugestão (atendimento:vincular-associado) */
+        get: operations["associadosSugeridos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/associados": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Busca associados para vínculo (atendimento:vincular-associado) */
+        get: operations["buscarAssociadosAtendimento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/associados/{id}/historico": {
         parameters: {
             query?: never;
@@ -720,6 +993,24 @@ export interface components {
             atualizadoPor: components["schemas"]["AutorUsinas"];
             /** Format: int64 */
             versao: number;
+        };
+        PresencaRequest: {
+            disponivel: boolean;
+        };
+        /** @description Presença informada manualmente pelo atendente */
+        PresencaAtendente: {
+            disponivel: boolean;
+        };
+        VinculoAssociadoRequest: {
+            /** Format: int64 */
+            versaoConversa: number;
+            /**
+             * Format: int64
+             * @description Vazio remove o vínculo
+             */
+            associadoId?: number;
+            /** @description Obrigatório ao alterar ou remover um vínculo existente */
+            motivo?: string;
         };
         EdicaoAssociadoRequest: {
             /**
@@ -943,6 +1234,29 @@ export interface components {
             /** Format: password */
             senha: string;
         };
+        TransferenciaRequest: {
+            /** Format: int64 */
+            versao: number;
+            /**
+             * Format: int64
+             * @description Novo responsável; vazio devolve o atendimento à fila
+             */
+            destinoId?: number;
+            motivo?: string;
+        };
+        RespostaRequest: {
+            texto: string;
+            /** @description Gerada pelo cliente; repetir a requisição não duplica */
+            chaveIdempotencia: string;
+        };
+        RespostaRegistrada: {
+            /** Format: int64 */
+            mensagemId: number;
+        };
+        EncerramentoRequest: {
+            /** Format: int64 */
+            versao: number;
+        };
         ContatoRequest: {
             nome: string;
             email?: string;
@@ -1122,6 +1436,114 @@ export interface components {
         Csrf: {
             /** @example X-XSRF-TOKEN */
             cabecalho: string;
+        };
+        FalhaWebhook: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            recebidoEm: string;
+            /** Format: int32 */
+            tentativas: number;
+            erro?: string;
+        };
+        UsuarioAtendimento: {
+            /** Format: int64 */
+            id: number;
+            nome: string;
+        };
+        /** @description Identificação mínima do associado vinculado */
+        AssociadoAtendimento: {
+            /** Format: int64 */
+            id: number;
+            tipo: string;
+            nome: string;
+            documentoMascarado: string;
+        };
+        AtendimentoResumo: {
+            /** Format: int64 */
+            id: number;
+            /** @example ATD-000123 */
+            codigo: string;
+            /** @enum {string} */
+            situacao: "AGUARDANDO" | "EM_ATENDIMENTO" | "ENCERRADO";
+            contatoNumero: string;
+            contatoNome?: string;
+            associado?: components["schemas"]["AssociadoAtendimento"];
+            responsavel?: components["schemas"]["UsuarioAtendimento"];
+            /** Format: date-time */
+            iniciadoEm: string;
+            /** Format: date-time */
+            ultimaMensagemEm?: string;
+            /** Format: date-time */
+            encerradoEm?: string;
+            encerradoPor?: components["schemas"]["UsuarioAtendimento"];
+        };
+        ContagensFila: {
+            /** Format: int64 */
+            aguardando: number;
+            /** Format: int64 */
+            emAndamento: number;
+            /** Format: int64 */
+            meus: number;
+        };
+        PaginaAtendimentos: {
+            itens: components["schemas"]["AtendimentoResumo"][];
+            /** Format: int32 */
+            pagina: number;
+            /** Format: int32 */
+            tamanho: number;
+            /** Format: int64 */
+            totalItens: number;
+            /** Format: int32 */
+            totalPaginas: number;
+            contagens: components["schemas"]["ContagensFila"];
+        };
+        /** @description Estado técnico do canal (não é a presença do atendente) */
+        CanalAtendimento: {
+            canal: string;
+            /** @description false = Canal não configurado; nada é enviado */
+            configurado: boolean;
+        };
+        AtendimentoDetalhe: {
+            resumo: components["schemas"]["AtendimentoResumo"];
+            /** Format: int64 */
+            versao: number;
+            /** Format: int64 */
+            versaoConversa: number;
+            /**
+             * Format: date-time
+             * @description Até quando texto livre é permitido (24 h após a última mensagem do cliente)
+             */
+            janelaAbertaAte?: string;
+            canalConfigurado: boolean;
+        };
+        /** @description Mensagem ou evento do atendimento */
+        ItemLinhaDoTempo: {
+            /** @enum {string} */
+            tipo: "MENSAGEM" | "EVENTO";
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            ocorridoEm: string;
+            /** Format: int64 */
+            atendimentoId?: number;
+            /** @enum {string} */
+            direcao?: "ENTRADA" | "SAIDA";
+            /** @enum {string} */
+            tipoMensagem?: "TEXTO" | "NAO_SUPORTADO";
+            /** @description Tipo informado pelo canal (ex.: image, audio) */
+            tipoExterno?: string;
+            texto?: string;
+            /** @enum {string} */
+            situacao?: "RECEBIDA" | "PENDENTE" | "ENVIANDO" | "ACEITA" | "ENVIADA" | "ENTREGUE" | "LIDA" | "FALHA" | "DESCONHECIDA";
+            /** Format: int32 */
+            erroCodigo?: number;
+            erroTitulo?: string;
+            autor?: components["schemas"]["UsuarioAtendimento"];
+            evento?: string;
+            usuarioAlvo?: components["schemas"]["UsuarioAtendimento"];
+            associado?: components["schemas"]["AssociadoAtendimento"];
+            motivo?: string;
         };
         /** @description Linha da listagem; documento parcialmente mascarado */
         AssociadoResumo: {
@@ -1330,6 +1752,74 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Fazenda"];
                 };
+            };
+        };
+    };
+    obterPresenca: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresencaAtendente"];
+                };
+            };
+        };
+    };
+    definirPresenca: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresencaRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresencaAtendente"];
+                };
+            };
+        };
+    };
+    vincularAssociadoAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VinculoAssociadoRequest"];
+            };
+        };
+        responses: {
+            /** @description Vínculo atualizado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1861,6 +2351,15 @@ export interface operations {
                     "application/json": components["schemas"]["TokenValido"];
                 };
             };
+            /** @description MUITAS_TENTATIVAS a partir deste IP, com Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenValido"];
+                };
+            };
         };
     };
     redefinirSenha: {
@@ -1885,6 +2384,13 @@ export interface operations {
             };
             /** @description TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description MUITAS_TENTATIVAS a partir deste IP, com Retry-After */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1940,6 +2446,13 @@ export interface operations {
         responses: {
             /** @description Senha alterada */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CREDENCIAL_ALTERADA: senha ou sessão mudou durante a operação; nada foi alterado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2029,6 +2542,166 @@ export interface operations {
             };
             /** @description TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description MUITAS_TENTATIVAS a partir deste IP, com Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reprocessarWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evento voltou para a fila */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transferirAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferenciaRequest"];
+            };
+        };
+        responses: {
+            /** @description Transferido */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CONFLITO_CONCORRENTE ou ATENDIMENTO_SEM_RESPONSAVEL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    responderAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespostaRequest"];
+            };
+        };
+        responses: {
+            /** @description Registrada como PENDENTE; envio e entrega vêm depois */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+            /** @description NAO_E_RESPONSAVEL ou JANELA_ENCERRADA */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+            /** @description CANAL_NAO_CONFIGURADO */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+        };
+    };
+    encerrarAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EncerramentoRequest"];
+            };
+        };
+        responses: {
+            /** @description Encerrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CONFLITO_CONCORRENTE ou ATENDIMENTO_ENCERRADO */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assumirAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assumido */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ATENDIMENTO_JA_ASSUMIDO ou ATENDIMENTO_ENCERRADO */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2418,6 +3091,208 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Csrf"];
+                };
+            };
+        };
+    };
+    falhasWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FalhaWebhook"][];
+                };
+            };
+        };
+    };
+    responsaveisAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuarioAtendimento"][];
+                };
+            };
+        };
+    };
+    historicoAtendimentos: {
+        parameters: {
+            query?: {
+                busca?: string;
+                de?: string;
+                ate?: string;
+                pagina?: number;
+                tamanho?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginaAtendimentos"];
+                };
+            };
+        };
+    };
+    estadoCanal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanalAtendimento"];
+                };
+            };
+        };
+    };
+    listarAtendimentos: {
+        parameters: {
+            query?: {
+                visao?: "AGUARDANDO" | "EM_ANDAMENTO" | "MEUS" | "ENCERRADOS";
+                busca?: string;
+                maisAntigos?: boolean;
+                pagina?: number;
+                tamanho?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginaAtendimentos"];
+                };
+            };
+        };
+    };
+    obterAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AtendimentoDetalhe"];
+                };
+            };
+        };
+    };
+    linhaDoTempo: {
+        parameters: {
+            query?: {
+                somenteEste?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemLinhaDoTempo"][];
+                };
+            };
+        };
+    };
+    associadosSugeridos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssociadoAtendimento"][];
+                };
+            };
+        };
+    };
+    buscarAssociadosAtendimento: {
+        parameters: {
+            query: {
+                busca: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssociadoAtendimento"][];
                 };
             };
         };

@@ -14,6 +14,9 @@
     "name" : "Sistema",
     "description" : "Verificações técnicas"
   }, {
+    "name" : "Atendimento",
+    "description" : "Conversas do WhatsApp, fila e histórico"
+  }, {
     "name" : "Associados",
     "description" : "Associados PF/PJ, contatos e unidades consumidoras"
   }, {
@@ -206,6 +209,83 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/presenca" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Presença manual do próprio atendente (atendimento:consultar)",
+        "operationId" : "obterPresenca",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PresencaAtendente"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Marca Disponível/Ausente; sem efeito em distribuição (atendimento:consultar)",
+        "operationId" : "definirPresenca",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PresencaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PresencaAtendente"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/associado" : {
+      "put" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Vincula, troca ou remove o associado da conversa (atendimento:vincular-associado)",
+        "operationId" : "vincularAssociadoAtendimento",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VinculoAssociadoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "Vínculo atualizado"
           }
         }
       }
@@ -1000,6 +1080,16 @@
                 }
               }
             }
+          },
+          "429" : {
+            "description" : "MUITAS_TENTATIVAS a partir deste IP, com Retry-After",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenValido"
+                }
+              }
+            }
           }
         }
       }
@@ -1025,6 +1115,9 @@
           },
           "400" : {
             "description" : "TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA"
+          },
+          "429" : {
+            "description" : "MUITAS_TENTATIVAS a partir deste IP, com Retry-After"
           }
         }
       }
@@ -1086,6 +1179,9 @@
         "responses" : {
           "204" : {
             "description" : "Senha alterada"
+          },
+          "409" : {
+            "description" : "CREDENCIAL_ALTERADA: senha ou sessão mudou durante a operação; nada foi alterado"
           }
         }
       }
@@ -1172,6 +1268,180 @@
           },
           "400" : {
             "description" : "TOKEN_INVALIDO ou SENHA_FORA_DA_POLITICA"
+          },
+          "429" : {
+            "description" : "MUITAS_TENTATIVAS a partir deste IP, com Retry-After"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/webhook-eventos/{id}/reprocessamento" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Devolve um evento em falha à fila (atendimento:reprocessar)",
+        "operationId" : "reprocessarWebhook",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "Evento voltou para a fila"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/transferencia" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Transfere para outro responsável ou devolve à fila (atendimento:transferir)",
+        "operationId" : "transferirAtendimento",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TransferenciaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "Transferido"
+          },
+          "409" : {
+            "description" : "CONFLITO_CONCORRENTE ou ATENDIMENTO_SEM_RESPONSAVEL"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/mensagens" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Registra resposta de texto para envio assíncrono (atendimento:responder)",
+        "operationId" : "responderAtendimento",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RespostaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "description" : "Registrada como PENDENTE; envio e entrega vêm depois",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "NAO_E_RESPONSAVEL ou JANELA_ENCERRADA",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          },
+          "503" : {
+            "description" : "CANAL_NAO_CONFIGURADO",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/encerramento" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Encerra o atendimento (atendimento:encerrar)",
+        "operationId" : "encerrarAtendimento",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EncerramentoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "Encerrado"
+          },
+          "409" : {
+            "description" : "CONFLITO_CONCORRENTE ou ATENDIMENTO_ENCERRADO"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/assuncao" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Assume um atendimento aguardando (atendimento:assumir)",
+        "operationId" : "assumirAtendimento",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "Assumido"
+          },
+          "409" : {
+            "description" : "ATENDIMENTO_JA_ASSUMIDO ou ATENDIMENTO_ENCERRADO"
           }
         }
       }
@@ -1741,6 +2011,334 @@
         }
       }
     },
+    "/api/v1/atendimento/webhook-falhas" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Eventos do webhook em falha definitiva (atendimento:reprocessar)",
+        "operationId" : "falhasWebhook",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/FalhaWebhook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/responsaveis" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Usuários ativos que podem receber atendimentos (atendimento:transferir)",
+        "operationId" : "responsaveisAtendimento",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/UsuarioAtendimento"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/historico" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Atendimentos encerrados, com busca e período (atendimento:consultar)",
+        "operationId" : "historicoAtendimentos",
+        "parameters" : [ {
+          "name" : "busca",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          }
+        }, {
+          "name" : "de",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "ate",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "pagina",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "maximum" : 100000,
+            "minimum" : 0
+          }
+        }, {
+          "name" : "tamanho",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaAtendimentos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/canal" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Se o canal WhatsApp está configurado (atendimento:consultar)",
+        "operationId" : "estadoCanal",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CanalAtendimento"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Fila paginada por visão, com busca (atendimento:consultar)",
+        "operationId" : "listarAtendimentos",
+        "parameters" : [ {
+          "name" : "visao",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "AGUARDANDO",
+            "enum" : [ "AGUARDANDO", "EM_ANDAMENTO", "MEUS", "ENCERRADOS" ]
+          }
+        }, {
+          "name" : "busca",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          }
+        }, {
+          "name" : "maisAntigos",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : true
+          }
+        }, {
+          "name" : "pagina",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "maximum" : 100000,
+            "minimum" : 0
+          }
+        }, {
+          "name" : "tamanho",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaAtendimentos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Detalhe do atendimento (atendimento:consultar)",
+        "operationId" : "obterAtendimento",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AtendimentoDetalhe"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/linha-do-tempo" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Mensagens e eventos da conversa (ou só deste atendimento) (atendimento:consultar)",
+        "operationId" : "linhaDoTempo",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "somenteEste",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ItemLinhaDoTempo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/associados-sugeridos" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Associados com contato no mesmo telefone; só sugestão (atendimento:vincular-associado)",
+        "operationId" : "associadosSugeridos",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/AssociadoAtendimento"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/associados" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Busca associados para vínculo (atendimento:vincular-associado)",
+        "operationId" : "buscarAssociadosAtendimento",
+        "parameters" : [ {
+          "name" : "busca",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 2
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/AssociadoAtendimento"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/associados/{id}/historico" : {
       "get" : {
         "tags" : [ "Associados" ],
@@ -2110,6 +2708,46 @@
           }
         },
         "required" : [ "atualizadoEm", "atualizadoPor", "codigo", "criadoEm", "criadoPor", "id", "nome", "versao" ]
+      },
+      "PresencaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "disponivel" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "disponivel" ]
+      },
+      "PresencaAtendente" : {
+        "type" : "object",
+        "description" : "Presença informada manualmente pelo atendente",
+        "properties" : {
+          "disponivel" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "disponivel" ]
+      },
+      "VinculoAssociadoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "versaoConversa" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "associadoId" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Vazio remove o vínculo"
+          },
+          "motivo" : {
+            "type" : "string",
+            "description" : "Obrigatório ao alterar ou remover um vínculo existente",
+            "maxLength" : 1000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "versaoConversa" ]
       },
       "EdicaoAssociadoRequest" : {
         "type" : "object",
@@ -2700,6 +3338,63 @@
         },
         "required" : [ "senha", "token" ]
       },
+      "TransferenciaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "versao" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "destinoId" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Novo responsável; vazio devolve o atendimento à fila"
+          },
+          "motivo" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "versao" ]
+      },
+      "RespostaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "texto" : {
+            "type" : "string",
+            "maxLength" : 5000,
+            "minLength" : 0
+          },
+          "chaveIdempotencia" : {
+            "type" : "string",
+            "description" : "Gerada pelo cliente; repetir a requisição não duplica",
+            "maxLength" : 64,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "chaveIdempotencia", "texto" ]
+      },
+      "RespostaRegistrada" : {
+        "type" : "object",
+        "properties" : {
+          "mensagemId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "mensagemId" ]
+      },
+      "EncerramentoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "versao" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "versao" ]
+      },
       "ContatoRequest" : {
         "type" : "object",
         "properties" : {
@@ -3149,6 +3844,257 @@
           }
         },
         "required" : [ "cabecalho" ]
+      },
+      "FalhaWebhook" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "recebidoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "tentativas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "erro" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "recebidoEm", "tentativas" ]
+      },
+      "UsuarioAtendimento" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "nome" ]
+      },
+      "AssociadoAtendimento" : {
+        "type" : "object",
+        "description" : "Identificação mínima do associado vinculado",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tipo" : {
+            "type" : "string"
+          },
+          "nome" : {
+            "type" : "string"
+          },
+          "documentoMascarado" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "documentoMascarado", "id", "nome", "tipo" ]
+      },
+      "AtendimentoResumo" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "codigo" : {
+            "type" : "string",
+            "example" : "ATD-000123"
+          },
+          "situacao" : {
+            "type" : "string",
+            "enum" : [ "AGUARDANDO", "EM_ATENDIMENTO", "ENCERRADO" ]
+          },
+          "contatoNumero" : {
+            "type" : "string"
+          },
+          "contatoNome" : {
+            "type" : "string"
+          },
+          "associado" : {
+            "$ref" : "#/components/schemas/AssociadoAtendimento"
+          },
+          "responsavel" : {
+            "$ref" : "#/components/schemas/UsuarioAtendimento"
+          },
+          "iniciadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "ultimaMensagemEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "encerradoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "encerradoPor" : {
+            "$ref" : "#/components/schemas/UsuarioAtendimento"
+          }
+        },
+        "required" : [ "codigo", "contatoNumero", "id", "iniciadoEm", "situacao" ]
+      },
+      "ContagensFila" : {
+        "type" : "object",
+        "properties" : {
+          "aguardando" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "emAndamento" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "meus" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "aguardando", "emAndamento", "meus" ]
+      },
+      "PaginaAtendimentos" : {
+        "type" : "object",
+        "properties" : {
+          "itens" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AtendimentoResumo"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItens" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "contagens" : {
+            "$ref" : "#/components/schemas/ContagensFila"
+          }
+        },
+        "required" : [ "contagens", "itens", "pagina", "tamanho", "totalItens", "totalPaginas" ]
+      },
+      "CanalAtendimento" : {
+        "type" : "object",
+        "description" : "Estado técnico do canal (não é a presença do atendente)",
+        "properties" : {
+          "canal" : {
+            "type" : "string"
+          },
+          "configurado" : {
+            "type" : "boolean",
+            "description" : "false = Canal não configurado; nada é enviado"
+          }
+        },
+        "required" : [ "canal", "configurado" ]
+      },
+      "AtendimentoDetalhe" : {
+        "type" : "object",
+        "properties" : {
+          "resumo" : {
+            "$ref" : "#/components/schemas/AtendimentoResumo"
+          },
+          "versao" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "versaoConversa" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "janelaAbertaAte" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Até quando texto livre é permitido (24 h após a última mensagem do cliente)"
+          },
+          "canalConfigurado" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "canalConfigurado", "resumo", "versao", "versaoConversa" ]
+      },
+      "ItemLinhaDoTempo" : {
+        "type" : "object",
+        "description" : "Mensagem ou evento do atendimento",
+        "properties" : {
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "MENSAGEM", "EVENTO" ]
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ocorridoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "atendimentoId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "direcao" : {
+            "type" : "string",
+            "enum" : [ "ENTRADA", "SAIDA" ]
+          },
+          "tipoMensagem" : {
+            "type" : "string",
+            "enum" : [ "TEXTO", "NAO_SUPORTADO" ]
+          },
+          "tipoExterno" : {
+            "type" : "string",
+            "description" : "Tipo informado pelo canal (ex.: image, audio)"
+          },
+          "texto" : {
+            "type" : "string"
+          },
+          "situacao" : {
+            "type" : "string",
+            "enum" : [ "RECEBIDA", "PENDENTE", "ENVIANDO", "ACEITA", "ENVIADA", "ENTREGUE", "LIDA", "FALHA", "DESCONHECIDA" ]
+          },
+          "erroCodigo" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "erroTitulo" : {
+            "type" : "string"
+          },
+          "autor" : {
+            "$ref" : "#/components/schemas/UsuarioAtendimento"
+          },
+          "evento" : {
+            "type" : "string"
+          },
+          "usuarioAlvo" : {
+            "$ref" : "#/components/schemas/UsuarioAtendimento"
+          },
+          "associado" : {
+            "$ref" : "#/components/schemas/AssociadoAtendimento"
+          },
+          "motivo" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "ocorridoEm", "tipo" ]
       },
       "AssociadoResumo" : {
         "type" : "object",

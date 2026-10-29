@@ -1,14 +1,21 @@
 package br.com.emconta.acesso.usuarios;
 
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByEmail(String emailNormalizado);
+
+    /** Carrega o usuário travando a linha (SELECT ... FOR UPDATE) até o fim da transação. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from Usuario u where u.id = :id")
+    Optional<Usuario> travar(long id);
 
     /** Só id e nome, sem carregar perfis. */
     @Query("select u.id as id, u.nome as nome from Usuario u where u.id in :ids")

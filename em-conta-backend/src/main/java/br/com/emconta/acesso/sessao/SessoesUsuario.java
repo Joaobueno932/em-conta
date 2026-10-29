@@ -1,9 +1,11 @@
 package br.com.emconta.acesso.sessao;
 
 import br.com.emconta.acesso.config.AcessoProperties;
+import br.com.emconta.acesso.tokens.Hashes;
 import br.com.emconta.acesso.usuarios.Perfil;
 import br.com.emconta.acesso.usuarios.Permissao;
 import br.com.emconta.acesso.usuarios.SituacaoConta;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.util.Arrays;
 import java.util.List;
@@ -50,8 +52,25 @@ public class SessoesUsuario {
 
     private record Estado(String situacao, int versaoSeguranca, String perfis) {}
 
+    /**
+     * Sessão aceita nesta requisição: o principal (promovido à versão atual quando a troca de senha
+     * autorizou esta sessão) e as autoridades vigentes.
+     */
+    public record SessaoValida(SessaoUsuario principal, List<GrantedAuthority> autoridades, boolean promovida) {}
+
     /** Autoridades vigentes, ou vazio se a sessão não vale mais (conta inapta, versão antiga ou expirada). */
     public Optional<List<GrantedAuthority>> autoridadesVigentes(SessaoUsuario sessao) {
+        return validar(sessao).map(SessaoValida::autoridades);
+    }
+
+    /**
+     * Valida a sessão contra o estado atual da conta. Versão de segurança antiga só é aceita se a troca
+     * de senha registrou, na mesma transação que incrementou a versão, que exatamente esta sessão
+     * (pela chave interna) continua válida nessa versão. Não há janela de tolerância: qualquer outra
+     * sessão, uma redefinição por link ou uma desativação (que incrementam a versão sem esse registro)
+     * continuam recusadas.
+     */
+    public Optional<SessaoValida> validar(SessaoUsuario sessao) {
         if (sessao.autenticadoEm().plus(properties.sessao().duracaoMaxima()).isBefore(clock.instant())) {
             return Optional.empty();
         }
@@ -61,9 +80,54 @@ public class SessoesUsuario {
                 .param("id", sessao.usuarioId())
                 .query((rs, n) -> new Estado(rs.getString(1), rs.getInt(2), rs.getString(3)))
                 .optional();
-        return estado.filter(e -> SituacaoConta.ATIVO.name().equals(e.situacao())
-                        && e.versaoSeguranca() == sessao.versaoSeguranca())
-                .map(e -> autoridades(sessao.usuarioId(), e.perfis()));
+        if (estado.isEmpty() || !SituacaoConta.ATIVO.name().equals(estado.get().situacao())) {
+            return Optional.empty();
+        }
+        Estado atual = estado.get();
+        if (atual.versaoSeguranca() == sessao.versaoSeguranca()) {
+            return Optional.of(new SessaoValida(sessao, autoridades(sessao.usuarioId(), atual.perfis()), false));
+        }
+        if (sessao.chave() != null && renovacaoAutorizada(sessao, atual.versaoSeguranca())) {
+            SessaoUsuario promovida = sessao.naVersao(atual.versaoSeguranca());
+            return Optional.of(new SessaoValida(promovida, autoridades(sessao.usuarioId(), atual.perfis()), true));
+        }
+        return Optional.empty();
+    }
+
+    private boolean renovacaoAutorizada(SessaoUsuario sessao, int versaoAtual) {
+        return jdbc.sql("select count(*) from sessao_renovada where usuario_id = :usuario and chave_sessao = :chave"
+                                + " and versao_seguranca = :versao")
+                        .param("usuario", sessao.usuarioId())
+                        .param("chave", Hashes.sha256Hex(sessao.chave()))
+                        .param("versao", versaoAtual)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
+    /**
+     * Registra que a sessão continua válida na nova versão de segurança. Chamar dentro da transação
+     * que incrementa a versão; autorizações anteriores do usuário são descartadas.
+     */
+    public void autorizarContinuidade(SessaoUsuario sessao, int novaVersao) {
+        removerRenovacoes(sessao.usuarioId());
+        if (sessao.chave() == null) {
+            return;
+        }
+        jdbc.sql("insert into sessao_renovada (usuario_id, chave_sessao, versao_seguranca, criado_em)"
+                        + " values (:usuario, :chave, :versao, :agora)")
+                .param("usuario", sessao.usuarioId())
+                .param("chave", Hashes.sha256Hex(sessao.chave()))
+                .param("versao", novaVersao)
+                .param("agora", Timestamp.from(clock.instant()))
+                .update();
+    }
+
+    /** Descarta autorizações de continuidade do usuário (redefinição por link, por exemplo). */
+    public void removerRenovacoes(long usuarioId) {
+        jdbc.sql("delete from sessao_renovada where usuario_id = :usuario")
+                .param("usuario", usuarioId)
+                .update();
     }
 
     private List<GrantedAuthority> autoridades(long usuarioId, String perfis) {

@@ -9,6 +9,14 @@ import { ADMIN_EMAIL, ADMIN_SENHA, paginaDoAdministrador } from './apoio'
 // eslint-disable-next-line playwright/no-skipped-test -- sem credenciais do bootstrap, as jornadas não podem rodar
 test.skip(!ADMIN_EMAIL || !ADMIN_SENHA, 'Defina E2E_ADMIN_EMAIL e E2E_ADMIN_SENHA (ver README)')
 
+/** Seleção pelo seletor paginado: busca no servidor e escolhe o resultado. */
+async function selecionarFazenda(page: Page, nome: string) {
+  await page.getByRole('searchbox', { name: 'Buscar fazenda' }).fill(nome)
+  await page.getByRole('button', { name: 'Buscar fazenda' }).click()
+  await page.getByRole('button', { name: new RegExp(`Selecionar FZD-\\d+ · ${nome}$`) }).click()
+  await expect(page.getByText(/Selecionada:/)).toContainText(nome)
+}
+
 const marca = () => `E2E${Date.now().toString(36).toUpperCase()}`
 
 function cnpjNumerico() {
@@ -58,16 +66,17 @@ test('cadastra usina, vincula UC existente e confere pelos dois lados e no hist�
   await page.goto('/fazendas/nova')
   await page.getByLabel(/Nome da fazenda/).fill(nomeFazenda)
   await page.getByRole('button', { name: 'Salvar fazenda' }).click()
+  await expect(page.getByText('Fazenda salva.')).toBeVisible()
+  // A lista é paginada e o banco de testes acumula fazendas: localiza pela busca.
+  await page.getByRole('searchbox', { name: 'Buscar fazendas' }).fill(nomeFazenda)
+  await page.getByRole('button', { name: 'Buscar' }).click()
   await expect(page.getByRole('cell', { name: nomeFazenda, exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: 'Usinas', exact: true }).first().click()
   await expect(page.getByRole('heading', { name: 'Usinas', level: 1 })).toBeVisible()
   await page.getByRole('link', { name: 'Nova usina' }).click()
   await page.getByLabel(/Nome da usina/).fill(nomeUsina)
-  const fazenda = await page
-    .locator('#usina-fazenda option', { hasText: nomeFazenda })
-    .getAttribute('value')
-  await page.getByLabel('Fazenda (opcional)').selectOption(fazenda as string)
+  await selecionarFazenda(page, nomeFazenda)
   await page.getByLabel('Cidade').fill('Sidrolândia')
   await page.getByLabel('UF').selectOption('MS')
   await page.getByRole('button', { name: 'Salvar usina' }).click()
@@ -170,4 +179,52 @@ test('edição concorrente da usina mantém o texto digitado', async ({ browser 
   await segunda.getByRole('button', { name: 'Salvar usina' }).click()
   await expect(segunda.getByText(/alterada por outra pessoa/)).toBeVisible()
   await expect(segunda.getByLabel('Cidade')).toHaveValue('Maracaju')
+})
+
+test('seletor paginado alcança fazenda além das 100 primeiras e mantém a da edição', async ({
+  browser,
+}) => {
+  const page = await paginaDoAdministrador(browser)
+  const prefixo = marca()
+  // 105 fazendas criadas pela API, na mesma sessão (banco isolado de testes).
+  await page.goto('/fazendas')
+  const xsrf = (await page.context().cookies()).find((c) => c.name === 'XSRF-TOKEN')?.value ?? ''
+  for (let i = 1; i <= 105; i++) {
+    const resposta = await page.request.post('/api/v1/fazendas', {
+      data: { nome: `${prefixo} ${String(i).padStart(3, '0')}`, confirmarNomeRepetido: true },
+      headers: { 'X-XSRF-TOKEN': xsrf },
+    })
+    expect(resposta.status()).toBe(201)
+  }
+
+  // Cadastro: a 105ª está na 6ª página de 20; chega-se a ela pela paginação.
+  await page.goto('/usinas/nova')
+  const nomeUsina = `Usina paginada ${prefixo}`
+  await page.getByLabel(/Nome da usina/).fill(nomeUsina)
+  await page.getByRole('searchbox', { name: 'Buscar fazenda' }).fill(prefixo)
+  await page.getByRole('button', { name: 'Buscar fazenda' }).click()
+  await expect(page.getByText('Página 1 de 6')).toBeVisible()
+  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Próxima' }).click()
+  await expect(page.getByText('Página 6 de 6')).toBeVisible()
+  await page.getByRole('button', { name: new RegExp(`${prefixo} 105$`) }).click()
+  await expect(page.getByText(/Selecionada:/)).toContainText(`${prefixo} 105`)
+  // Outra busca sem resultado não perde a seleção.
+  await page.getByRole('searchbox', { name: 'Buscar fazenda' }).fill(`${prefixo}-inexistente`)
+  await page.getByRole('button', { name: 'Buscar fazenda' }).click()
+  await expect(page.getByText(/Nenhuma fazenda encontrada/)).toBeVisible()
+  await expect(page.getByText(/Selecionada:/)).toContainText(`${prefixo} 105`)
+  await page.getByRole('button', { name: 'Salvar usina' }).click()
+  await expect(page.getByRole('heading', { name: nomeUsina, level: 1 })).toBeVisible()
+  await expect(page.getByText(`Fazenda ${prefixo} 105`)).toBeVisible()
+
+  // Edição: a fazenda vinculada não está entre os resultados iniciais, mas continua selecionada.
+  await page.getByRole('link', { name: 'Editar informações' }).click()
+  await expect(page.getByText(/Selecionada:/)).toContainText(`${prefixo} 105`)
+  await page.getByRole('button', { name: /Remover fazenda/ }).click()
+  await expect(page.getByText('Nenhuma fazenda selecionada.')).toBeVisible()
+  await page.getByRole('button', { name: 'Salvar usina' }).click()
+  await expect(page.getByText('Informações salvas.')).toBeVisible()
+  await page.getByRole('tab', { name: 'Informações' }).click()
+  await expect(page.getByRole('tabpanel').getByText('Fazenda', { exact: true })).toBeVisible()
+  await expect(page.getByText(`Fazenda ${prefixo} 105`)).toHaveCount(0)
 })

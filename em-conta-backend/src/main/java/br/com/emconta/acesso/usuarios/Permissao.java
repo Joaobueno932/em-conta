@@ -31,7 +31,17 @@ public enum Permissao {
     /** Vínculos cadastrais UC → usina (pela usina e pela ficha do associado). */
     VINCULOS_USINA_CONSULTAR("vinculos-usina:consultar"),
     VINCULOS_USINA_CRIAR("vinculos-usina:criar"),
-    VINCULOS_USINA_ENCERRAR("vinculos-usina:encerrar");
+    VINCULOS_USINA_ENCERRAR("vinculos-usina:encerrar"),
+    /** Fila, conversa, linha do tempo, histórico, estado do canal e a própria presença. */
+    ATENDIMENTO_CONSULTAR("atendimento:consultar"),
+    ATENDIMENTO_ASSUMIR("atendimento:assumir"),
+    /** Responder (só o responsável) e ser destinatário de transferências. */
+    ATENDIMENTO_RESPONDER("atendimento:responder"),
+    ATENDIMENTO_TRANSFERIR("atendimento:transferir"),
+    ATENDIMENTO_ENCERRAR("atendimento:encerrar"),
+    ATENDIMENTO_VINCULAR_ASSOCIADO("atendimento:vincular-associado"),
+    /** Consultar e reprocessar eventos do webhook em falha. */
+    ATENDIMENTO_REPROCESSAR("atendimento:reprocessar");
 
     private final String autoridade;
 

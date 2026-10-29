@@ -81,9 +81,28 @@ docker exec em-conta-mysql-1 sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CR
 docker run -d --name emconta-api-e2e --network em-conta_default -p 127.0.0.1:8090:8080 `
   -e SPRING_PROFILES_ACTIVE=local,api -e DB_HOST=mysql -e DB_PORT=3306 -e DB_NAME=emconta_e2e `
   -e SPRING_MAIL_HOST=mailpit -e SPRING_MAIL_PORT=1025 em-conta-backend
+# Todas as chamadas do e2e chegam pelo mesmo IP (o proxy); para rodar várias vezes seguidas,
+# a API de testes eleva o limite de uso de links: acrescente ao docker run acima
+#   -e EMCONTA_ACESSO_LIMITES_USOTOKENIP_MAXIMO=1000 -e EMCONTA_ACESSO_LIMITES_USOTOKENIP_JANELA=15m
+#   -e EMCONTA_ACESSO_LIMITES_USOTOKENIP_BLOQUEIO=15m
 # administrador do banco de testes pelo bootstrap (com -e DB_NAME=emconta_e2e), depois:
 $env:EM_CONTA_API_PROXY_TARGET = "http://localhost:8090"
 npm run test:e2e
+```
+
+A jornada de atendimento (`e2e/atendimento.spec.ts`) usa um **ambiente externo controlado, só de
+teste** (`e2e/whatsapp-controlado.ts`): um servidor local no lugar da Graph API e webhooks assinados
+com segredo fictício. Nada vai para a Meta nem para o número oficial. A API de testes recebe valores
+fictícios (escolha os seus; não são credenciais):
+
+```powershell
+# acrescente ao docker run da API de testes
+#   -e WHATSAPP_ACCESS_TOKEN=e2e-ficticio -e WHATSAPP_PHONE_NUMBER_ID=e2e-numero-ficticio
+#   -e WHATSAPP_APP_SECRET=e2e-segredo-ficticio -e WHATSAPP_VERIFY_TOKEN=e2e-ficticio
+#   -e WHATSAPP_GRAPH_URL=http://host.docker.internal:8099
+$env:E2E_WHATSAPP_APP_SECRET = "e2e-segredo-ficticio"        # o mesmo da API de testes
+$env:E2E_WHATSAPP_PHONE_NUMBER_ID = "e2e-numero-ficticio"
+# $env:E2E_GRAPH_PORT = "8099"                                # padrão
 ```
 
 Sem essas variáveis, as jornadas de acesso e de associados são puladas e só o teste da página técnica roda. Os
@@ -104,6 +123,7 @@ src/
     inicio/                  área autenticada mínima
     usuarios/                administração de usuários
     associados/              listagem, cadastro PF/PJ, ficha, contatos, UCs, histórico e usina de cada UC
+    atendimento/             fila, conversa, painel do associado, histórico geral (WhatsApp)
     usinas/                  usinas, fazendas, vínculos UC → usina e histórico
     system-status/           página técnica e consulta ao endpoint de status
   shared/

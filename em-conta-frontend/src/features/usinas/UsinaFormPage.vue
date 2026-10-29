@@ -15,11 +15,11 @@ import {
   cadastrarUsina,
   chavesUsinas,
   editarUsina,
-  listarFazendas,
   obterUsina,
   UFS,
   type DadosUsina,
 } from './usinas-api'
+import SeletorFazenda, { type FazendaSelecionada } from './SeletorFazenda.vue'
 
 /** Cadastro (sem `id`) ou edição das informações da usina. */
 const props = defineProps<{ id?: string }>()
@@ -34,14 +34,10 @@ const existente = useQuery({
   queryFn: () => obterUsina(http, id.value as number),
   enabled: computed(() => id.value !== null),
 })
-const fazendas = useQuery({
-  queryKey: chavesUsinas.fazendas,
-  queryFn: () => listarFazendas(http),
-})
 
 const formulario = reactive({
   nome: '',
-  fazendaId: '' as number | '',
+  fazenda: null as FazendaSelecionada | null,
   cep: '',
   endereco: '',
   cidade: '',
@@ -57,7 +53,9 @@ function carregar() {
   if (!u || versao.value !== null) return
   Object.assign(formulario, {
     nome: u.nome,
-    fazendaId: u.fazenda?.id ?? '',
+    fazenda: u.fazenda
+      ? { id: u.fazenda.id, codigo: u.fazenda.codigo, nome: u.fazenda.nome }
+      : null,
     cep: u.cep ?? '',
     endereco: u.endereco ?? '',
     cidade: u.cidade ?? '',
@@ -77,7 +75,7 @@ function dados(): DadosUsina {
   const texto = (v: string) => (v.trim() ? v : undefined)
   return {
     nome: formulario.nome,
-    fazendaId: formulario.fazendaId === '' ? undefined : formulario.fazendaId,
+    fazendaId: formulario.fazenda?.id,
     cep: texto(formulario.cep),
     endereco: texto(formulario.endereco),
     cidade: texto(formulario.cidade),
@@ -204,26 +202,7 @@ async function recarregar() {
           :maximo="150"
           :erro="erros.nome"
         />
-        <div class="campo">
-          <label for="usina-fazenda">Fazenda (opcional)</label>
-          <select
-            id="usina-fazenda"
-            v-model="formulario.fazendaId"
-            :aria-invalid="erros.fazendaId ? 'true' : undefined"
-            :aria-describedby="erros.fazendaId ? 'usina-fazenda-erro' : 'usina-fazenda-ajuda'"
-          >
-            <option value="">Sem fazenda</option>
-            <option v-for="f in fazendas.data.value?.itens ?? []" :key="f.id" :value="f.id">
-              {{ f.codigo }} · {{ f.nome }}
-            </option>
-          </select>
-          <p id="usina-fazenda-ajuda" class="ajuda">
-            Não encontrou? <RouterLink :to="{ name: 'fazenda-nova' }">Cadastrar fazenda</RouterLink>
-          </p>
-          <p v-if="erros.fazendaId" id="usina-fazenda-erro" class="ajuda ajuda--erro">
-            {{ erros.fazendaId }}
-          </p>
-        </div>
+        <SeletorFazenda id="usina-fazenda" v-model="formulario.fazenda" :erro="erros.fazendaId" />
       </div>
 
       <h2>Localização</h2>

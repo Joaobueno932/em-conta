@@ -35,7 +35,14 @@ public enum Perfil {
                     Permissao.USINAS_CONSULTAR_HISTORICO,
                     Permissao.VINCULOS_USINA_CONSULTAR,
                     Permissao.VINCULOS_USINA_CRIAR,
-                    Permissao.VINCULOS_USINA_ENCERRAR));
+                    Permissao.VINCULOS_USINA_ENCERRAR,
+                    Permissao.ATENDIMENTO_CONSULTAR,
+                    Permissao.ATENDIMENTO_ASSUMIR,
+                    Permissao.ATENDIMENTO_RESPONDER,
+                    Permissao.ATENDIMENTO_TRANSFERIR,
+                    Permissao.ATENDIMENTO_ENCERRAR,
+                    Permissao.ATENDIMENTO_VINCULAR_ASSOCIADO,
+                    Permissao.ATENDIMENTO_REPROCESSAR));
 
     private final String nome;
     private final Set<Permissao> permissoes;

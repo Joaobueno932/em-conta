@@ -10,9 +10,9 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -36,12 +36,24 @@ public class SessaoUsuarioFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         Authentication atual = SecurityContextHolder.getContext().getAuthentication();
         if (atual != null && atual.getPrincipal() instanceof SessaoUsuario sessao) {
-            Optional<List<GrantedAuthority>> autoridades = sessoes.autoridadesVigentes(sessao);
-            if (autoridades.isPresent()) {
+            Optional<SessoesUsuario.SessaoValida> valida = sessoes.validar(sessao);
+            if (valida.isPresent()) {
                 SecurityContext contexto = SecurityContextHolder.createEmptyContext();
-                contexto.setAuthentication(
-                        UsernamePasswordAuthenticationToken.authenticated(sessao, null, autoridades.get()));
+                contexto.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                        valida.get().principal(), null, valida.get().autoridades()));
                 SecurityContextHolder.setContext(contexto);
+                if (valida.get().promovida()) {
+                    // Esta sessão fez a troca de senha: grava o principal na nova versão. Sem
+                    // autoridades, como no login; elas são recalculadas a cada requisição.
+                    HttpSession httpSession = request.getSession(false);
+                    if (httpSession != null) {
+                        SecurityContext gravado = SecurityContextHolder.createEmptyContext();
+                        gravado.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                                valida.get().principal(), null, List.of()));
+                        httpSession.setAttribute(
+                                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, gravado);
+                    }
+                }
             } else {
                 SecurityContextHolder.clearContext();
                 HttpSession httpSession = request.getSession(false);
