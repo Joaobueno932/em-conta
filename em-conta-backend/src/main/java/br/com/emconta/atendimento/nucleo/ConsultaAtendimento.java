@@ -34,9 +34,6 @@ public class ConsultaAtendimento {
     private final JdbcClient jdbc;
     private final Clock clock;
 
-    /** Máximo de associados considerados na busca por nome (evita listas enormes no {@code in}). */
-    static final int MAXIMO_ASSOCIADOS_BUSCA = 200;
-
     private final CatalogoAssociados associados;
 
     ConsultaAtendimento(JdbcClient jdbc, Clock clock, CatalogoAssociados associados) {
@@ -131,8 +128,8 @@ public class ConsultaAtendimento {
 
     /**
      * Busca por nome do perfil do WhatsApp, número (trecho com 4+ dígitos) ou nome do associado vinculado
-     * (PF ou PJ). Os associados vêm da API pública do módulo de associados, limitados a
-     * {@link #MAXIMO_ASSOCIADOS_BUSCA}; cada atendimento aparece uma vez (filtro, não junção).
+     * (PF ou PJ). O critério do associado vem da API pública do módulo de associados (subconsulta de
+     * ids, sem limite); cada atendimento aparece uma vez (filtro, não junção) e o total reflete tudo.
      */
     private void adicionarBusca(String busca, List<String> condicoes, Map<String, Object> params) {
         String termo = busca == null ? "" : busca.strip();
@@ -146,11 +143,10 @@ public class ConsultaAtendimento {
             alternativas.add("c.wa_id like :digitos");
             params.put("digitos", "%" + digitos + "%");
         }
-        List<Long> encontrados = associados.idsPorNome(termo, MAXIMO_ASSOCIADOS_BUSCA);
-        if (!encontrados.isEmpty()) {
-            alternativas.add("v.associado_id in (:associados)");
-            params.put("associados", encontrados);
-        }
+        associados.criterioPorNome(termo).ifPresent(criterio -> {
+            alternativas.add("v.associado_id in (" + criterio.subconsulta() + ")");
+            params.putAll(criterio.parametros());
+        });
         condicoes.add("(" + String.join(" or ", alternativas) + ")");
     }
 

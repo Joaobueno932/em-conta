@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -75,21 +76,26 @@ public class CatalogoAssociados {
     }
 
     /**
-     * Ids de associados cujo nome (PF) ou razão social (PJ), ambos no campo {@code nome}, contém o trecho.
-     * Só ids: outros módulos filtram por eles sem receber documento nem contatos. Limitado a {@code limite}.
+     * Critério de consulta (projeção só de ids) para outro módulo filtrar pelo nome do associado sem
+     * conhecer a tabela: {@code subconsulta} é um SELECT de ids, a ser usado em {@code coluna in (...)}, e
+     * {@code parametros} são os seus valores nomeados. O banco resolve a semijunção, então não há corte de
+     * resultados nem carga de associados em memória. Só ids saem daqui (nunca documento nem contatos).
      */
-    @Transactional(readOnly = true)
-    public List<Long> idsPorNome(String termo, int limite) {
+    public record CriterioIds(String subconsulta, Map<String, Object> parametros) {}
+
+    /**
+     * Associados cujo nome (PF) ou razão social (PJ), ambos no campo {@code nome}, contém o trecho (mínimo
+     * de 2 caracteres). O parâmetro nomeado é {@code associadoNome}; quem usa não deve repetir esse nome.
+     */
+    public Optional<CriterioIds> criterioPorNome(String termo) {
         String limpo = termo == null ? "" : termo.strip();
         if (limpo.length() < 2) {
-            return List.of();
+            return Optional.empty();
         }
         String trecho = "%" + limpo.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
-        return jdbc.sql("select a.id from associado a where a.nome like :trecho escape '!' order by a.id limit :limite")
-                .param("trecho", trecho)
-                .param("limite", limite)
-                .query(Long.class)
-                .list();
+        return Optional.of(new CriterioIds(
+                "select a.id from associado a where a.nome like :associadoNome escape '!'",
+                Map.of("associadoNome", trecho)));
     }
 
     /**
