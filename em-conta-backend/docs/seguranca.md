@@ -250,6 +250,10 @@ envia autoridades: o `Ator` de cada operação é montado das permissões calcul
 | `atendimento:encerrar` | `POST …/atendimentos/{id}/encerramento` (só o responsável atual, em andamento) |
 | `atendimento:vincular-associado` | `PUT …/atendimentos/{id}/associado`, `GET …/atendimentos/{id}/associados-sugeridos`, `GET /api/v1/atendimento/associados` |
 | `atendimento:reprocessar` | `GET /api/v1/atendimento/webhook-falhas`, `POST …/webhook-eventos/{id}/reprocessamento` |
+| `respostas-rapidas:consultar` | `GET /api/v1/atendimento/respostas-rapidas` e `GET …/respostas-rapidas/{id}` |
+| `respostas-rapidas:cadastrar` | `POST /api/v1/atendimento/respostas-rapidas` |
+| `respostas-rapidas:editar` | `PUT …/respostas-rapidas/{id}` (exige `versao`) |
+| `respostas-rapidas:alterar-situacao` | `POST …/respostas-rapidas/{id}/ativacao` e `…/desativacao` (exigem `versao`) |
 | (público, assinatura HMAC) | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` — ver [atendimento.md](atendimento.md#provedor) |
 | (sessão válida) | `GET /api/v1/auth/sessao`, `POST /api/v1/auth/senha/alteracao` |
 

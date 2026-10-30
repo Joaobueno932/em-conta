@@ -42,7 +42,11 @@ public enum Perfil {
                     Permissao.ATENDIMENTO_TRANSFERIR,
                     Permissao.ATENDIMENTO_ENCERRAR,
                     Permissao.ATENDIMENTO_VINCULAR_ASSOCIADO,
-                    Permissao.ATENDIMENTO_REPROCESSAR));
+                    Permissao.ATENDIMENTO_REPROCESSAR,
+                    Permissao.RESPOSTAS_RAPIDAS_CONSULTAR,
+                    Permissao.RESPOSTAS_RAPIDAS_CADASTRAR,
+                    Permissao.RESPOSTAS_RAPIDAS_EDITAR,
+                    Permissao.RESPOSTAS_RAPIDAS_ALTERAR_SITUACAO));
 
     private final String nome;
     private final Set<Permissao> permissoes;

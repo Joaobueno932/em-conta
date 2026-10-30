@@ -41,7 +41,13 @@ public enum Permissao {
     ATENDIMENTO_ENCERRAR("atendimento:encerrar"),
     ATENDIMENTO_VINCULAR_ASSOCIADO("atendimento:vincular-associado"),
     /** Consultar e reprocessar eventos do webhook em falha. */
-    ATENDIMENTO_REPROCESSAR("atendimento:reprocessar");
+    ATENDIMENTO_REPROCESSAR("atendimento:reprocessar"),
+    /** Catálogo de respostas rápidas: consultar (inclui o seletor da conversa). */
+    RESPOSTAS_RAPIDAS_CONSULTAR("respostas-rapidas:consultar"),
+    RESPOSTAS_RAPIDAS_CADASTRAR("respostas-rapidas:cadastrar"),
+    RESPOSTAS_RAPIDAS_EDITAR("respostas-rapidas:editar"),
+    /** Ativar e desativar respostas rápidas. */
+    RESPOSTAS_RAPIDAS_ALTERAR_SITUACAO("respostas-rapidas:alterar-situacao");
 
     private final String autoridade;
 

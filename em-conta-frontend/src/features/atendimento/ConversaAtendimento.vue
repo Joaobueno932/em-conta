@@ -31,6 +31,8 @@ import {
   transferir,
 } from './atendimento-api'
 import ItemLinhaDoTempo from './ItemLinhaDoTempo.vue'
+import type { RespostaRapida } from './respostas-rapidas-api'
+import SeletorRespostasRapidas from './SeletorRespostasRapidas.vue'
 import { useLinhaDoTempo } from './use-linha-do-tempo'
 
 /**
@@ -212,6 +214,118 @@ function enviar() {
   responderMut.mutate(conteudo)
 }
 const enviando = computed(() => responderMut.isPending.value || anexoMut.isPending.value)
+
+// Respostas rápidas (AT-07): pelo botão ou digitando "/" no início de uma palavra. Escolher só preenche
+// o campo para revisão; o envio continua o mesmo (mesma chave de idempotência por texto). Com rascunho,
+// pergunta se substitui ou insere no cursor; nunca passa do limite do campo sem avisar.
+const TAMANHO_MAXIMO_MENSAGEM = 4096
+const campoTexto = ref<HTMLTextAreaElement | null>(null)
+const seletorRespostas = ref<InstanceType<typeof SeletorRespostasRapidas> | null>(null)
+const podeRespostas = computed(() => pode('respostas-rapidas:consultar'))
+const respostasIndisponiveis = computed(
+  () => !!motivoComposer.value || enviando.value || !!arquivo.value,
+)
+/** Seletor aberto; `barra` é o termo depois de "/" quando aberto pela digitação. */
+const respostas = ref<{ inicio: number; fim: number; barra?: string } | null>(null)
+const escolha = ref<{ resposta: RespostaRapida; inicio: number; fim: number } | null>(null)
+const erroResposta = ref('')
+const pelaBarra = computed(() => respostas.value?.barra !== undefined)
+
+function abrirRespostas() {
+  if (respostasIndisponiveis.value) return
+  const el = campoTexto.value
+  const inicio = el?.selectionStart ?? texto.value.length
+  respostas.value = { inicio, fim: el?.selectionEnd ?? inicio }
+  erroResposta.value = ''
+}
+async function focarCampo(cursor?: number) {
+  await nextTick()
+  const el = campoTexto.value
+  if (!el) return
+  el.focus()
+  if (cursor !== undefined) el.setSelectionRange(cursor, cursor)
+}
+function fecharRespostas() {
+  respostas.value = null
+  void focarCampo()
+}
+// "/" só abre no início do campo ou depois de espaço/quebra de linha, e só com caracteres de atalho
+// até o cursor: links (https://…) e barras no meio de palavras não abrem nada.
+function verificarBarra() {
+  const el = campoTexto.value
+  if (!el || !podeRespostas.value || respostasIndisponiveis.value) return
+  if (respostas.value && !pelaBarra.value) return
+  const cursor = el.selectionStart
+  const achado =
+    cursor === el.selectionEnd
+      ? /(^|\s)\/([a-z0-9-]{0,30})$/i.exec(texto.value.slice(0, cursor))
+      : null
+  if (!achado) {
+    fecharBarra()
+    return
+  }
+  const termo = achado[2] ?? ''
+  respostas.value = { inicio: cursor - termo.length - 1, fim: cursor, barra: termo }
+  erroResposta.value = ''
+}
+function fecharBarra() {
+  if (pelaBarra.value) respostas.value = null
+}
+function teclarNoCampo(evento: KeyboardEvent) {
+  if (pelaBarra.value && seletorRespostas.value?.teclar(evento)) {
+    evento.preventDefault()
+    return
+  }
+  const modificador = evento.shiftKey || evento.ctrlKey || evento.altKey || evento.metaKey
+  if (evento.key === 'Enter' && !modificador && !evento.isComposing) {
+    evento.preventDefault()
+    enviar()
+  }
+}
+
+function escolherResposta(resposta: RespostaRapida) {
+  const aberto = respostas.value
+  if (!aberto) return
+  respostas.value = null
+  const resto = texto.value.slice(0, aberto.inicio) + texto.value.slice(aberto.fim)
+  if (resto.trim()) {
+    escolha.value = { resposta, inicio: aberto.inicio, fim: aberto.fim }
+    return
+  }
+  aplicarResposta(resposta.conteudo, resposta.conteudo.length)
+}
+function decidir(modo: 'substituir' | 'inserir') {
+  const e = escolha.value
+  if (!e) return
+  const conteudo = e.resposta.conteudo
+  if (modo === 'substituir') aplicarResposta(conteudo, conteudo.length)
+  else
+    aplicarResposta(
+      texto.value.slice(0, e.inicio) + conteudo + texto.value.slice(e.fim),
+      e.inicio + conteudo.length,
+    )
+}
+function cancelarEscolha() {
+  escolha.value = null
+  void focarCampo()
+}
+function aplicarResposta(novo: string, cursor: number) {
+  escolha.value = null
+  if (novo.length > TAMANHO_MAXIMO_MENSAGEM) {
+    erroResposta.value = `Com esta resposta a mensagem ficaria com ${novo.length} caracteres (máximo ${TAMANHO_MAXIMO_MENSAGEM}). Nada foi inserido; encurte o rascunho ou substitua o texto.`
+    void focarCampo()
+    return
+  }
+  erroResposta.value = ''
+  texto.value = novo
+  void focarCampo(cursor)
+}
+watch(arquivo, (a) => {
+  if (a) {
+    respostas.value = null
+    escolha.value = null
+  }
+})
 
 // "Ver na conversa" (área Mídia): carrega o contexto da mensagem se preciso, rola até ela, foca e
 // destaca por alguns segundos.
@@ -510,8 +624,30 @@ async function carregarAnteriores() {
         <label for="resposta" class="visualmente-oculto">{{
           arquivo ? 'Legenda (opcional)' : 'Mensagem'
         }}</label>
+        <SeletorRespostasRapidas
+          v-if="respostas"
+          id="seletor-respostas"
+          ref="seletorRespostas"
+          :termo="respostas.barra"
+          @escolher="escolherResposta"
+          @fechar="fecharRespostas"
+        />
+        <div v-if="escolha" class="escolha" role="group" aria-labelledby="escolha-titulo">
+          <p id="escolha-titulo">
+            O campo já tem um rascunho. Como usar “{{ escolha.resposta.titulo }}”?
+          </p>
+          <div class="acoes">
+            <button type="button" @click="decidir('substituir')">Substituir rascunho</button>
+            <button type="button" class="secundario" @click="decidir('inserir')">
+              Inserir no cursor
+            </button>
+            <button type="button" class="link" @click="cancelarEscolha">Cancelar</button>
+          </div>
+        </div>
+        <p v-if="erroResposta" class="ajuda ajuda--erro" role="alert">{{ erroResposta }}</p>
         <textarea
           id="resposta"
+          ref="campoTexto"
           v-model="texto"
           rows="2"
           :maxlength="arquivo ? TAMANHO_MAXIMO_LEGENDA : 4096"
@@ -524,7 +660,14 @@ async function carregarAnteriores() {
                 : 'O WhatsApp não aceita legenda em áudio.'
               : 'Digite uma mensagem…')
           "
-          @keydown.enter.exact.prevent="enviar"
+          :role="pelaBarra ? 'combobox' : undefined"
+          :aria-expanded="pelaBarra ? 'true' : undefined"
+          :aria-controls="pelaBarra ? 'seletor-respostas-lista' : undefined"
+          :aria-activedescendant="pelaBarra ? seletorRespostas?.opcaoAtiva : undefined"
+          @keydown="teclarNoCampo"
+          @input="verificarBarra"
+          @click="verificarBarra"
+          @blur="fecharBarra"
         ></textarea>
         <div class="ferramentas">
           <button
@@ -537,6 +680,23 @@ async function carregarAnteriores() {
           >
             <IconeTraco nome="anexar" :tamanho="20" />
           </button>
+          <button
+            v-if="podeRespostas"
+            type="button"
+            class="secundario com-icone"
+            :aria-expanded="!!respostas && !pelaBarra"
+            :aria-describedby="arquivo ? 'respostas-indisponivel' : undefined"
+            :disabled="respostasIndisponiveis"
+            title="Inserir uma resposta rápida (ou digite / no campo)"
+            @click="respostas && !pelaBarra ? fecharRespostas() : abrirRespostas()"
+          >
+            <IconeTraco nome="raio" />
+            Respostas rápidas
+          </button>
+          <span v-if="podeRespostas && arquivo" id="respostas-indisponivel" class="ajuda">
+            Respostas rápidas ficam indisponíveis com anexo selecionado.
+          </span>
+          <span class="espaco"></span>
           <button
             type="submit"
             class="botao-icone enviar"
@@ -712,8 +872,23 @@ async function carregarAnteriores() {
 
 .ferramentas {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 0.5rem;
+}
+
+.ferramentas .espaco {
+  flex: 1;
+}
+
+.escolha {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+}
+
+.escolha p {
+  margin: 0 0 0.5rem;
 }
 
 button.botao-icone.enviar {

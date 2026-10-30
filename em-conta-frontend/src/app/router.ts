@@ -8,6 +8,7 @@ import UcFormPage from '@/features/associados/UcFormPage.vue'
 import AtendimentoDetalhePage from '@/features/atendimento/AtendimentoDetalhePage.vue'
 import AtendimentoPage from '@/features/atendimento/AtendimentoPage.vue'
 import HistoricoGeralPage from '@/features/atendimento/HistoricoGeralPage.vue'
+import RespostasRapidasPage from '@/features/atendimento/RespostasRapidasPage.vue'
 import AcessoNegadoPage from '@/features/auth/AcessoNegadoPage.vue'
 import FazendaFormPage from '@/features/usinas/FazendaFormPage.vue'
 import FazendasPage from '@/features/usinas/FazendasPage.vue'
@@ -149,6 +150,12 @@ export const routes: RouteRecordRaw[] = [
         component: AtendimentoDetalhePage,
         props: true,
         meta: { permissao: 'atendimento:consultar' },
+      },
+      {
+        path: 'atendimento/respostas-rapidas',
+        name: 'atendimento-respostas-rapidas',
+        component: RespostasRapidasPage,
+        meta: { permissao: 'respostas-rapidas:consultar' },
       },
       { path: 'acesso-negado', name: 'acesso-negado', component: AcessoNegadoPage },
     ],

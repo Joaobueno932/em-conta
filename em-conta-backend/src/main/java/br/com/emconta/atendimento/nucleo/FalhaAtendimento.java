@@ -24,12 +24,24 @@ public class FalhaAtendimento extends RuntimeException {
         return new FalhaAtendimento(HttpStatus.CONFLICT, codigo, null, mensagem);
     }
 
+    static FalhaAtendimento conflitoNoCampo(String codigo, String campo, String mensagem) {
+        return new FalhaAtendimento(HttpStatus.CONFLICT, codigo, campo, mensagem);
+    }
+
     static FalhaAtendimento campoInvalido(String campo, String mensagem) {
         return new FalhaAtendimento(HttpStatus.BAD_REQUEST, "DADOS_INVALIDOS", campo, mensagem);
     }
 
     static FalhaAtendimento proibido(String codigo, String mensagem) {
         return new FalhaAtendimento(HttpStatus.FORBIDDEN, codigo, null, mensagem);
+    }
+
+    public static FalhaAtendimento respostaRapidaNaoEncontrada() {
+        return naoEncontrado("RESPOSTA_RAPIDA_NAO_ENCONTRADA", "Resposta rápida não encontrada.");
+    }
+
+    public static FalhaAtendimento versaoObrigatoria() {
+        return campoInvalido("versao", "Informe a versão vista.");
     }
 
     public static FalhaAtendimento anexoNaoEncontrado() {

@@ -181,6 +181,22 @@ class SecurityConfiguration {
             auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/webhook-eventos/*/reprocessamento")
                     .hasAuthority(Permissao.ATENDIMENTO_REPROCESSAR.autoridade());
 
+            // Respostas rápidas (catálogo interno de textos; não são templates da Meta).
+            auth.requestMatchers(
+                            HttpMethod.GET,
+                            "/api/v1/atendimento/respostas-rapidas",
+                            "/api/v1/atendimento/respostas-rapidas/*")
+                    .hasAuthority(Permissao.RESPOSTAS_RAPIDAS_CONSULTAR.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/respostas-rapidas")
+                    .hasAuthority(Permissao.RESPOSTAS_RAPIDAS_CADASTRAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/respostas-rapidas/*")
+                    .hasAuthority(Permissao.RESPOSTAS_RAPIDAS_EDITAR.autoridade());
+            auth.requestMatchers(
+                            HttpMethod.POST,
+                            "/api/v1/atendimento/respostas-rapidas/*/ativacao",
+                            "/api/v1/atendimento/respostas-rapidas/*/desativacao")
+                    .hasAuthority(Permissao.RESPOSTAS_RAPIDAS_ALTERAR_SITUACAO.autoridade());
+
             // Webhook da Meta: sem sessão; cada evento é autenticado pela assinatura no controller.
             auth.requestMatchers(HttpMethod.GET, WEBHOOK_WHATSAPP).permitAll();
             auth.requestMatchers(HttpMethod.POST, WEBHOOK_WHATSAPP).permitAll();

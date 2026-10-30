@@ -302,6 +302,48 @@ atendimento a usa em `associado_id in (...)`. O banco resolve a semijunção; n�
 de associados em memória, junção de linhas (sem duplicar atendimentos) nem exposição de documento.
 Total, páginas e ordenação continuam os mesmos da consulta.
 
+## Respostas rápidas (V10)
+
+Catálogo da equipe com textos internos para inserir no campo de resposta. **Não são templates
+(modelos de mensagem) aprovados pela Meta**: não passam por aprovação, não liberam envio fora da
+janela de 24 h e não enviam nada sozinhos. Escolher uma resposta só preenche o campo; o atendente
+revisa, pode editar e envia pelo fluxo normal (mesma validação, responsável, janela, permissão
+`atendimento:responder` e chave de idempotência por texto). A mensagem guarda o texto enviado:
+editar ou desativar a resposta depois não altera mensagens registradas.
+
+- `atd_resposta_rapida`: título (até 80), atalho, conteúdo (1 a 4096, o limite do envio; quebras de
+  linha e Unicode preservados, só os espaços das pontas são removidos), ativa, `versao`, autor e
+  datas de criação e alteração.
+- **Atalho**: normalizado (sem espaços nas pontas, sem a `/` inicial, minúsculas) e validado com
+  `^[a-z0-9][a-z0-9-]{1,29}$`; único no catálogo inteiro, inclusive entre inativas (restrição única
+  no banco, collation binária): duplicado → 409 `ATALHO_EM_USO` no campo `atalho`, também sob
+  concorrência.
+- **Concorrência otimista**: editar, ativar e desativar exigem a `versao` vista; diferente → 409
+  `CONFLITO_CONCORRENTE` (a tela pede para recarregar). Pedir a situação que já vale não altera nada.
+- **Auditoria**: `atd_resposta_rapida_historico` registra criação, alteração (com os campos que
+  mudaram), ativação e desativação, com autor e instante. Nunca guarda o conteúdo, que também não vai
+  para logs técnicos.
+
+| Método e caminho (`/api/v1/atendimento/respostas-rapidas`) | Uso |
+| --- | --- |
+| `GET ?busca&noConteudo&situacao&pagina&tamanho` | Lista em ordem de título; `busca` no título e atalho e, com `noConteudo=true` (padrão), no conteúdo; `situacao` `ATIVAS`/`INATIVAS`/`TODAS`; `tamanho` até 100 |
+| `GET /{id}` | Uma resposta |
+| `POST` | `titulo`, `atalho`, `conteudo` → 201 |
+| `PUT /{id}` | mesmos campos + `versao` |
+| `POST /{id}/ativacao`, `/{id}/desativacao` | `versao` |
+
+Permissões em [seguranca.md](seguranca.md#autorização); só o `ADMINISTRADOR` as recebe por enquanto.
+
+**Telas.** O catálogo fica em **Ver opções → Mensagens rápidas** (`/atendimento/respostas-rapidas`):
+busca no servidor, filtro por situação, paginação, formulário com prévia e contador, erros junto dos
+campos, ativar/desativar; ações sem permissão não aparecem. No compositor, o botão **Respostas
+rápidas** (ou digitar `/` no início do campo ou depois de espaço) abre a busca nas ativas por título
+e atalho (até 8 resultados) com prévia; ↑/↓ escolhem, Enter insere, Esc fecha e devolve o foco ao
+campo. Links e barras no meio de palavras não abrem nada. Com rascunho, a tela pergunta se substitui
+ou insere no cursor (cancelar mantém o rascunho); se o resultado passar de 4096 caracteres, nada é
+inserido e o motivo aparece. O botão segue os bloqueios do compositor e fica indisponível com anexo
+selecionado.
+
 ## Configurar e homologar
 
 1. Preencher as variáveis acima no `.env` do ambiente (nunca em arquivo versionado) e reiniciar a API.

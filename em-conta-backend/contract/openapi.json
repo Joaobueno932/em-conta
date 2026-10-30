@@ -213,6 +213,70 @@
         }
       }
     },
+    "/api/v1/atendimento/respostas-rapidas/{id}" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Uma resposta rápida (respostas-rapidas:consultar)",
+        "operationId" : "obterRespostaRapida",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRapida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Edita resposta rápida (respostas-rapidas:editar)",
+        "operationId" : "editarRespostaRapida",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RespostaRapidaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "description" : "ATALHO_EM_USO ou CONFLITO_CONCORRENTE",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRapida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/presenca" : {
       "get" : {
         "tags" : [ "Atendimento" ],
@@ -1292,6 +1356,189 @@
         "responses" : {
           "204" : {
             "description" : "Evento voltou para a fila"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/respostas-rapidas" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Catálogo de respostas rápidas, com busca e situação (respostas-rapidas:consultar)",
+        "operationId" : "listarRespostasRapidas",
+        "parameters" : [ {
+          "name" : "busca",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          }
+        }, {
+          "name" : "noConteudo",
+          "in" : "query",
+          "description" : "Também procurar no conteúdo (tela de gerenciamento)",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : true,
+            "description" : "Também procurar no conteúdo (tela de gerenciamento)"
+          }
+        }, {
+          "name" : "situacao",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "default" : "TODAS",
+            "enum" : [ "ATIVAS", "INATIVAS", "TODAS" ]
+          }
+        }, {
+          "name" : "pagina",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "maximum" : 100000,
+            "minimum" : 0
+          }
+        }, {
+          "name" : "tamanho",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaRespostasRapidas"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Cadastra resposta rápida (respostas-rapidas:cadastrar)",
+        "operationId" : "criarRespostaRapida",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RespostaRapidaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Cadastrada (ativa)",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRapida"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "ATALHO_EM_USO",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRapida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/respostas-rapidas/{id}/desativacao" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Desativa resposta rápida, preservando o cadastro (respostas-rapidas:alterar-situacao)",
+        "operationId" : "desativarRespostaRapida",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SituacaoRespostaRapidaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "description" : "CONFLITO_CONCORRENTE",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRapida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/respostas-rapidas/{id}/ativacao" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Ativa resposta rápida (respostas-rapidas:alterar-situacao)",
+        "operationId" : "ativarRespostaRapida",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SituacaoRespostaRapidaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "description" : "CONFLITO_CONCORRENTE",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RespostaRapida"
+                }
+              }
+            }
           }
         }
       }
@@ -3032,6 +3279,88 @@
         },
         "required" : [ "atualizadoEm", "atualizadoPor", "codigo", "criadoEm", "criadoPor", "id", "nome", "versao" ]
       },
+      "RespostaRapidaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "titulo" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 0
+          },
+          "atalho" : {
+            "type" : "string",
+            "description" : "Letras minúsculas sem acento, números e hífen (2 a 30); a barra inicial é ignorada",
+            "maxLength" : 60,
+            "minLength" : 0
+          },
+          "conteudo" : {
+            "type" : "string",
+            "maxLength" : 8192,
+            "minLength" : 0
+          },
+          "versao" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Versão vista (obrigatória na edição)"
+          }
+        },
+        "required" : [ "atalho", "conteudo", "titulo" ]
+      },
+      "RespostaRapida" : {
+        "type" : "object",
+        "description" : "Texto reutilizável do catálogo interno",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "titulo" : {
+            "type" : "string"
+          },
+          "atalho" : {
+            "type" : "string",
+            "description" : "Forma normalizada, sem a barra exibida na interface"
+          },
+          "conteudo" : {
+            "type" : "string"
+          },
+          "ativa" : {
+            "type" : "boolean"
+          },
+          "versao" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "criadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "criadoPor" : {
+            "$ref" : "#/components/schemas/UsuarioAtendimento"
+          },
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "atualizadoPor" : {
+            "$ref" : "#/components/schemas/UsuarioAtendimento"
+          }
+        },
+        "required" : [ "atalho", "ativa", "atualizadoEm", "atualizadoPor", "conteudo", "criadoEm", "criadoPor", "id", "titulo", "versao" ]
+      },
+      "UsuarioAtendimento" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "id", "nome" ]
+      },
       "PresencaRequest" : {
         "type" : "object",
         "properties" : {
@@ -3661,6 +3990,16 @@
         },
         "required" : [ "senha", "token" ]
       },
+      "SituacaoRespostaRapidaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "versao" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "versao" ]
+      },
       "TransferenciaRequest" : {
         "type" : "object",
         "properties" : {
@@ -4189,18 +4528,33 @@
         },
         "required" : [ "id", "recebidoEm", "tentativas" ]
       },
-      "UsuarioAtendimento" : {
+      "PaginaRespostasRapidas" : {
         "type" : "object",
         "properties" : {
-          "id" : {
+          "itens" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/RespostaRapida"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItens" : {
             "type" : "integer",
             "format" : "int64"
           },
-          "nome" : {
-            "type" : "string"
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         },
-        "required" : [ "id", "nome" ]
+        "required" : [ "itens", "pagina", "tamanho", "totalItens", "totalPaginas" ]
       },
       "AssociadoAtendimento" : {
         "type" : "object",

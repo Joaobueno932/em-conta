@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
+import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
 import IconeTraco from '@/shared/components/IconeTraco.vue'
@@ -23,8 +24,10 @@ const props = defineProps<{ selecionado: number | null }>()
 const emit = defineEmits<{ selecionar: [id: number] }>()
 
 // "Ver opções" (AT-04/AT-06): menu que abre para cima no rodapé da fila. Nesta versão só tem o
-// Histórico geral; as demais opções do protótipo dependem de entregas futuras.
+// Histórico geral e as Mensagens rápidas (com permissão); as demais opções do protótipo dependem de entregas futuras.
 const opcoes = ref(false)
+const { data: usuario } = useSessao()
+const podeRespostas = computed(() => temPermissao(usuario.value, 'respostas-rapidas:consultar'))
 const rodape = ref<HTMLElement | null>(null)
 const botaoOpcoes = ref<HTMLButtonElement | null>(null)
 function fecharOpcoes(devolverFoco = false) {
@@ -167,6 +170,12 @@ function trocar(nova: Visao) {
           <RouterLink :to="{ name: 'atendimento-historico' }" class="com-icone">
             <IconeTraco nome="historico" />
             Histórico geral
+          </RouterLink>
+        </li>
+        <li v-if="podeRespostas">
+          <RouterLink :to="{ name: 'atendimento-respostas-rapidas' }" class="com-icone">
+            <IconeTraco nome="raio" />
+            Mensagens rápidas
           </RouterLink>
         </li>
       </ul>

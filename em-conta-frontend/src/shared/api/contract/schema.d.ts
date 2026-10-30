@@ -57,6 +57,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/respostas-rapidas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uma resposta rápida (respostas-rapidas:consultar) */
+        get: operations["obterRespostaRapida"];
+        /** Edita resposta rápida (respostas-rapidas:editar) */
+        put: operations["editarRespostaRapida"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/presenca": {
         parameters: {
             query?: never;
@@ -415,6 +433,58 @@ export interface paths {
         put?: never;
         /** Devolve um evento em falha à fila (atendimento:reprocessar) */
         post: operations["reprocessarWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/respostas-rapidas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catálogo de respostas rápidas, com busca e situação (respostas-rapidas:consultar) */
+        get: operations["listarRespostasRapidas"];
+        put?: never;
+        /** Cadastra resposta rápida (respostas-rapidas:cadastrar) */
+        post: operations["criarRespostaRapida"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/respostas-rapidas/{id}/desativacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desativa resposta rápida, preservando o cadastro (respostas-rapidas:alterar-situacao) */
+        post: operations["desativarRespostaRapida"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/respostas-rapidas/{id}/ativacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ativa resposta rápida (respostas-rapidas:alterar-situacao) */
+        post: operations["ativarRespostaRapida"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1079,6 +1149,40 @@ export interface components {
             /** Format: int64 */
             versao: number;
         };
+        RespostaRapidaRequest: {
+            titulo: string;
+            /** @description Letras minúsculas sem acento, números e hífen (2 a 30); a barra inicial é ignorada */
+            atalho: string;
+            conteudo: string;
+            /**
+             * Format: int64
+             * @description Versão vista (obrigatória na edição)
+             */
+            versao?: number;
+        };
+        /** @description Texto reutilizável do catálogo interno */
+        RespostaRapida: {
+            /** Format: int64 */
+            id: number;
+            titulo: string;
+            /** @description Forma normalizada, sem a barra exibida na interface */
+            atalho: string;
+            conteudo: string;
+            ativa: boolean;
+            /** Format: int64 */
+            versao: number;
+            /** Format: date-time */
+            criadoEm: string;
+            criadoPor: components["schemas"]["UsuarioAtendimento"];
+            /** Format: date-time */
+            atualizadoEm: string;
+            atualizadoPor: components["schemas"]["UsuarioAtendimento"];
+        };
+        UsuarioAtendimento: {
+            /** Format: int64 */
+            id: number;
+            nome: string;
+        };
         PresencaRequest: {
             disponivel: boolean;
         };
@@ -1319,6 +1423,10 @@ export interface components {
             /** Format: password */
             senha: string;
         };
+        SituacaoRespostaRapidaRequest: {
+            /** Format: int64 */
+            versao: number;
+        };
         TransferenciaRequest: {
             /** Format: int64 */
             versao: number;
@@ -1531,10 +1639,16 @@ export interface components {
             tentativas: number;
             erro?: string;
         };
-        UsuarioAtendimento: {
+        PaginaRespostasRapidas: {
+            itens: components["schemas"]["RespostaRapida"][];
+            /** Format: int32 */
+            pagina: number;
+            /** Format: int32 */
+            tamanho: number;
             /** Format: int64 */
-            id: number;
-            nome: string;
+            totalItens: number;
+            /** Format: int32 */
+            totalPaginas: number;
         };
         /** @description Identificação mínima do associado vinculado */
         AssociadoAtendimento: {
@@ -1916,6 +2030,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Fazenda"];
+                };
+            };
+        };
+    };
+    obterRespostaRapida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRapida"];
+                };
+            };
+        };
+    };
+    editarRespostaRapida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespostaRapidaRequest"];
+            };
+        };
+        responses: {
+            /** @description ATALHO_EM_USO ou CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRapida"];
                 };
             };
         };
@@ -2738,6 +2900,118 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listarRespostasRapidas: {
+        parameters: {
+            query?: {
+                busca?: string;
+                /** @description Também procurar no conteúdo (tela de gerenciamento) */
+                noConteudo?: boolean;
+                situacao?: "ATIVAS" | "INATIVAS" | "TODAS";
+                pagina?: number;
+                tamanho?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginaRespostasRapidas"];
+                };
+            };
+        };
+    };
+    criarRespostaRapida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespostaRapidaRequest"];
+            };
+        };
+        responses: {
+            /** @description Cadastrada (ativa) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRapida"];
+                };
+            };
+            /** @description ATALHO_EM_USO */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRapida"];
+                };
+            };
+        };
+    };
+    desativarRespostaRapida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SituacaoRespostaRapidaRequest"];
+            };
+        };
+        responses: {
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRapida"];
+                };
+            };
+        };
+    };
+    ativarRespostaRapida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SituacaoRespostaRapidaRequest"];
+            };
+        };
+        responses: {
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRapida"];
+                };
             };
         };
     };
