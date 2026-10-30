@@ -50,6 +50,17 @@ final class GraphApiControlada implements AutoCloseable {
     private final List<String> uploads = new CopyOnWriteArrayList<>();
     private final Map<String, Midia> midias = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> downloads = new ConcurrentHashMap<>();
+    private final Map<String, Bloqueio> bloqueios = new ConcurrentHashMap<>();
+    private final AtomicReference<Runnable> aoReceberUpload = new AtomicReference<>();
+
+    /**
+     * Segura o PRIMEIRO download de uma mídia até o teste liberar (sincronização explícita, sem sleeps):
+     * {@code entrou} sinaliza que a execução chegou ao download; ao liberar, responde o arquivo ou, com
+     * {@code falhar}, 404.
+     */
+    record Bloqueio(
+            java.util.concurrent.CountDownLatch entrou, java.util.concurrent.CountDownLatch liberar, boolean falhar) {}
+
     private final AtomicReference<Modo> modo = new AtomicReference<>(Modo.ACEITAR);
     private final AtomicReference<Modo> modoUpload = new AtomicReference<>(Modo.ACEITAR);
     private final AtomicInteger sequencia = new AtomicInteger();
@@ -79,6 +90,10 @@ final class GraphApiControlada implements AutoCloseable {
         }
         if ("POST".equals(metodo) && caminho.endsWith("/media")) {
             uploads.add(new String(corpo, StandardCharsets.ISO_8859_1));
+            Runnable acao = aoReceberUpload.getAndSet(null);
+            if (acao != null) {
+                acao.run(); // ex.: o tempo passa durante o upload
+            }
             requisicoes.add(caminho + " [upload " + corpo.length + " bytes]");
             if (modoUpload.get() == Modo.ERRO_TEMPORARIO) {
                 responder(troca, 500, "{\"error\":{\"message\":\"Something went wrong\",\"code\":131000}}");
@@ -141,6 +156,19 @@ final class GraphApiControlada implements AutoCloseable {
     private void baixar(HttpExchange troca, String id) throws IOException {
         Midia midia = midias.get(id);
         int tentativa = downloads.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
+        Bloqueio bloqueio = tentativa == 1 ? bloqueios.remove(id) : null;
+        if (bloqueio != null) {
+            bloqueio.entrou().countDown();
+            try {
+                bloqueio.liberar().await(30, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            if (bloqueio.falhar()) {
+                responder(troca, 404, "");
+                return;
+            }
+        }
         if (midia == null) {
             responder(troca, 404, "");
             return;
@@ -231,11 +259,22 @@ final class GraphApiControlada implements AutoCloseable {
         return uploads;
     }
 
+    void bloquearPrimeiroDownload(String id, Bloqueio bloqueio) {
+        bloqueios.put(id, bloqueio);
+    }
+
+    /** Executa {@code acao} enquanto o próximo upload de mídia é recebido. */
+    void aoReceberUpload(Runnable acao) {
+        aoReceberUpload.set(acao);
+    }
+
     void limpar() {
         requisicoes.clear();
         autorizacoes.clear();
         uploads.clear();
         downloads.clear();
+        bloqueios.clear();
+        aoReceberUpload.set(null);
         modo.set(Modo.ACEITAR);
         modoUpload.set(Modo.ACEITAR);
     }

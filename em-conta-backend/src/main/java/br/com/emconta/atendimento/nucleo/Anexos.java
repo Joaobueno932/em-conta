@@ -227,12 +227,18 @@ public class Anexos {
                 .param("chave", chave)
                 .query(Long.class)
                 .single();
-        jdbc.sql("update atd_anexo set mensagem_id = :m, situacao = 'DISPONIVEL', atualizado_em = :agora"
-                        + " where id = :id and situacao = 'RECEBENDO'")
+        int vinculados = jdbc.sql(
+                        "update atd_anexo set mensagem_id = :m, situacao = 'DISPONIVEL', atualizado_em = :agora"
+                                + " where id = :id and situacao = 'RECEBENDO'")
                 .param("m", mensagem)
                 .param("agora", Timestamp.from(agora))
                 .param("id", anexo)
                 .update();
+        if (vinculados == 0) {
+            // A limpeza de uploads abandonados reivindicou este anexo: desfaz a mensagem (rollback).
+            throw FalhaAtendimento.indisponivel(
+                    "UPLOAD_EXPIRADO", "O arquivo enviado expirou antes do registro. Envie de novo.");
+        }
         jdbc.sql("update atd_conversa set ultima_mensagem_em = :agora where id = :id")
                 .param("agora", Timestamp.from(agora))
                 .param("id", estado.conversaId())

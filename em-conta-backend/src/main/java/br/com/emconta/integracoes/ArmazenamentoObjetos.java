@@ -65,7 +65,7 @@ public class ArmazenamentoObjetos {
 
     /** Falha de comunicação ou resposta inesperada do armazenamento (pode ser tentada de novo). */
     public static class FalhaArmazenamento extends RuntimeException {
-        FalhaArmazenamento(String mensagem) {
+        public FalhaArmazenamento(String mensagem) {
             super(mensagem);
         }
     }

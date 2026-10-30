@@ -283,6 +283,42 @@ abstract class AtendimentoIntegracao extends ApiIntegracao {
                 .single();
     }
 
+    /** Notificação de mídia no formato do webhook da Cloud API ({@code messages[].<tipo>}). */
+    protected static String webhookMidia(
+            String de, String wamid, String tipo, String idMidia, String mime, String sha, String nome) {
+        return webhookMidia(de, wamid, tipo, idMidia, mime, sha, nome, null);
+    }
+
+    protected static String webhookMidia(
+            String de,
+            String wamid,
+            String tipo,
+            String idMidia,
+            String mime,
+            String sha,
+            String nome,
+            String legenda) {
+        String objeto = "{\"id\":\"" + idMidia + "\",\"mime_type\":\"" + mime + "\""
+                + (sha == null ? "" : ",\"sha256\":\"" + sha + "\"")
+                + (nome == null
+                        ? ""
+                        : ",\"filename\":\"" + nome.replace("\\", "\\\\").replace("‮", "\\u202E") + "\"")
+                + (legenda == null ? "" : ",\"caption\":\"" + legenda + "\"") + "}";
+        return "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"102290129340398\",\"changes\":[{\"value\":{"
+                + "\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
+                + "\"phone_number_id\":\"" + NUMERO + "\"},\"contacts\":[{\"profile\":{\"name\":\"Contato\"},"
+                + "\"wa_id\":\"" + de + "\"}],\"messages\":[{\"from\":\"" + de + "\",\"id\":\"" + wamid
+                + "\",\"timestamp\":\"" + agoraEpoch() + "\",\"type\":\"" + tipo + "\",\"" + tipo + "\":" + objeto
+                + "}]},\"field\":\"messages\"}]}]}";
+    }
+
+    protected void receber(String numero, String tipo, String idMidia, String mime, String nome, String legenda)
+            throws Exception {
+        String corpo = webhookMidia(numero, wamid(), tipo, idMidia, mime, null, nome, legenda);
+        assertThat(enviarWebhook(corpo, assinar(corpo)).getStatus()).isEqualTo(200);
+        recebimento.processarPendentes(50);
+    }
+
     protected static String numeroUnico() {
         return "5567" + (900000000L + ThreadLocalRandom.current().nextLong(99_999_999L));
     }
