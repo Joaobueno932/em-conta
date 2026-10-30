@@ -463,7 +463,8 @@ public class ConsultaAtendimento {
             Long tamanho,
             String situacao,
             Instant registradoEm,
-            String texto) {}
+            String texto,
+            String cursorMensagem) {}
 
     public record PaginaMidia(List<ItemMidia> itens, Long anterior) {}
 
@@ -508,7 +509,9 @@ public class ConsultaAtendimento {
                         rs.getObject("tamanho", Long.class),
                         rs.getString("situacao"),
                         instante(rs, "criado_em"),
-                        rs.getString("texto")))
+                        rs.getString("texto"),
+                        Cursor.de(instante(rs, "criado_em"), ORDEM_MENSAGEM, rs.getLong("mensagem_id"))
+                                .toString()))
                 .list());
         Long anterior = null;
         if (itens.size() > tamanho) {

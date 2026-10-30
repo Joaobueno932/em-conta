@@ -1623,6 +1623,8 @@ export interface components {
             registradoEm: string;
             /** @description Legenda */
             legenda?: string;
+            /** @description Cursor da mensagem na linha do tempo, para abrir o contexto dela */
+            cursorMensagem: string;
         };
         /** @description Página da área Mídia, do mais recente para o mais antigo */
         PaginaMidia: {

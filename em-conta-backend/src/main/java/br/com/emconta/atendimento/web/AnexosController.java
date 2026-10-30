@@ -186,7 +186,8 @@ class AnexosController {
                                 i.tamanho(),
                                 i.situacao(),
                                 i.registradoEm(),
-                                i.texto()))
+                                i.texto(),
+                                i.cursorMensagem()))
                         .toList(),
                 pagina.anterior());
     }

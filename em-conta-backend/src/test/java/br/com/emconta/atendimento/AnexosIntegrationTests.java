@@ -619,6 +619,13 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
 
         JsonNode pagina1 = corpo(admin.get(url(segundo, "midia?tamanho=2")));
         assertThat(pagina1.get("itens")).hasSize(2);
+        // O cursor da mensagem abre o contexto dela: a página logo antes dele+1 termina na mensagem.
+        JsonNode item = pagina1.get("itens").get(1);
+        String[] partes = item.get("cursorMensagem").asString().split("\\.");
+        String logoDepois = partes[0] + "." + partes[1] + "." + (Long.parseLong(partes[2]) + 1);
+        JsonNode contexto = corpo(admin.get(url(segundo, "linha-do-tempo?tamanho=5&antes=" + logoDepois)));
+        JsonNode ultimo = contexto.get("itens").get(contexto.get("itens").size() - 1);
+        assertThat(ultimo.get("id").asLong()).isEqualTo(item.get("mensagemId").asLong());
         JsonNode pagina2 = corpo(admin.get(
                 url(segundo, "midia?tamanho=2&antes=" + pagina1.get("anterior").asLong())));
         JsonNode pagina3 = corpo(admin.get(

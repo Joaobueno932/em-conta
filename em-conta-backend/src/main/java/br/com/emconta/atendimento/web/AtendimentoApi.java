@@ -221,7 +221,12 @@ final class AtendimentoApi {
             Long tamanho,
             @Schema(requiredMode = REQUIRED) String situacao,
             @Schema(requiredMode = REQUIRED) Instant registradoEm,
-            @Schema(description = "Legenda") String legenda) {}
+            @Schema(description = "Legenda") String legenda,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    description = "Cursor da mensagem na linha do tempo, para abrir o contexto dela")
+            String cursorMensagem) {}
 
     @Schema(name = "PaginaMidia", description = "Página da área Mídia, do mais recente para o mais antigo")
     record PaginaMidiaResponse(

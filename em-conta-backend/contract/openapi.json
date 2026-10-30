@@ -4399,9 +4399,13 @@
           "legenda" : {
             "type" : "string",
             "description" : "Legenda"
+          },
+          "cursorMensagem" : {
+            "type" : "string",
+            "description" : "Cursor da mensagem na linha do tempo, para abrir o contexto dela"
           }
         },
-        "required" : [ "atendimentoId", "categoria", "direcao", "id", "mensagemId", "registradoEm", "situacao" ]
+        "required" : [ "atendimentoId", "categoria", "cursorMensagem", "direcao", "id", "mensagemId", "registradoEm", "situacao" ]
       },
       "PaginaMidia" : {
         "type" : "object",
