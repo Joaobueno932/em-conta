@@ -4,6 +4,7 @@ import { computed } from 'vue'
 
 import { useHttpClient } from '@/app/injection'
 import { describeApiError } from '@/shared/api/errors'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import {
   chavesAtendimento,
@@ -74,19 +75,40 @@ const estado = computed(() => {
         <img :src="url()" :alt="legenda || nome" loading="lazy" />
       </a>
       <div v-else-if="categoria === 'DOCUMENTO'" class="documento">
-        <span aria-hidden="true">📄</span>
-        <span class="nome">{{ nome }}</span>
-        <span class="ajuda">PDF · {{ formatarTamanho(anexo.tamanho) }}</span>
-        <span class="acoes">
-          <a :href="url()" target="_blank" rel="noopener" :aria-label="`Visualizar ${nome}`"
-            >Visualizar</a
+        <span class="selo" aria-hidden="true">PDF</span>
+        <span class="descricao">
+          <a
+            :href="url()"
+            target="_blank"
+            rel="noopener"
+            class="nome"
+            :aria-label="`Visualizar ${nome}`"
+            title="Visualizar"
+            >{{ nome }}</a
           >
-          <a :href="url(true)" :download="nome" :aria-label="`Baixar ${nome}`">Baixar</a>
+          <span class="ajuda">{{ formatarTamanho(anexo.tamanho) }}</span>
         </span>
+        <a
+          :href="url(true)"
+          :download="nome"
+          class="botao-icone sem-borda"
+          :aria-label="`Baixar ${nome}`"
+          title="Baixar"
+        >
+          <IconeTraco nome="baixar" />
+        </a>
       </div>
       <div v-else class="audio">
         <audio controls preload="none" :src="url()" :aria-label="`Áudio ${nome}`"></audio>
-        <a :href="url(true)" :download="nome" class="ajuda">Baixar áudio</a>
+        <a
+          :href="url(true)"
+          :download="nome"
+          class="ajuda com-icone"
+          :aria-label="`Baixar ${nome}`"
+        >
+          <IconeTraco nome="baixar" :tamanho="14" />
+          Baixar áudio
+        </a>
       </div>
     </template>
     <p
@@ -128,21 +150,48 @@ const estado = computed(() => {
   background: var(--cor-superficie-2);
 }
 
+/* Cartão de PDF (AT-04/HG-03): selo, nome e tamanho, ação de baixar. */
 .documento {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: min(16rem, 100%);
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: var(--cor-superficie);
+}
+
+.selo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2.25rem;
+  border-radius: 4px;
+  background: var(--cor-erro);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.descricao {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .documento .nome {
+  color: var(--cor-texto);
   font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
   overflow-wrap: anywhere;
 }
 
-.documento .acoes {
-  display: inline-flex;
-  gap: 0.75rem;
+.documento .nome:hover {
+  text-decoration: underline;
 }
 
 .audio {

@@ -7,8 +7,8 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { codigoDoErro, describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
 
-import AnexoMensagem from './AnexoMensagem.vue'
 import {
   ACEITOS,
   assumir,
@@ -20,26 +20,25 @@ import {
   TAMANHO_MAXIMO_LEGENDA,
   validarArquivo,
   encerrar,
-  formatarDataHora,
-  formatarHora,
+  iniciais,
   INTERVALO_MS,
+  comecaDia,
   nomeContato,
+  rotuloDia,
   obterDetalhe,
   responder,
   responsaveis,
-  ROTULO_EVENTO,
-  ROTULO_SITUACAO_MENSAGEM,
-  SITUACOES_SEM_ENVIO,
   transferir,
 } from './atendimento-api'
+import ItemLinhaDoTempo from './ItemLinhaDoTempo.vue'
 import { useLinhaDoTempo } from './use-linha-do-tempo'
 
 /**
  * Conversa (AT-02/AT-04/AT-05): linha do tempo, assumir, responder, transferir e encerrar. Só o
  * responsável responde; o servidor confere tudo de novo (permissão, responsável, janela de 24 h).
  */
-const props = defineProps<{ id: number }>()
-const emit = defineEmits<{ fechar: [] }>()
+const props = defineProps<{ id: number; painelAberto?: boolean }>()
+const emit = defineEmits<{ fechar: []; alternarPainel: [] }>()
 
 const http = useHttpClient()
 const queryClient = useQueryClient()
@@ -214,21 +213,42 @@ function enviar() {
 }
 const enviando = computed(() => responderMut.isPending.value || anexoMut.isPending.value)
 
-// "Ver na conversa" (área Mídia): rola até a mensagem, se já estiver carregada.
+// "Ver na conversa" (área Mídia): carrega o contexto da mensagem se preciso, rola até ela, foca e
+// destaca por alguns segundos.
 const avisoMensagem = ref('')
-async function irParaMensagem(mensagemId: number) {
-  avisoMensagem.value = ''
+const destacada = ref<number | null>(null)
+async function irParaMensagem(mensagemId: number, cursor: string) {
+  avisoMensagem.value = 'Localizando a mensagem…'
+  try {
+    const carregada = await linha.carregarAte(cursor, mensagemId)
+    if (!carregada) {
+      avisoMensagem.value = 'Esta mensagem não está disponível nesta conversa.'
+      return
+    }
+  } catch (erro) {
+    avisoMensagem.value = `Não foi possível abrir a mensagem. ${describeApiError(erro)}`
+    return
+  }
   await nextTick()
   const alvo = rolagem.value?.querySelector<HTMLElement>(`#mensagem-${mensagemId}`)
   if (!alvo) {
-    avisoMensagem.value =
-      'Esta mensagem ainda não está carregada. Use “Carregar mensagens anteriores” para chegar até ela.'
+    avisoMensagem.value = 'Esta mensagem não está disponível nesta conversa.'
     return
   }
+  avisoMensagem.value = ''
   alvo.scrollIntoView({ block: 'center' })
-  alvo.focus()
+  alvo.focus({ preventScroll: true })
+  destacada.value = mensagemId
+  window.setTimeout(() => {
+    if (destacada.value === mensagemId) destacada.value = null
+  }, 3000)
 }
-defineExpose({ irParaMensagem })
+
+/** Devolve o foco ao botão que reabre o painel do associado (ao fechar o painel pelo X). */
+function focarBotaoPainel() {
+  botaoPainel.value?.focus()
+}
+defineExpose({ irParaMensagem, focarBotaoPainel })
 
 const motivoComposer = computed(() => {
   if (!detalhe.data.value) return ''
@@ -242,7 +262,10 @@ const motivoComposer = computed(() => {
   return ''
 })
 
-const opcoes = ref(false)
+const botaoPainel = ref<HTMLButtonElement | null>(null)
+
+// Separador de dia (AT-04: "Hoje, 13 de outubro") antes do primeiro item de cada dia.
+const novoDia = (indice: number) => comecaDia(linha.itens.value, indice)
 const rolagem = ref<HTMLElement | null>(null)
 const perto = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 80
 
@@ -276,10 +299,13 @@ async function carregarAnteriores() {
     </AlertaMensagem>
     <template v-else-if="resumo">
       <header class="topo">
-        <div>
+        <span class="avatar" aria-hidden="true">{{
+          iniciais(resumo.associado?.nome ?? nomeContato(resumo))
+        }}</span>
+        <div class="identificacao">
           <h2 id="titulo-conversa">{{ resumo.associado?.nome ?? nomeContato(resumo) }}</h2>
+          <p class="ajuda">+{{ resumo.contatoNumero }} · {{ resumo.codigo }}</p>
           <p class="ajuda">
-            {{ resumo.codigo }} · +{{ resumo.contatoNumero }} ·
             <span v-if="resumo.situacao === 'AGUARDANDO'">Aguardando atendimento</span>
             <span v-else-if="resumo.situacao === 'EM_ATENDIMENTO'">
               Em atendimento com {{ resumo.responsavel?.nome }}
@@ -291,56 +317,63 @@ async function carregarAnteriores() {
           <button
             v-if="resumo.situacao === 'AGUARDANDO' && pode('atendimento:assumir')"
             type="button"
+            class="com-icone"
             :disabled="assumirMut.isPending.value"
             @click="assumirMut.mutate()"
           >
-            Assumir
+            <IconeTraco nome="concluir" />
+            Assumir atendimento
           </button>
           <template v-if="resumo.situacao === 'EM_ATENDIMENTO' && souResponsavel">
             <button
               v-if="pode('atendimento:transferir')"
               type="button"
-              class="secundario"
+              class="secundario com-icone"
               :aria-expanded="transferindo"
               @click="transferindo = !transferindo"
             >
+              <IconeTraco nome="transferir" />
               Transferir
             </button>
             <button
               v-if="pode('atendimento:encerrar')"
               type="button"
+              class="secundario com-icone"
               :disabled="encerrarMut.isPending.value"
               @click="confirmarEncerramento"
             >
+              <IconeTraco nome="concluir" />
               Encerrar
             </button>
           </template>
-          <div class="menu">
-            <button
-              type="button"
-              class="secundario"
-              :aria-expanded="opcoes"
-              @click="opcoes = !opcoes"
-            >
-              Ver opções
-            </button>
-            <ul v-if="opcoes" class="menu-itens">
-              <li>
-                <RouterLink
-                  :to="{ name: 'atendimento-historico', query: { busca: resumo.contatoNumero } }"
-                >
-                  Histórico geral
-                </RouterLink>
-              </li>
-            </ul>
-          </div>
+          <RouterLink
+            class="botao-icone"
+            :to="{ name: 'atendimento-historico', query: { busca: resumo.contatoNumero } }"
+            aria-label="Histórico do contato"
+            title="Histórico do contato"
+          >
+            <IconeTraco nome="historico" />
+          </RouterLink>
+          <button
+            ref="botaoPainel"
+            type="button"
+            class="botao-icone"
+            aria-label="Dados do associado"
+            title="Dados do associado"
+            :aria-expanded="painelAberto"
+            aria-controls="painel-associado"
+            @click="emit('alternarPainel')"
+          >
+            <IconeTraco nome="pessoa" />
+          </button>
           <button
             type="button"
-            class="link fechar"
+            class="botao-icone sem-borda"
             aria-label="Fechar conversa"
+            title="Fechar conversa"
             @click="emit('fechar')"
           >
-            ✕
+            <IconeTraco nome="fechar" />
           </button>
         </div>
       </header>
@@ -401,58 +434,19 @@ async function carregarAnteriores() {
             </button>
             <p v-else class="ajuda">Início do histórico</p>
           </div>
-          <template v-for="item in linha.itens.value" :key="`${item.tipo}-${item.id}`">
-            <p v-if="item.tipo === 'EVENTO'" class="evento">
-              {{ formatarDataHora(item.ocorridoEm) }} —
-              <template v-if="item.evento === 'ATENDIMENTO_INICIADO'">{{
-                ROTULO_EVENTO[item.evento]
-              }}</template>
-              <template v-else>
-                {{ item.autor?.nome }} {{ ROTULO_EVENTO[item.evento ?? ''] ?? item.evento }}
-                <template v-if="item.usuarioAlvo">para {{ item.usuarioAlvo.nome }}</template>
-                <template v-if="item.associado">{{ item.associado.nome }}</template>
-                <template v-if="item.motivo">({{ item.motivo }})</template>
-              </template>
-            </p>
-            <div
-              v-else
-              :id="`mensagem-${item.id}`"
-              class="mensagem"
-              :class="item.direcao === 'SAIDA' ? 'saida' : 'entrada'"
-              tabindex="-1"
-            >
-              <p v-if="item.tipoMensagem === 'NAO_SUPORTADO'" class="ajuda">
-                Mensagem do tipo “{{ item.tipoExterno }}” não suportada nesta versão.
-              </p>
-              <template v-else-if="item.anexo">
-                <AnexoMensagem
-                  :atendimento="id"
-                  :anexo="item.anexo"
-                  :legenda="item.texto"
-                  :pode-tentar-de-novo="
-                    item.direcao === 'ENTRADA' &&
-                    souResponsavel &&
-                    resumo.situacao === 'EM_ATENDIMENTO' &&
-                    pode('atendimento:responder')
-                  "
-                />
-                <p v-if="item.texto" class="texto">{{ item.texto }}</p>
-              </template>
-              <p v-else class="texto">{{ item.texto }}</p>
-              <p class="meta">
-                <span v-if="item.autor">{{ item.autor.nome }} · </span>
-                {{ formatarHora(item.ocorridoEm) }}
-                <span
-                  v-if="item.direcao === 'SAIDA'"
-                  :class="{ falha: SITUACOES_SEM_ENVIO.includes(item.situacao ?? '') }"
-                >
-                  · {{ ROTULO_SITUACAO_MENSAGEM[item.situacao ?? ''] }}
-                  <template v-if="item.situacao === 'FALHA' && item.erroTitulo"
-                    >: {{ item.erroTitulo }}</template
-                  >
-                </span>
-              </p>
-            </div>
+          <template v-for="(item, indice) in linha.itens.value" :key="`${item.tipo}-${item.id}`">
+            <p v-if="novoDia(indice)" class="dia">{{ rotuloDia(item.ocorridoEm) }}</p>
+            <ItemLinhaDoTempo
+              :item="item"
+              :atendimento="id"
+              :destacada="destacada === item.id"
+              :pode-tentar-de-novo="
+                item.direcao === 'ENTRADA' &&
+                souResponsavel &&
+                resumo.situacao === 'EM_ATENDIMENTO' &&
+                pode('atendimento:responder')
+              "
+            />
           </template>
         </template>
       </div>
@@ -495,6 +489,14 @@ async function carregarAnteriores() {
         </button>
       </div>
       <AlertaMensagem v-if="erroArquivo" tipo="erro">{{ erroArquivo }}</AlertaMensagem>
+      <p
+        v-if="motivoComposer && detalhe.data.value?.canalConfigurado"
+        class="aviso-compositor"
+        role="status"
+      >
+        <IconeTraco nome="informacao" />
+        {{ motivoComposer }}
+      </p>
       <form class="composer" @submit.prevent="enviar">
         <input
           ref="seletor"
@@ -505,14 +507,6 @@ async function carregarAnteriores() {
           :accept="ACEITOS"
           @change="selecionarArquivo"
         />
-        <button
-          type="button"
-          class="secundario"
-          :disabled="!!motivoComposer || enviando"
-          @click="seletor?.click()"
-        >
-          Anexar arquivo
-        </button>
         <label for="resposta" class="visualmente-oculto">{{
           arquivo ? 'Legenda (opcional)' : 'Mensagem'
         }}</label>
@@ -528,20 +522,32 @@ async function carregarAnteriores() {
               ? aceitaLegenda
                 ? 'Legenda (opcional)'
                 : 'O WhatsApp não aceita legenda em áudio.'
-              : 'Digite uma mensagem')
+              : 'Digite uma mensagem…')
           "
           @keydown.enter.exact.prevent="enviar"
         ></textarea>
-        <button
-          type="submit"
-          :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
-        >
-          {{ enviando ? 'Enviando…' : 'Enviar' }}
-        </button>
+        <div class="ferramentas">
+          <button
+            type="button"
+            class="botao-icone sem-borda"
+            aria-label="Anexar arquivo"
+            title="Anexar arquivo (imagem, PDF ou áudio)"
+            :disabled="!!motivoComposer || enviando"
+            @click="seletor?.click()"
+          >
+            <IconeTraco nome="anexar" :tamanho="20" />
+          </button>
+          <button
+            type="submit"
+            class="botao-icone enviar"
+            :aria-label="enviando ? 'Enviando…' : 'Enviar'"
+            :title="enviando ? 'Enviando…' : 'Enviar'"
+            :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
+          >
+            <IconeTraco nome="enviar" :tamanho="20" />
+          </button>
+        </div>
       </form>
-      <p v-if="motivoComposer && detalhe.data.value?.canalConfigurado" class="ajuda">
-        {{ motivoComposer }}
-      </p>
       <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
         {{ describeApiError(anexoMut.error.value) }} O arquivo foi mantido; tentar de novo não
         duplica a mensagem.
@@ -563,43 +569,48 @@ async function carregarAnteriores() {
   gap: 0.5rem;
 }
 
+/* AT-03/AT-04: avatar, nome, telefone e situação à esquerda; ações à direita (descem para a linha
+   de baixo quando não cabem, sem espremer o nome). */
 .topo {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--cor-borda);
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--cor-destaque-suave);
+  color: var(--cor-destaque-forte);
+  font-weight: 600;
+}
+
+.identificacao {
+  flex: 1 1 14rem;
+  min-width: 0;
 }
 
 .topo h2 {
   margin: 0;
   font-size: 1.1rem;
+  overflow-wrap: anywhere;
 }
 
 .topo p {
-  margin: 0.2rem 0 0;
+  margin: 0.15rem 0 0;
 }
 
-.menu {
-  position: relative;
-}
-
-.menu-itens {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 2;
-  list-style: none;
-  margin: 0.25rem 0 0;
-  padding: 0.5rem 0.75rem;
-  background: var(--cor-superficie);
-  border: 1px solid var(--cor-borda);
-  border-radius: 8px;
-  white-space: nowrap;
-}
-
-.fechar {
-  font-size: 1.1rem;
+.topo .acoes {
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 .transferencia {
@@ -626,10 +637,8 @@ async function carregarAnteriores() {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  background: var(--cor-superficie-2);
-  border-radius: 8px;
+  gap: 0.6rem;
+  padding: 0.75rem 0.25rem;
 }
 
 .anteriores {
@@ -645,51 +654,15 @@ async function carregarAnteriores() {
   margin: 0;
 }
 
-.evento {
+/* Separador de dia (pílula centralizada, como os eventos). */
+.dia {
   align-self: center;
-  margin: 0;
+  margin: 0.25rem 0;
+  padding: 0.2rem 0.75rem;
+  border-radius: 6px;
+  background: var(--cor-superficie-2);
+  color: var(--cor-texto-2);
   font-size: 0.8rem;
-  color: var(--cor-texto-2);
-  text-align: center;
-}
-
-.mensagem {
-  max-width: 75%;
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  background: var(--cor-superficie);
-  border: 1px solid var(--cor-borda);
-}
-
-.mensagem.saida {
-  align-self: flex-end;
-  background: var(--cor-destaque-suave);
-  border-color: var(--cor-destaque-borda);
-}
-
-.mensagem p {
-  margin: 0;
-}
-
-.texto {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.meta {
-  font-size: 0.75rem;
-  color: var(--cor-texto-2);
-  margin-top: 0.2rem !important;
-}
-
-.falha {
-  color: var(--cor-erro);
-}
-
-.composer {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-end;
 }
 
 .selecionado {
@@ -707,12 +680,51 @@ async function carregarAnteriores() {
   overflow-wrap: anywhere;
 }
 
-.mensagem:focus-visible {
-  outline: 2px solid var(--cor-destaque-borda);
+/* AT-03: aviso no lugar da resposta quando ela não é possível. */
+.aviso-compositor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: var(--cor-destaque-suave);
+  color: var(--cor-destaque-forte);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* AT-04: campo em toda a largura e, abaixo, anexar à esquerda e enviar à direita. */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-top: 1px solid var(--cor-borda);
+  padding-top: 0.75rem;
 }
 
 .composer textarea {
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   resize: vertical;
+}
+
+.ferramentas {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+button.botao-icone.enviar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-color: var(--cor-destaque-forte);
+  background: var(--cor-destaque);
+  color: #fff;
+}
+
+button.botao-icone.enviar:hover:not(:disabled) {
+  background: var(--cor-destaque-forte);
 }
 </style>

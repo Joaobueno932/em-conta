@@ -21,7 +21,7 @@ import {
  * é carregada; nenhum arquivo é baixado ou reproduzido até a pessoa pedir.
  */
 const props = defineProps<{ atendimento: number; somenteEste?: boolean }>()
-const emit = defineEmits<{ abrirMensagem: [mensagemId: number] }>()
+const emit = defineEmits<{ abrirMensagem: [mensagemId: number, cursor: string] }>()
 
 const http = useHttpClient()
 const categoria = ref<CategoriaAnexo | ''>('')
@@ -87,7 +87,11 @@ const itens = computed(() => lista.data.value?.pages.flatMap((p) => p.itens) ?? 
           {{ formatarDataHora(item.registradoEm) }}
           <template v-if="item.tamanho"> · {{ formatarTamanho(item.tamanho) }}</template>
         </span>
-        <button type="button" class="link" @click="emit('abrirMensagem', item.mensagemId)">
+        <button
+          type="button"
+          class="link"
+          @click="emit('abrirMensagem', item.mensagemId, item.cursorMensagem)"
+        >
           Ver na conversa
         </button>
       </li>
@@ -167,6 +171,16 @@ h3 {
 
 .nome {
   overflow-wrap: anywhere;
+}
+
+/* Sem sublinhado contínuo: ele esconderia "_" de nomes de arquivo (volta no foco e ao passar). */
+a.nome {
+  text-decoration: none;
+}
+
+a.nome:hover,
+a.nome:focus-visible {
+  text-decoration: underline;
 }
 
 .itens .link {

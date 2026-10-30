@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
@@ -25,6 +25,23 @@ const selecionado = computed(() => {
 })
 const painelAberto = ref(true)
 const conversa = ref<InstanceType<typeof ConversaAtendimento> | null>(null)
+const painel = ref<InstanceType<typeof PainelAssociado> | null>(null)
+
+// Painel do associado: o X fecha e devolve o foco ao botão da conversa que o reabre.
+async function fecharPainel() {
+  painelAberto.value = false
+  await nextTick()
+  conversa.value?.focarBotaoPainel()
+}
+async function alternarPainel() {
+  if (painelAberto.value) {
+    await fecharPainel()
+    return
+  }
+  painelAberto.value = true
+  await nextTick()
+  painel.value?.focar()
+}
 
 function selecionar(id: number | null) {
   painelAberto.value = true
@@ -45,18 +62,29 @@ const alterarPresenca = useMutation({
 <template>
   <main class="pagina pagina--larga atendimento">
     <header class="cabecalho-pagina">
-      <h1>Atendimento</h1>
-      <div class="acoes">
-        <!-- Presença manual simples: só informa os colegas, não muda a distribuição. -->
-        <label v-if="presenca.data.value" class="presenca">
-          <input
-            type="checkbox"
-            :checked="presenca.data.value.disponivel"
-            :disabled="alterarPresenca.isPending.value"
-            @change="alterarPresenca.mutate(($event.target as HTMLInputElement).checked)"
-          />
-          {{ presenca.data.value.disponivel ? 'Disponível' : 'Ausente' }}
-        </label>
+      <div>
+        <h1>Atendimento</h1>
+        <p class="subtitulo">Converse e acompanhe seus associados.</p>
+      </div>
+      <!-- Presença manual simples: só informa os colegas, não muda a distribuição. -->
+      <div v-if="presenca.data.value" class="presenca">
+        <span
+          class="ponto"
+          :class="{ ausente: !presenca.data.value.disponivel }"
+          aria-hidden="true"
+        ></span>
+        <label for="presenca" class="visualmente-oculto">Sua presença</label>
+        <select
+          id="presenca"
+          :value="presenca.data.value.disponivel ? 'DISPONIVEL' : 'AUSENTE'"
+          :disabled="alterarPresenca.isPending.value"
+          @change="
+            alterarPresenca.mutate(($event.target as HTMLSelectElement).value === 'DISPONIVEL')
+          "
+        >
+          <option value="DISPONIVEL">Disponível</option>
+          <option value="AUSENTE">Ausente</option>
+        </select>
       </div>
     </header>
     <AlertaMensagem v-if="alterarPresenca.isError.value" tipo="erro">
@@ -74,7 +102,9 @@ const alterarPresenca = useMutation({
         :id="selecionado"
         ref="conversa"
         :key="selecionado"
+        :painel-aberto="painelAberto"
         @fechar="selecionar(null)"
+        @alternar-painel="alternarPainel"
       />
       <section v-else class="cartao vazio">
         <p>Selecione um atendimento na fila.</p>
@@ -82,9 +112,10 @@ const alterarPresenca = useMutation({
       <PainelAssociado
         v-if="selecionado && painelAberto"
         :id="selecionado"
+        ref="painel"
         :key="`p-${selecionado}`"
-        @fechar="painelAberto = false"
-        @abrir-mensagem="(m) => conversa?.irParaMensagem(m)"
+        @fechar="fecharPainel"
+        @abrir-mensagem="(m, cursor) => conversa?.irParaMensagem(m, cursor)"
       />
     </div>
   </main>
@@ -98,7 +129,12 @@ const alterarPresenca = useMutation({
 .cabecalho-pagina {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.cabecalho-pagina .subtitulo {
+  margin: 0 0 1rem;
 }
 
 .presenca {
@@ -107,9 +143,27 @@ const alterarPresenca = useMutation({
   align-items: center;
 }
 
+.presenca select {
+  border-color: transparent;
+  background: transparent;
+  font-weight: 500;
+}
+
+.ponto {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--cor-destaque);
+}
+
+.ponto.ausente {
+  background: var(--cor-texto-3);
+}
+
+/* Três colunas só onde cabem; abaixo disso, fila e conversa lado a lado e o painel embaixo. */
 .colunas {
   display: grid;
-  grid-template-columns: 20rem minmax(0, 1fr) 18rem;
+  grid-template-columns: 20rem minmax(0, 1fr) 20rem;
   gap: 1rem;
   align-items: start;
 }
@@ -125,10 +179,20 @@ const alterarPresenca = useMutation({
   padding: 3rem 1rem;
 }
 
-@media (max-width: 70rem) {
+@media (max-width: 90rem) {
+  .colunas {
+    grid-template-columns: 18rem minmax(0, 1fr);
+  }
+
+  .colunas > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 60rem) {
   .colunas,
   .colunas.sem-painel {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

@@ -247,3 +247,39 @@ describe('lacunas da linha do tempo', () => {
     expect(linha().lacunaPendente.value).toBe(false)
   })
 })
+
+describe('abrir uma mensagem antiga pela área Mídia', () => {
+  it('carrega só a página que termina nela e deixa o intervalo como lacuna limitada', async () => {
+    const pedidos: string[] = []
+    const { linha } = await montar({
+      [`GET ${LINHA(1)}`]: () =>
+        jsonResponse({ itens: faixa(951, 1000), anterior: mensagem(951).cursor }),
+      [`GET ${LINHA(1)}&antes=${String(10).padStart(6, '0')}.1.11`]: (_init, url) => {
+        pedidos.push(url!)
+        return jsonResponse({ itens: faixa(1, 10) })
+      },
+      [`GET ${LINHA(1)}&antes=${mensagem(951).cursor}`]: (_init, url) => {
+        pedidos.push(url!)
+        return jsonResponse({ itens: faixa(901, 950), anterior: mensagem(901).cursor })
+      },
+    })
+    expect(await linha().carregarAte(mensagem(10).cursor, 10)).toBe(true)
+    await flushPromises()
+    const ids = textos(linha())
+    expect(ids).toContain(10)
+    expect(ids).toContain(901) // a recuperação da lacuna começou, com limite por ciclo
+    expect(ids.length).toBeLessThan(1000) // não carregou o histórico inteiro
+    expect(linha().lacunaPendente.value).toBe(true)
+  })
+
+  it('mensagem que não está nesta conversa não é encontrada', async () => {
+    const { linha } = await montar({
+      [`GET ${LINHA(1)}`]: () =>
+        jsonResponse({ itens: faixa(50, 60), anterior: mensagem(50).cursor }),
+      [`GET ${LINHA(1)}&antes=${String(5).padStart(6, '0')}.1.6`]: () =>
+        jsonResponse({ itens: faixa(1, 4) }),
+    })
+    expect(await linha().carregarAte(mensagem(5).cursor, 5)).toBe(false)
+    expect(textos(linha())).not.toContain(5)
+  })
+})

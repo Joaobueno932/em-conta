@@ -7,6 +7,7 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { codigoDoErro, describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import {
   buscarAssociados,
@@ -23,7 +24,11 @@ import MidiaConversa from './MidiaConversa.vue'
  * atendente escolher. Trocar ou remover um vínculo exige motivo e fica no histórico.
  */
 const props = defineProps<{ id: number }>()
-const emit = defineEmits<{ fechar: []; abrirMensagem: [mensagemId: number] }>()
+const emit = defineEmits<{ fechar: []; abrirMensagem: [mensagemId: number, cursor: string] }>()
+
+// Ao abrir o painel pelo botão da conversa, o foco vai para o fechar (e volta ao botão ao fechar).
+const botaoFechar = ref<HTMLButtonElement | null>(null)
+defineExpose({ focar: () => botaoFechar.value?.focus() })
 
 const http = useHttpClient()
 const queryClient = useQueryClient()
@@ -80,16 +85,18 @@ function confirmar(associadoId?: number) {
 </script>
 
 <template>
-  <aside class="painel cartao" aria-labelledby="titulo-associado">
+  <aside id="painel-associado" class="painel cartao" aria-labelledby="titulo-associado">
     <header class="topo">
-      <h2 id="titulo-associado">Associado</h2>
+      <h2 id="titulo-associado">Dados do associado</h2>
       <button
+        ref="botaoFechar"
         type="button"
-        class="link"
+        class="botao-icone sem-borda"
         aria-label="Fechar painel do associado"
+        title="Fechar painel"
         @click="emit('fechar')"
       >
-        ✕
+        <IconeTraco nome="fechar" />
       </button>
     </header>
 
@@ -182,7 +189,10 @@ function confirmar(associadoId?: number) {
         </div>
       </div>
 
-      <MidiaConversa :atendimento="id" @abrir-mensagem="(m) => emit('abrirMensagem', m)" />
+      <MidiaConversa
+        :atendimento="id"
+        @abrir-mensagem="(m, cursor) => emit('abrirMensagem', m, cursor)"
+      />
     </template>
   </aside>
 </template>

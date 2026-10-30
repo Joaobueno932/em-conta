@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import {
   chavesAtendimento,
@@ -20,6 +21,22 @@ import {
 /** Fila de conversas (AT-01/AT-03): visões, busca no servidor e paginação. */
 const props = defineProps<{ selecionado: number | null }>()
 const emit = defineEmits<{ selecionar: [id: number] }>()
+
+// "Ver opções" (AT-04/AT-06): menu que abre para cima no rodapé da fila. Nesta versão só tem o
+// Histórico geral; as demais opções do protótipo dependem de entregas futuras.
+const opcoes = ref(false)
+const rodape = ref<HTMLElement | null>(null)
+const botaoOpcoes = ref<HTMLButtonElement | null>(null)
+function fecharOpcoes(devolverFoco = false) {
+  if (!opcoes.value) return
+  opcoes.value = false
+  if (devolverFoco) botaoOpcoes.value?.focus()
+}
+function cliqueFora(evento: MouseEvent) {
+  if (opcoes.value && rodape.value && !rodape.value.contains(evento.target as Node)) fecharOpcoes()
+}
+onMounted(() => document.addEventListener('click', cliqueFora))
+onBeforeUnmount(() => document.removeEventListener('click', cliqueFora))
 
 const http = useHttpClient()
 const visao = ref<Visao>('AGUARDANDO')
@@ -132,9 +149,28 @@ function trocar(nova: Visao) {
         </button>
       </nav>
     </template>
-    <p class="rodape">
-      <RouterLink :to="{ name: 'atendimento-historico' }">Histórico geral</RouterLink>
-    </p>
+    <div ref="rodape" class="rodape" @keydown.esc="fecharOpcoes(true)">
+      <button
+        ref="botaoOpcoes"
+        type="button"
+        class="ver-opcoes"
+        :aria-expanded="opcoes"
+        aria-controls="opcoes-atendimento"
+        @click="opcoes = !opcoes"
+      >
+        Ver opções
+        <IconeTraco :nome="opcoes ? 'seta-abaixo' : 'seta-acima'" />
+      </button>
+      <!-- Depois do botão no DOM (o Tab chega ao item); visualmente abre para cima. -->
+      <ul v-if="opcoes" id="opcoes-atendimento" class="menu-opcoes">
+        <li>
+          <RouterLink :to="{ name: 'atendimento-historico' }" class="com-icone">
+            <IconeTraco nome="historico" />
+            Histórico geral
+          </RouterLink>
+        </li>
+      </ul>
+    </div>
   </section>
 </template>
 
@@ -230,8 +266,48 @@ function trocar(nova: Visao) {
 }
 
 .rodape {
+  position: relative;
   margin: 0.75rem 0 0;
   border-top: 1px solid var(--cor-borda);
   padding-top: 0.5rem;
+}
+
+button.ver-opcoes {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  border: none;
+  background: none;
+  color: var(--cor-texto);
+  padding: 0.4rem 0;
+  font-weight: 500;
+}
+
+.menu-opcoes {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  z-index: 3;
+  list-style: none;
+  margin: 0 0 0.25rem;
+  padding: 0.4rem;
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 8%);
+}
+
+.menu-opcoes a {
+  display: flex;
+  padding: 0.5rem;
+  border-radius: 8px;
+  color: var(--cor-texto);
+  text-decoration: none;
+}
+
+.menu-opcoes a:hover {
+  background: var(--cor-superficie-2);
 }
 </style>

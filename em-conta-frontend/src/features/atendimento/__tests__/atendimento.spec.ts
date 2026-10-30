@@ -95,7 +95,7 @@ describe('Atendimento', () => {
     // Ainda não é responsável: não responde.
     expect((screen.getByLabelText('Mensagem') as HTMLTextAreaElement).disabled).toBe(true)
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Assumir' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Assumir atendimento' }))
     await waitFor(() => expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/assuncao`))
   })
 
@@ -208,7 +208,7 @@ describe('Atendimento', () => {
     expect(screen.getByText('Início do histórico')).toBeTruthy()
 
     // Atualização (aqui provocada por uma ação): as páginas lidas continuam e a lacuna é buscada.
-    await fireEvent.click(screen.getByRole('button', { name: 'Assumir' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Assumir atendimento' }))
     expect(await screen.findByText('cinquenta')).toBeTruthy()
     expect(await screen.findByText('quarenta')).toBeTruthy()
     const textos = [...document.querySelectorAll('.mensagem .texto')].map((e) => e.textContent)
@@ -288,9 +288,34 @@ describe('Atendimento', () => {
   it('"Ver opções" só oferece o Histórico geral', async () => {
     const { fetchFn } = apiFalsa(rotas(detalhe()))
     await montarApp(fetchFn, '/atendimento?id=1')
-    await fireEvent.click(await screen.findByRole('button', { name: 'Ver opções' }))
-    const menu = screen.getAllByRole('link', { name: 'Histórico geral' })
-    expect(menu.length).toBe(2) // rodapé da fila + menu
+    const botao = await screen.findByRole('button', { name: 'Ver opções' })
+    expect(botao.getAttribute('aria-expanded')).toBe('false')
+    await fireEvent.click(botao)
+    expect(botao.getAttribute('aria-expanded')).toBe('true')
+    const menu = document.getElementById('opcoes-atendimento')!
+    expect([...menu.querySelectorAll('a')].map((a) => a.textContent?.trim())).toEqual([
+      'Histórico geral',
+    ])
+    // Esc fecha e devolve o foco ao botão.
+    menu.querySelector('a')!.focus()
+    await fireEvent.keyDown(menu, { key: 'Escape' })
+    expect(document.getElementById('opcoes-atendimento')).toBeNull()
+    expect(document.activeElement).toBe(botao)
+  })
+
+  it('fechar o painel do associado pelo X devolve o foco ao botão que o reabre', async () => {
+    const { fetchFn } = apiFalsa(rotas(detalhe()))
+    await montarApp(fetchFn, '/atendimento?id=1')
+    // Com a conversa carregada (o botão que reabre o painel já existe).
+    const reabrir = await screen.findByRole('button', { name: 'Dados do associado' })
+    expect(reabrir.getAttribute('aria-expanded')).toBe('true')
+    await fireEvent.click(await screen.findByRole('button', { name: 'Fechar painel do associado' }))
+    await waitFor(() => expect(document.activeElement).toBe(reabrir))
+    expect(reabrir.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('complementary', { name: 'Dados do associado' })).toBeNull()
+    await fireEvent.click(reabrir)
+    const fechar = await screen.findByRole('button', { name: 'Fechar painel do associado' })
+    await waitFor(() => expect(document.activeElement).toBe(fechar))
   })
 
   it('trocar o associado vinculado exige motivo', async () => {

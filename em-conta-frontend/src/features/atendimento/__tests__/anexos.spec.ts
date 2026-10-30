@@ -334,7 +334,7 @@ describe('Anexos no atendimento', () => {
     expect(screen.getByText(/Aceita pelo WhatsApp/)).toBeTruthy()
 
     // Uma atualização (aqui provocada por uma ação) confere as mensagens antigas em lote.
-    await fireEvent.click(screen.getByRole('button', { name: 'Assumir' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Assumir atendimento' }))
     await waitFor(() => expect(screen.getByText(/· Entregue/)).toBeTruthy())
     expect(screen.getByText('antiga enviada')).toBeTruthy()
     expect(screen.getByText('recente')).toBeTruthy()

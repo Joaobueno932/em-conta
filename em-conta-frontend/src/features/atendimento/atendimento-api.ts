@@ -339,3 +339,30 @@ const data = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' })
 export const formatarHora = (i: string) => hora.format(new Date(i))
 export const formatarDataHora = (i: string) => dataHora.format(new Date(i))
 export const formatarData = (i: string) => data.format(new Date(i))
+
+const dia = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' })
+const diaComAno = new Intl.DateTimeFormat('pt-BR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+/** Rótulo do separador de dia da linha do tempo: "Hoje, 13 de outubro", "Ontem, …" ou a data. */
+export function rotuloDia(instante: string, agora = new Date()) {
+  const data = new Date(instante)
+  const ontem = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - 1)
+  if (data.toDateString() === agora.toDateString()) return `Hoje, ${dia.format(data)}`
+  if (data.toDateString() === ontem.toDateString()) return `Ontem, ${dia.format(data)}`
+  return data.getFullYear() === agora.getFullYear() ? dia.format(data) : diaComAno.format(data)
+}
+
+/** O item na posição `indice` é o primeiro do seu dia (recebe separador antes)? */
+export function comecaDia(itens: { ocorridoEm: string }[], indice: number) {
+  const atual = itens[indice]
+  if (!atual) return false
+  return (
+    indice === 0 ||
+    new Date(itens[indice - 1]!.ocorridoEm).toDateString() !==
+      new Date(atual.ocorridoEm).toDateString()
+  )
+}

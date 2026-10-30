@@ -226,7 +226,38 @@ export function useLinhaDoTempo(id: Ref<number>, somenteEste: boolean, atualizar
     }
   }
 
+  /**
+   * Garante que a mensagem do cursor esteja carregada ("Ver na conversa" da área Mídia). Se não estiver,
+   * busca uma única página que termina nela (o contexto anterior) e registra o intervalo entre ela e o
+   * que já estava na tela como lacuna, recuperada com os mesmos limites por ciclo — o histórico inteiro
+   * nunca é carregado de uma vez.
+   *
+   * @return se a mensagem está carregada (falso: não pertence a esta conversa/ciclo ou falhou)
+   */
+  async function carregarAte(cursor: string, mensagemId: number): Promise<boolean> {
+    if (itens.value.some((i) => i.tipo === 'MENSAGEM' && i.id === mensagemId)) return true
+    const [micros, ordem, idCursor] = cursor.split('.')
+    const idAtual = id.value
+    const pagina = await linhaDoTempo(http, idAtual, {
+      somenteEste,
+      antes: `${micros}.${ordem}.${Number(idCursor) + 1}`,
+    })
+    if (id.value !== idAtual) return false
+    const encontrada = pagina.itens.some((i) => i.tipo === 'MENSAGEM' && i.id === mensagemId)
+    if (!encontrada) return false
+    const maisAntigoCarregado = itens.value[0]
+    guardar(pagina.itens)
+    carregouAnteriores.value = true
+    fimDoHistorico.value = !pagina.anterior
+    if (maisAntigoCarregado && compararCursor(maisAntigoCarregado.cursor, cursor) > 0) {
+      lacunas.value = [...lacunas.value, { antes: maisAntigoCarregado.cursor, ate: cursor }]
+      void recuperarLacunas()
+    }
+    return true
+  }
+
   return {
+    carregarAte,
     recente,
     itens,
     temAnteriores,

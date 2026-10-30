@@ -143,10 +143,13 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   const linha = page.getByRole('row', { name: new RegExp(razao) })
   await expect(linha).toHaveCount(1)
   await linha.getByRole('link').click()
-  await expect(page.getByRole('heading', { name: /Atendimento ATD-/ })).toBeVisible()
+  const trilha = page.getByRole('navigation', { name: 'Trilha' })
+  await expect(trilha).toContainText(/Detalhes do atendimento ATD-\d+/)
+  await expect(page.getByRole('heading', { name: razao, level: 1 })).toBeVisible()
   await expect(page.getByText('Bom dia! Vou verificar sua fatura.')).toBeVisible()
   await expect(page.getByText(/encerrou o atendimento/)).toBeVisible()
-  const codigoEncerrado = (await page.getByRole('heading', { level: 1 }).textContent()) ?? ''
+  await expect(page.getByText('Conversa encerrada · Somente leitura')).toBeVisible()
+  const codigoEncerrado = /ATD-\d+/.exec((await trilha.textContent()) ?? '')![0]
 
   // 6. Nova mensagem depois do encerramento abre outro ciclo na fila, na mesma conversa.
   await webhookDeTeste.mensagem(page.request, waId, nome, 'Esqueci de perguntar uma coisa')
@@ -156,7 +159,7 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   }).toPass({ timeout: 20_000 })
   await expect(page.getByText('Aguardando atendimento')).toBeVisible()
   await expect(page.getByText('Esqueci de perguntar uma coisa')).toBeVisible()
-  await expect(page.getByText(codigoEncerrado.replace('Atendimento ', ''))).toHaveCount(0)
+  await expect(page.getByText(codigoEncerrado)).toHaveCount(0)
 })
 
 test('transferência entre dois atendentes: só o novo responsável responde e encerra', async ({
