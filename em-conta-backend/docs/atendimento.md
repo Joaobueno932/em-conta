@@ -5,9 +5,9 @@ responder → vincular associado existente → transferir → encerrar e consult
 mensagem depois do encerramento abre outro atendimento (`AGUARDANDO`) na mesma conversa.
 
 Fora do escopo desta versão (sem botões na interface): envio em massa, respostas rápidas, chatbot/IA,
-CRM, tickets/SLA, automações, dashboards, templates, setor, protocolo, etiquetas e **anexos**
-(US-ATE-04 parcial: mensagens que não são texto aparecem como "não suportada"; a área "Mídia" do
-painel informa que anexos ainda não estão disponíveis).
+CRM, tickets/SLA, automações, dashboards, templates, setor, protocolo, etiquetas, gravação pelo
+microfone, transcrição e OCR. Anexos: imagem, PDF e áudio (ver [Anexos](#anexos)); outros tipos
+aparecem como "não suportado".
 
 ## Provedor
 
@@ -21,7 +21,7 @@ a documentação oficial:
 | Notificações | `entry[].changes[].value` com `metadata.phone_number_id`, `contacts`, `messages`, `statuses`; eventos de outro `phone_number_id` são ignorados (contados) |
 | Envio | `POST {graph-url}/{versão}/{phone-number-id}/messages` (texto), `Authorization: Bearer`; resposta `messages[].id` + `message_status: accepted` |
 | Correlação | `biz_opaque_callback_data` = correlação interna da mensagem, para casar status mesmo sem o `wamid` |
-| Janela de 24 h | resposta livre só até 24 h após a última mensagem do contato; depois 409 `JANELA_ENCERRADA` (templates estão fora do escopo) |
+| Janela de 24 h | resposta livre até o instante exato de 24 h após a última mensagem do contato, inclusive; depois 409 `JANELA_ENCERRADA` (templates estão fora do escopo). Conferida no registro **e** de novo antes de cada tentativa de envio |
 
 ### Variáveis de ambiente
 
@@ -41,17 +41,18 @@ fictício.
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
-## Modelo (V6)
+## Modelo (V6, V7, V8)
 
 | Tabela | Conteúdo |
 |---|---|
 | `atd_contato` | contato do WhatsApp (`wa_id` único, nome do perfil) |
 | `atd_conversa` | uma por contato; associado vinculado, última entrada (janela de 24 h), `versao` |
 | `atd_atendimento` | ciclo `AGUARDANDO → EM_ATENDIMENTO → ENCERRADO`, responsável, `versao`; índice único garante um só ciclo aberto por conversa |
-| `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação, erro, tentativas |
+| `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação (V7 acrescenta `JANELA_EXPIRADA`), erro, tentativas |
 | `atd_mensagem_situacao` | histórico de status de cada mensagem |
 | `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo) |
 | `atd_webhook_evento` | caixa de entrada do webhook (corpo bruto, hash único, situação, tentativas) |
+| `atd_anexo` | V8: anexo da mensagem (categoria, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
 | `atd_presenca` | presença manual do atendente (Disponível/Ausente; não afeta distribuição) |
 
 ## Consistência, eventos e repetição
@@ -63,8 +64,19 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
   (30 s × 2ⁿ); após 5 tentativas fica `FALHA` e pode ser reprocessada
   (`POST …/webhook-eventos/{id}/reprocessamento`). A Meta também reenvia por até 7 dias.
 - **Saída (outbox)**: responder grava a mensagem `PENDENTE` com a chave de idempotência enviada pela
-  interface (repetir o clique após falha de rede não duplica). O processador reserva a mensagem
+  interface. A chave identifica a operação: autor + atendimento + texto normalizado (`strip()`, o mesmo
+  texto gravado e enviado). Repetição exata → mesma mensagem (202), sem nova gravação nem reenfileirar,
+  inclusive depois de transferência ou encerramento; mesma chave com outro autor, atendimento ou texto →
+  409 `CHAVE_IDEMPOTENCIA_REUTILIZADA`, sem revelar a mensagem anterior. A garantia é a restrição única
+  `chave_idempotencia`: requisições simultâneas disputam o INSERT; a perdedora relê a vencedora com
+  leitura travada (`FOR SHARE`) e aplica a mesma comparação. A interface gera uma chave por texto
+  ainda sem confirmação: repetir o mesmo texto após falha de rede reutiliza a chave; texto editado usa
+  outra. O processador reserva a mensagem
   (`ENVIANDO`), chama a Graph API **fora de transação** e registra o resultado:
+  - janela de 24 h expirada no momento da tentativa (última entrada **atual** do contato, relógio da
+    aplicação) → `JANELA_EXPIRADA`, sem chamada à Graph API, sem `erro_codigo` (não é recusa do
+    provedor) e sem nova tentativa. Uma mensagem nova do contato antes do processamento renova a janela
+    das mensagens ainda pendentes; mensagens já finalizadas não voltam;
   - aceita → `ACEITA` (não é "entregue");
   - erro temporário (131000, 130429, 131056, 4, 80007, 131016, 2, HTTP 5xx, falha de conexão) →
     nova tentativa, até 3;
@@ -83,7 +95,12 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
 
 ## Regras
 
-- Só o responsável responde (409 `NAO_E_RESPONSAVEL`), transfere e encerra.
+- Só o responsável atual responde, transfere, devolve à fila e encerra (409 `NAO_E_RESPONSAVEL`), além da
+  permissão específica da rota (403). Não há exceção para administrador. Essas ações exigem
+  `EM_ATENDIMENTO`: aguardando → 409 `ATENDIMENTO_SEM_RESPONSAVEL` (não se encerra direto da fila);
+  encerrado → 409 `ATENDIMENTO_ENCERRADO`; versão antiga → 409 `CONFLITO_CONCORRENTE`. A verificação e a
+  gravação acontecem com a linha do atendimento travada (`FOR UPDATE`) na mesma transação; ação recusada
+  não altera dados nem grava evento.
 - Transferência direta, motivo opcional; sem destino devolve à fila. O destino precisa estar ativo e
   ter `atendimento:responder`.
 - Vincular associado é escolha do atendente: o telefone só **sugere** (com ou sem DDI 55); vários
@@ -99,7 +116,8 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `GET canal` | canal configurado ou não |
 | `GET`/`PUT presenca` | presença manual |
 | `GET atendimentos?visao=AGUARDANDO\|EM_ANDAMENTO\|MEUS\|ENCERRADOS&busca=&pagina=&tamanho=` | fila com contagens |
-| `GET atendimentos/{id}`, `GET atendimentos/{id}/linha-do-tempo?somenteEste=` | conversa |
+| `GET atendimentos/{id}` | conversa |
+| `GET atendimentos/{id}/linha-do-tempo?somenteEste=&antes=&tamanho=` | página da linha do tempo (ver abaixo) |
 | `POST atendimentos/{id}/assuncao` | assumir (204) |
 | `POST atendimentos/{id}/mensagens` | responder (`texto`, `chaveIdempotencia`) → 202 |
 | `POST atendimentos/{id}/transferencia` | `versao`, `destinoId?`, `motivo?` |
@@ -109,6 +127,133 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `GET historico?busca=&de=&ate=` | histórico geral |
 | `GET webhook-falhas`, `POST webhook-eventos/{id}/reprocessamento` | eventos com falha |
 | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` | webhook da Meta (fora do contrato OpenAPI) |
+
+| `POST atendimentos/{id}/anexos` | multipart `arquivo`, `legenda?`, `chaveIdempotencia` → 202 (atendimento:responder) |
+| `GET atendimentos/{id}/anexos/{anexo}/conteudo?somenteEste=&download=` | conteúdo em streaming, com `Range` |
+| `POST atendimentos/{id}/anexos/{anexo}/nova-tentativa` | baixar de novo um anexo recebido em FALHA (responsável) |
+| `GET atendimentos/{id}/midia?somenteEste=&categoria=&antes=&tamanho=` | área Mídia, por cursor (1–50) |
+| `GET atendimentos/{id}/linha-do-tempo/situacoes?ids=&somenteEste=` | situação atual de até 100 mensagens já carregadas |
+
+### Linha do tempo paginada
+
+Resposta `{ itens, anterior }`: `itens` em ordem cronológica; `anterior` é o cursor para a página
+anterior (ausente no início do histórico). Sem `antes`, devolve a página mais recente. `tamanho` 1–100
+(padrão 50); cursor inválido → 400 `DADOS_INVALIDOS` (campo `antes`).
+
+Mensagens e eventos entram na mesma ordenação, por (instante de registro, tipo, id): o instante em que
+foram gravados, com desempate estável (evento antes de mensagem no mesmo instante, depois o id). O
+cursor de cada item é `<microssegundos>.<0|1>.<id>`. Como registros novos têm instante de registro
+maior, mensagens que chegam durante a navegação não deslocam as páginas anteriores. O horário exibido
+continua sendo `ocorridoEm` (o do WhatsApp, para mensagens recebidas). `somenteEste=true` restringe ao
+atendimento selecionado (detalhe do histórico); sem ele, todos os ciclos da conversa.
+
+A interface consulta a página recente a cada 5 s e carrega as anteriores sob demanda ("Carregar
+mensagens anteriores", com estados de carregamento, erro com nova tentativa e "Início do histórico").
+Páginas já carregadas e itens que saem da página recente continuam na tela; se chegarem mais itens do
+que cabem numa página entre duas consultas, a lacuna é buscada por cursor. Ao carregar conteúdo
+anterior a posição de leitura é preservada, e a rolagem só desce para mensagens novas quando a pessoa
+já está no fim.
+
+## Anexos
+
+Referências oficiais (consultadas em 30/10/2026): [Media](https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media)
+(upload `POST /{phone-number-id}/media`, consulta `GET /{media-id}` com `url`, `mime_type`, `sha256`,
+`file_size`; URL válida por 5 minutos; download com `Authorization: Bearer`; 404 → consultar de novo),
+[Image messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/image-messages)
+(legenda até 1024 caracteres), [Document messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/document-messages)
+(`filename` e legenda) e [Audio messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/audio-messages)
+(sem legenda). Os exemplos atuais da Meta usam a Graph API v26.0; a aplicação usa `WHATSAPP_GRAPH_VERSION`
+(padrão v23.0) em todas as chamadas, e a versão deve ser confirmada na homologação.
+
+### Formatos e limites
+
+| Categoria | Formatos (MIME / extensão) | Limite padrão | Limite da Meta |
+|---|---|---|---|
+| Imagem | `image/jpeg` (.jpg, .jpeg), `image/png` (.png) | 5 MB | 5 MB |
+| Documento | `application/pdf` (.pdf) | 16 MB | 100 MB |
+| Áudio | `audio/ogg` com Opus (.ogg, .opus), `audio/mpeg` (.mp3), `audio/mp4` (.m4a), `audio/aac` (.aac), `audio/amr` (.amr) | 16 MB | 16 MB |
+
+Cada arquivo é conferido por MIME declarado, extensão (quando há nome), assinatura dos primeiros bytes e
+tamanho lido de fato (o limite vale durante a leitura, não só pelo cabeçalho). Nada é convertido.
+Documentos do Office, texto, vídeo e figurinhas recebidos ficam visíveis como "não suportado". Os
+limites são configuráveis (`emconta.atendimento.anexos.*`) e nunca passam dos da Meta; o teto do
+multipart (`EMCONTA_ANEXO_MAXIMO`, padrão 17 MB) precisa acompanhar o maior limite.
+
+O campo `sha256` da Meta não tem codificação documentada; a aplicação aceita hexadecimal ou Base64 e,
+se não conferir com o arquivo baixado, o anexo fica em FALHA (não é disponibilizado).
+
+### Recebimento
+
+1. O webhook só valida a assinatura e grava o evento (como antes).
+2. O processamento do evento grava a mensagem (`IMAGEM`/`DOCUMENTO`/`AUDIO`, legenda em `texto`) e o
+   anexo `PENDENTE` com os metadados (id da mídia, MIME, hash, nome higienizado), na mesma transação.
+   Mensagem repetida (mesmo `wamid`) não duplica mensagem nem anexo.
+3. `Midias` (mesmo agendador, `SKIP LOCKED`) reserva o anexo e, **fora de transação**, consulta uma
+   URL nova pelo id da mídia, baixa para um arquivo temporário com limite, valida e grava no MinIO;
+   depois marca `DISPONIVEL`. Falhas temporárias (rede, 5xx, URL expirada, armazenamento) voltam com
+   espera crescente (30 s × 2ⁿ) até 5 tentativas; falhas definitivas (tipo divergente, conteúdo
+   inválido, hash, limite, destino não autorizado, mídia inexistente) ficam `FALHA` com o motivo.
+   Reserva abandonada (queda) volta para nova tentativa depois de 5 min. O responsável pode pedir
+   "Tentar de novo" de um anexo em FALHA (só baixa de novo; nada é enviado ao contato).
+
+SSRF: o download só vai para HTTPS em host de `WHATSAPP_HOSTS_MIDIA` (padrão `lookaside.fbsbx.com`)
+ou para a própria origem configurada da Graph API (que em teste é o servidor controlado);
+redirecionamentos não são seguidos, e o token nunca vai para outro destino. URLs temporárias nunca
+são gravadas.
+
+### Armazenamento e acesso
+
+- MinIO/S3 privado (`emconta.armazenamento.*`), cliente S3 mínimo com assinatura SigV4 (sem SDK).
+  Chave opaca `atendimento/anexos/<uuid>`; o nome original é só metadado de exibição, higienizado
+  (sem diretórios, caracteres de controle, marcas de direção de texto nem reservados; até 120).
+- Conteúdo só por `GET …/anexos/{anexo}/conteudo` (atendimento:consultar): o anexo precisa pertencer à
+  conversa do atendimento informado (ou ao próprio ciclo, com `somenteEste=true`, usado no histórico);
+  qualquer outra combinação é 404. Streaming do armazenamento (sem carregar o arquivo na memória),
+  `Range` de uma faixa (206) para áudio, `Content-Type` validado, `X-Content-Type-Options: nosniff`,
+  `Content-Disposition` com nome higienizado (RFC 6266), `Cache-Control: private, no-store` e CSP
+  restritiva (`sandbox` para imagem e áudio). Não há URL assinada nem endereço do MinIO no navegador.
+
+### Envio
+
+1. `POST …/anexos` (multipart; CSRF como as demais rotas): valida chave, legenda (só imagem e PDF,
+   até 1024), tipo, extensão, tamanho durante a leitura e assinatura; confere responsável, situação e
+   janela antes de gravar qualquer coisa.
+2. Idempotência: a chave fica vinculada a autor, atendimento, categoria, SHA-256 do arquivo e legenda
+   (sem espaços nas pontas). Repetição exata → a mesma mensagem (sem novo upload nem envio); mesma
+   chave em outra operação (inclusive texto) → 409 `CHAVE_IDEMPOTENCIA_REUTILIZADA`. Requisições
+   simultâneas disputam a restrição única; a perdedora devolve a vencedora e descarta o próprio objeto.
+3. O anexo é registrado como `RECEBENDO`, o objeto é gravado no MinIO e, numa transação com o
+   atendimento travado, as regras são conferidas de novo e a mensagem `PENDENTE` é criada. Falha do
+   armazenamento → 503 `ARMAZENAMENTO_INDISPONIVEL`, nada registrado.
+4. O `Envio` (outbox) revalida a janela, faz o upload à Meta (`POST /media`, fora de transação; o id
+   da mídia fica gravado para não repetir) e envia a mensagem pelo id. Falha no upload: temporária volta
+   à fila (até 3), definitiva vira FALHA com `etapaFalha = UPLOAD`; falha no envio, `ENVIO`; resultado
+   desconhecido no envio → `DESCONHECIDA`, sem reenvio. Upload concluído não é entrega: valem ACEITA,
+   ENVIADA, ENTREGUE e LIDA pelo webhook.
+
+### Arquivos órfãos e uploads abandonados
+
+- Upload do atendente que não virou mensagem (falha entre gravar o objeto e registrar a mensagem, ou
+  queda do processo): a linha `RECEBENDO` sem mensagem é removida junto com o objeto pela limpeza
+  periódica (`Midias.limparUploadsAbandonados`, idade mínima `emconta.atendimento.anexos.upload-abandonado`,
+  padrão 1 h). Anexos com mensagem nunca entram nessa limpeza.
+- Download recebido: o objeto só é gravado depois de validado e, se a marcação final falhar, é removido
+  na hora. Se até essa remoção falhar, o objeto fica sem linha no banco: para encontrá-lo, liste as
+  chaves `atendimento/anexos/` do bucket e compare com `atd_anexo.chave_objeto`; remova só as que não
+  estiverem em nenhuma linha e tenham mais de 1 h. Esse procedimento é manual nesta versão.
+
+### Atualização de situações na tela
+
+A página recente da linha do tempo é consultada a cada 5 s; as mensagens já carregadas fora dela e
+ainda sujeitas a mudança (PENDENTE, ENVIANDO, ACEITA, ENVIADA, ENTREGUE, DESCONHECIDA ou anexo em
+processamento) são conferidas em lote por `…/linha-do-tempo/situacoes` (até 100 por consulta). A tela
+mantém a versão com `atualizadoEm` mais novo, sem recarregar páginas nem mudar a posição de leitura.
+
+### Busca pelo associado
+
+Fila e histórico também encontram pelo nome do associado vinculado (nome da PF ou razão social da
+PJ, campo `nome` do cadastro). O atendimento pede ao módulo de associados só os ids (`CatalogoAssociados.idsPorNome`,
+até 200) e filtra por eles, sem junção entre módulos, sem duplicar resultados e sem expor documento.
 
 ## Configurar e homologar
 
@@ -120,13 +265,27 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 4. Assumir, responder, conferir `Aceita` → `Enviada`/`Entregue`/`Lida` conforme os status da Meta.
 5. Conferir a janela de 24 h, a transferência, o encerramento e a nova mensagem após encerrar.
 
+Anexos, na homologação: preencher `ARMAZENAMENTO_*` (bucket privado; credencial restrita ao bucket);
+conferir o host das URLs de mídia devolvidas pela Meta e ajustar `WHATSAPP_HOSTS_MIDIA` se for outro;
+enviar do celular de teste uma imagem JPEG/PNG, um PDF e um áudio (nota de voz OGG/Opus) e conferir
+download, hash e reprodução; responder com imagem com legenda, PDF e áudio e acompanhar
+ACEITA → ENTREGUE/LIDA; conferir a versão da Graph API.
+
 A homologação com o canal real **ainda não foi feita**: depende do acesso à Meta e do número de teste.
 
 ## Testes
 
-- `AtendimentoIntegrationTests` / `CanalNaoConfiguradoIntegrationTests`: MySQL real (Testcontainers)
-  e um servidor HTTP **controlado, de teste** (`GraphApiControlada`) no lugar da Graph API, com
-  webhooks assinados com segredo fictício.
+- `AtendimentoIntegrationTests`, `TransicoesAtendimentoIntegrationTests`,
+  `RespostaEEnvioIntegrationTests`, `LinhaDoTempoIntegrationTests` (base `AtendimentoIntegracao`) e
+  `CanalNaoConfiguradoIntegrationTests`: MySQL real (Testcontainers) e um servidor HTTP **controlado, de
+  teste** (`GraphApiControlada`) no lugar da Graph API, com webhooks assinados com segredo fictício. O
+  relógio da aplicação é controlado pelo teste (`RelogioControlado`) para a janela de 24 h, sem esperas.
+- `AnexosIntegrationTests`: MinIO real (mesma imagem do Compose, via Testcontainers) e a Graph
+  controlada reproduzindo consulta, download e upload de mídia: recebimento de imagem/PDF/áudio,
+  deduplicação e concorrência, URL expirada, timeout, mídia inexistente, conteúdo/MIME/hash/limite
+  inválidos, destino e redirecionamento não autorizados, permissões e relação anexo↔atendimento,
+  envio pelo responsável, idempotência, janela, resultado desconhecido, falha do armazenamento,
+  limpeza de uploads abandonados, Mídia por ciclo, busca por associado e situações em lote.
 - Frontend: `src/features/atendimento/__tests__` (Vitest) e `e2e/atendimento.spec.ts` (Playwright),
   este contra a API de testes do banco isolado, também com Graph controlada local
   (`e2e/whatsapp-controlado.ts`). Nada disso é envio ou recebimento real.

@@ -2,85 +2,29 @@ package br.com.emconta.atendimento;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
-import br.com.emconta.ApiIntegracao;
 import br.com.emconta.acesso.Navegador;
 import br.com.emconta.acesso.usuarios.Perfil;
 import br.com.emconta.acesso.usuarios.Permissao;
 import br.com.emconta.acesso.usuarios.Usuario;
 import br.com.emconta.atendimento.GraphApiControlada.Modo;
-import br.com.emconta.atendimento.nucleo.Envio;
-import br.com.emconta.atendimento.nucleo.Recebimento;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadLocalRandom;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Atendimento pelo WhatsApp sobre MySQL real, com a Graph API substituída por um servidor externo
- * CONTROLADO ({@link GraphApiControlada}) e eventos de webhook montados no formato dos exemplos oficiais
- * da Meta e assinados com um App Secret de teste. Não há credencial real nem chamada à Meta.
+ * Atendimento pelo WhatsApp de ponta a ponta (webhook, fila, resposta, situações, vínculo), com o canal
+ * no ambiente externo controlado de {@link AtendimentoIntegracao}.
  */
-class AtendimentoIntegrationTests extends ApiIntegracao {
-
-    private static final String SEGREDO = "app-secret-de-teste";
-    private static final String NUMERO = "106540352242922";
-    private static final GraphApiControlada GRAPH;
-
-    static {
-        try {
-            GRAPH = new GraphApiControlada();
-        } catch (java.io.IOException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    @DynamicPropertySource
-    static void canal(DynamicPropertyRegistry registro) {
-        registro.add("emconta.whatsapp.access-token", () -> "token-de-teste");
-        registro.add("emconta.whatsapp.phone-number-id", () -> NUMERO);
-        registro.add("emconta.whatsapp.app-secret", () -> SEGREDO);
-        registro.add("emconta.whatsapp.verify-token", () -> "verificacao-de-teste");
-        registro.add("emconta.whatsapp.graph-url", GRAPH::url);
-        registro.add("emconta.whatsapp.timeout-resposta", () -> "1s");
-        // Processamento acionado pelo teste, passo a passo.
-        registro.add("emconta.atendimento.processamento.habilitado", () -> "false");
-    }
-
-    @AfterAll
-    static void parar() {
-        GRAPH.close();
-    }
-
-    @Autowired
-    Recebimento recebimento;
-
-    @Autowired
-    Envio envio;
-
-    @BeforeEach
-    void limpar() {
-        GRAPH.limpar();
-    }
+class AtendimentoIntegrationTests extends AtendimentoIntegracao {
 
     // ------------------------------------------------------------------ webhook
 
@@ -162,7 +106,7 @@ class AtendimentoIntegrationTests extends ApiIntegracao {
                 + "\"phone_number_id\":\"" + NUMERO
                 + "\"},\"contacts\":[{\"profile\":{\"name\":\"Imagem\"},\"wa_id\":\""
                 + numero + "\"}],\"messages\":[{\"from\":\"" + numero + "\",\"id\":\"" + wamid() + "\",\"timestamp\":\""
-                + agoraEpoch() + "\",\"type\":\"image\",\"image\":{\"id\":\"123\",\"mime_type\":\"image/jpeg\"}}]},"
+                + agoraEpoch() + "\",\"type\":\"sticker\",\"sticker\":{\"id\":\"123\",\"mime_type\":\"image/webp\"}}]},"
                 + "\"field\":\"messages\"}]}]}";
         enviarWebhook(imagem, assinar(imagem));
         processar();
@@ -179,7 +123,7 @@ class AtendimentoIntegrationTests extends ApiIntegracao {
                 .query()
                 .singleRow();
         assertThat(msg.get("tipo")).isEqualTo("NAO_SUPORTADO");
-        assertThat(msg.get("tipo_externo")).isEqualTo("image");
+        assertThat(msg.get("tipo_externo")).isEqualTo("sticker");
     }
 
     // ------------------------------------------------------------------ fila e responsabilidade
@@ -409,9 +353,12 @@ class AtendimentoIntegrationTests extends ApiIntegracao {
                         .getStatus())
                 .isEqualTo(204);
         assertThat(codigo(admin.post(url(atendimento, "transferencia"), Map.of("versao", versao))))
+                .as("o antigo responsável não age mais")
+                .isEqualTo("NAO_E_RESPONSAVEL");
+        Navegador novoResponsavel = logado(emailDestino);
+        assertThat(codigo(novoResponsavel.post(url(atendimento, "transferencia"), Map.of("versao", versao))))
                 .as("versão antiga")
                 .isEqualTo("CONFLITO_CONCORRENTE");
-        Navegador novoResponsavel = logado(emailDestino);
         assertThat(responder(novoResponsavel, atendimento, "assumi após a transferência"))
                 .isPositive();
         assertThat(codigo(admin.post(
@@ -428,7 +375,11 @@ class AtendimentoIntegrationTests extends ApiIntegracao {
                 .param("id", semPermissao.getId())
                 .update();
 
-        assertThat(admin.post(url(atendimento, "encerramento"), Map.of("versao", versao(atendimento)))
+        // Depois da transferência só o novo responsável encerra.
+        assertThat(codigo(admin.post(url(atendimento, "encerramento"), Map.of("versao", versao(atendimento)))))
+                .isEqualTo("NAO_E_RESPONSAVEL");
+        assertThat(novoResponsavel
+                        .post(url(atendimento, "encerramento"), Map.of("versao", versao(atendimento)))
                         .getStatus())
                 .isEqualTo(204);
         JsonNode linha = corpo(
@@ -545,135 +496,5 @@ class AtendimentoIntegrationTests extends ApiIntegracao {
                         .get("/api/v1/atendimento/atendimentos")
                         .getStatus())
                 .isEqualTo(401);
-    }
-
-    // ------------------------------------------------------------------ apoio
-
-    private static final String WEBHOOK = "/api/v1/integracoes/whatsapp/webhook";
-
-    private static String url(long atendimento, String acao) {
-        return "/api/v1/atendimento/atendimentos/" + atendimento + "/" + acao;
-    }
-
-    private void processar() {
-        recebimento.processarPendentes(50);
-        envio.enviarPendentes(20);
-    }
-
-    private MockHttpServletResponse enviarWebhook(String corpo, String assinatura) throws Exception {
-        var requisicao =
-                post(WEBHOOK).contentType(MediaType.APPLICATION_JSON).content(corpo.getBytes(StandardCharsets.UTF_8));
-        if (assinatura != null) {
-            requisicao = requisicao.header("X-Hub-Signature-256", assinatura);
-        }
-        return mvc.perform(requisicao).andReturn().getResponse();
-    }
-
-    private static String assinar(String corpo) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(SEGREDO.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        return "sha256=" + HexFormat.of().formatHex(mac.doFinal(corpo.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    /** Notificação de mensagem de texto no formato do exemplo oficial da Meta. */
-    private static String mensagem(String de, String nome, String id, String texto, long timestamp) {
-        return "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"102290129340398\",\"changes\":[{\"value\":{"
-                + "\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
-                + "\"phone_number_id\":\"" + NUMERO + "\"},\"contacts\":[{\"profile\":{\"name\":\"" + nome + "\"},"
-                + "\"wa_id\":\"" + de + "\"}],\"messages\":[{\"from\":\"" + de + "\",\"id\":\"" + id
-                + "\",\"timestamp\":\""
-                + timestamp + "\",\"type\":\"text\",\"text\":{\"body\":\"" + texto
-                + "\"}}]},\"field\":\"messages\"}]}]}";
-    }
-
-    private void webhookSituacao(String idExterno, String situacao, String correlacao, Integer erro) throws Exception {
-        String corpo = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"102290129340398\",\"changes\":[{"
-                + "\"value\":{\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
-                + "\"phone_number_id\":\"" + NUMERO + "\"},\"statuses\":[{\"id\":\"" + idExterno + "\",\"status\":\""
-                + situacao + "\",\"timestamp\":\"" + agoraEpoch() + "\",\"recipient_id\":\"5567999990000\""
-                + (correlacao == null ? "" : ",\"biz_opaque_callback_data\":\"" + correlacao + "\"")
-                + (erro == null ? "" : ",\"errors\":[{\"code\":" + erro + ",\"title\":\"Re-engagement message\"}]")
-                + "}]},\"field\":\"messages\"}]}]}";
-        assertThat(enviarWebhook(corpo, assinar(corpo)).getStatus()).isEqualTo(200);
-    }
-
-    private long novoAtendimento(String numero) throws Exception {
-        String corpo = mensagem(numero, "Contato " + numero, wamid(), "Olá", agoraEpoch());
-        enviarWebhook(corpo, assinar(corpo));
-        recebimento.processarPendentes(50);
-        return jdbc.sql("select a.id from atd_atendimento a join atd_conversa v on v.id = a.conversa_id"
-                        + " join atd_contato c on c.id = v.contato_id where c.wa_id = :n and a.situacao <> 'ENCERRADO'")
-                .param("n", numero)
-                .query(Long.class)
-                .single();
-    }
-
-    private long assumido(Navegador admin, String numero) throws Exception {
-        long atendimento = novoAtendimento(numero);
-        assertThat(admin.post(url(atendimento, "assuncao"), null).getStatus()).isEqualTo(204);
-        return atendimento;
-    }
-
-    private long responder(Navegador navegador, long atendimento, String texto) {
-        MockHttpServletResponse resposta = navegador.post(
-                url(atendimento, "mensagens"),
-                Map.of("texto", texto, "chaveIdempotencia", UUID.randomUUID().toString()));
-        assertThat(resposta.getStatus()).isEqualTo(202);
-        return corpo(resposta).get("mensagemId").asLong();
-    }
-
-    private long associadoComTelefone(Navegador admin, String numero) {
-        JsonNode criado = corpo(admin.post(
-                "/api/v1/associados",
-                Map.of(
-                        "tipo",
-                        "PJ",
-                        "documento",
-                        cnpjValido(),
-                        "nome",
-                        "Associado " + UUID.randomUUID(),
-                        "contatos",
-                        List.of(Map.of("nome", "Contato", "telefone", numero.substring(2))))));
-        return criado.get("id").asLong();
-    }
-
-    private long versao(long atendimento) {
-        return jdbc.sql("select versao from atd_atendimento where id = :id")
-                .param("id", atendimento)
-                .query(Long.class)
-                .single();
-    }
-
-    private String situacao(long mensagem) {
-        return jdbc.sql("select situacao from atd_mensagem where id = :id")
-                .param("id", mensagem)
-                .query(String.class)
-                .single();
-    }
-
-    private String correlacao(long mensagem) {
-        return jdbc.sql("select correlacao from atd_mensagem where id = :id")
-                .param("id", mensagem)
-                .query(String.class)
-                .single();
-    }
-
-    private long contar(String deOnde, Object valor) {
-        return jdbc.sql("select count(*) from " + deOnde)
-                .param("c", valor)
-                .query(Long.class)
-                .single();
-    }
-
-    private static String numeroUnico() {
-        return "5567" + (900000000L + ThreadLocalRandom.current().nextLong(99_999_999L));
-    }
-
-    private static String wamid() {
-        return "wamid.TESTE" + UUID.randomUUID().toString().replace("-", "");
-    }
-
-    private static long agoraEpoch() {
-        return Instant.now().getEpochSecond();
     }
 }

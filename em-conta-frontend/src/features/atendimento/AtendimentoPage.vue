@@ -24,6 +24,7 @@ const selecionado = computed(() => {
   return Number.isInteger(id) && id > 0 ? id : null
 })
 const painelAberto = ref(true)
+const conversa = ref<InstanceType<typeof ConversaAtendimento> | null>(null)
 
 function selecionar(id: number | null) {
   painelAberto.value = true
@@ -71,6 +72,7 @@ const alterarPresenca = useMutation({
       <ConversaAtendimento
         v-if="selecionado"
         :id="selecionado"
+        ref="conversa"
         :key="selecionado"
         @fechar="selecionar(null)"
       />
@@ -82,6 +84,7 @@ const alterarPresenca = useMutation({
         :id="selecionado"
         :key="`p-${selecionado}`"
         @fechar="painelAberto = false"
+        @abrir-mensagem="(m) => conversa?.irParaMensagem(m)"
       />
     </div>
   </main>

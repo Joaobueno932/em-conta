@@ -44,6 +44,7 @@ function detalhe(sobrescrever: Record<string, unknown> = {}, extra: Record<strin
 const mensagem = {
   tipo: 'MENSAGEM',
   id: 10,
+  cursor: '1000.1.10',
   ocorridoEm: '2026-10-29T12:00:00Z',
   atendimentoId: 1,
   direcao: 'ENTRADA',
@@ -68,8 +69,9 @@ function rotas(det: unknown, permissoes = TODAS, adicionais: Rotas = {}): Rotas 
         contagens: { aguardando: 1, emAndamento: 0, meus: 0 },
       }),
     [`GET ${BASE}/atendimentos/1`]: () => jsonResponse(det),
-    [`GET ${BASE}/atendimentos/1/linha-do-tempo`]: () => jsonResponse([mensagem]),
+    [`GET ${BASE}/atendimentos/1/linha-do-tempo`]: () => jsonResponse({ itens: [mensagem] }),
     [`GET ${BASE}/atendimentos/1/associados-sugeridos`]: () => jsonResponse([]),
+    [`GET ${BASE}/atendimentos/1/midia`]: () => jsonResponse({ itens: [] }),
     ...adicionais,
   }
 }
@@ -139,6 +141,126 @@ describe('Atendimento', () => {
     await waitFor(() => expect(chaves).toHaveLength(2))
     expect(chaves[0]).toBe(chaves[1])
     await waitFor(() => expect(campo.value).toBe(''))
+  })
+
+  it('texto editado depois de uma falha é outra operação, com outra chave', async () => {
+    const enviados: { texto: string; chave: string }[] = []
+    const { fetchFn } = apiFalsa(
+      rotas(detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: EU }), TODAS, {
+        [`POST ${BASE}/atendimentos/1/mensagens`]: (init) => {
+          const corpo = JSON.parse(String(init?.body))
+          enviados.push({ texto: corpo.texto, chave: corpo.chaveIdempotencia })
+          return problema(503, 'INDISPONIVEL', 'Serviço indisponível.')
+        },
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const campo = (await screen.findByLabelText('Mensagem')) as HTMLTextAreaElement
+    await waitFor(() => expect(campo.disabled).toBe(false))
+    const enviar = async (valor: string, quantos: number) => {
+      await fireEvent.update(campo, valor)
+      await fireEvent.click(await screen.findByRole('button', { name: 'Enviar' }))
+      await waitFor(() => expect(enviados).toHaveLength(quantos))
+    }
+
+    await enviar('Bom dia!', 1)
+    await enviar('Bom dia! Tudo bem?', 2)
+    // Voltar ao texto original repete a primeira operação (que pode ter sido registrada).
+    await enviar('  Bom dia!  ', 3)
+    expect(enviados.map((e) => e.texto)).toEqual(['Bom dia!', 'Bom dia! Tudo bem?', 'Bom dia!'])
+    expect(enviados[1]!.chave).not.toBe(enviados[0]!.chave)
+    expect(enviados[2]!.chave).toBe(enviados[0]!.chave)
+  })
+
+  it('carrega mensagens anteriores, mantém o que já foi lido e preenche lacunas', async () => {
+    const item = (id: number, texto: string) => ({
+      ...mensagem,
+      id,
+      cursor: `${id}000.1.${id}`,
+      texto,
+    })
+    let consultasRecentes = 0
+    const LINHA = `${BASE}/atendimentos/1/linha-do-tempo?somenteEste=false&tamanho=50`
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas(detalhe({ situacao: 'AGUARDANDO' }), TODAS, {
+        [`POST ${BASE}/atendimentos/1/assuncao`]: () => new Response(null, { status: 204 }),
+        [`GET ${LINHA}`]: () => {
+          consultasRecentes++
+          // Na segunda consulta chegaram mais itens do que cabem na página: a 40 ficou de fora.
+          return jsonResponse(
+            consultasRecentes === 1
+              ? { itens: [item(30, 'trinta')], anterior: '30000.1.30' }
+              : { itens: [item(50, 'cinquenta')], anterior: '50000.1.50' },
+          )
+        },
+        [`GET ${LINHA}&antes=30000.1.30`]: () =>
+          jsonResponse({ itens: [item(10, 'dez'), item(20, 'vinte')] }),
+        [`GET ${LINHA}&antes=50000.1.50`]: () =>
+          jsonResponse({ itens: [item(40, 'quarenta')], anterior: '40000.1.40' }),
+        [`GET ${LINHA}&antes=40000.1.40`]: () => jsonResponse({ itens: [item(30, 'trinta')] }),
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    expect(await screen.findByText('trinta')).toBeTruthy()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Carregar mensagens anteriores' }))
+    expect(await screen.findByText('dez')).toBeTruthy()
+    expect(screen.getByText('Início do histórico')).toBeTruthy()
+
+    // Atualização (aqui provocada por uma ação): as páginas lidas continuam e a lacuna é buscada.
+    await fireEvent.click(screen.getByRole('button', { name: 'Assumir' }))
+    expect(await screen.findByText('cinquenta')).toBeTruthy()
+    expect(await screen.findByText('quarenta')).toBeTruthy()
+    const textos = [...document.querySelectorAll('.mensagem .texto')].map((e) => e.textContent)
+    expect(textos).toEqual(['dez', 'vinte', 'trinta', 'quarenta', 'cinquenta'])
+    expect(chamadas).toContain(`GET ${LINHA}&antes=50000.1.50`)
+  })
+
+  it('falha ao carregar anteriores oferece nova tentativa', async () => {
+    let tentativas = 0
+    const LINHA = `${BASE}/atendimentos/1/linha-do-tempo?somenteEste=false&tamanho=50`
+    const { fetchFn } = apiFalsa(
+      rotas(detalhe(), TODAS, {
+        [`GET ${LINHA}`]: () => jsonResponse({ itens: [mensagem], anterior: mensagem.cursor }),
+        [`GET ${LINHA}&antes=${mensagem.cursor}`]: () =>
+          ++tentativas === 1
+            ? problema(503, 'INDISPONIVEL', 'Serviço indisponível.')
+            : jsonResponse({ itens: [{ ...mensagem, id: 9, cursor: '900.1.9', texto: 'antiga' }] }),
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Carregar mensagens anteriores' }),
+    )
+    expect(
+      await screen.findByText(/Não foi possível carregar as mensagens anteriores/),
+    ).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }))
+    expect(await screen.findByText('antiga')).toBeTruthy()
+    expect(screen.getByText('Início do histórico')).toBeTruthy()
+  })
+
+  it('resposta não enviada por janela expirada é explicada', async () => {
+    const { fetchFn } = apiFalsa(
+      rotas(detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: EU }), TODAS, {
+        [`GET ${BASE}/atendimentos/1/linha-do-tempo`]: () =>
+          jsonResponse({
+            itens: [
+              mensagem,
+              {
+                ...mensagem,
+                id: 11,
+                cursor: '2000.1.11',
+                direcao: 'SAIDA',
+                texto: 'Resposta tardia',
+                situacao: 'JANELA_EXPIRADA',
+              },
+            ],
+          }),
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    expect(await screen.findByText(/janela de 24 horas expirou antes do envio/)).toBeTruthy()
   })
 
   it('janela de 24 horas encerrada bloqueia a resposta', async () => {

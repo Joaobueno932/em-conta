@@ -32,6 +32,18 @@ public class FalhaAtendimento extends RuntimeException {
         return new FalhaAtendimento(HttpStatus.FORBIDDEN, codigo, null, mensagem);
     }
 
+    public static FalhaAtendimento anexoNaoEncontrado() {
+        return naoEncontrado("ANEXO_NAO_ENCONTRADO", "Anexo não encontrado.");
+    }
+
+    static FalhaAtendimento indisponivel(String codigo, String mensagem) {
+        return new FalhaAtendimento(HttpStatus.SERVICE_UNAVAILABLE, codigo, null, mensagem);
+    }
+
+    static FalhaAtendimento arquivoMuitoGrande(String mensagem) {
+        return new FalhaAtendimento(HttpStatus.CONTENT_TOO_LARGE, "ARQUIVO_MUITO_GRANDE", "arquivo", mensagem);
+    }
+
     static FalhaAtendimento canalNaoConfigurado() {
         return new FalhaAtendimento(
                 HttpStatus.SERVICE_UNAVAILABLE,

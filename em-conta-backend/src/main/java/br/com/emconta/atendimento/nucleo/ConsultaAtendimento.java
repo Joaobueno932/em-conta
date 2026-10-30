@@ -1,5 +1,6 @@
 package br.com.emconta.atendimento.nucleo;
 
+import br.com.emconta.associados.CatalogoAssociados;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -8,11 +9,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -32,9 +34,15 @@ public class ConsultaAtendimento {
     private final JdbcClient jdbc;
     private final Clock clock;
 
-    ConsultaAtendimento(JdbcClient jdbc, Clock clock) {
+    /** Máximo de associados considerados na busca por nome (evita listas enormes no {@code in}). */
+    static final int MAXIMO_ASSOCIADOS_BUSCA = 200;
+
+    private final CatalogoAssociados associados;
+
+    ConsultaAtendimento(JdbcClient jdbc, Clock clock, CatalogoAssociados associados) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.associados = associados;
     }
 
     public enum Visao {
@@ -121,20 +129,29 @@ public class ConsultaAtendimento {
                 tamanho);
     }
 
+    /**
+     * Busca por nome do perfil do WhatsApp, número (trecho com 4+ dígitos) ou nome do associado vinculado
+     * (PF ou PJ). Os associados vêm da API pública do módulo de associados, limitados a
+     * {@link #MAXIMO_ASSOCIADOS_BUSCA}; cada atendimento aparece uma vez (filtro, não junção).
+     */
     private void adicionarBusca(String busca, List<String> condicoes, Map<String, Object> params) {
         String termo = busca == null ? "" : busca.strip();
         if (termo.isEmpty()) {
             return;
         }
-        String escapado = "%" + termo.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        List<String> alternativas = new ArrayList<>(List.of("c.nome_perfil like :busca escape '!'"));
+        params.put("busca", "%" + termo.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
         String digitos = termo.replaceAll("\\D", "");
         if (digitos.length() >= 4) {
-            condicoes.add("(c.nome_perfil like :busca escape '!' or c.wa_id like :digitos)");
+            alternativas.add("c.wa_id like :digitos");
             params.put("digitos", "%" + digitos + "%");
-        } else {
-            condicoes.add("c.nome_perfil like :busca escape '!'");
         }
-        params.put("busca", escapado);
+        List<Long> encontrados = associados.idsPorNome(termo, MAXIMO_ASSOCIADOS_BUSCA);
+        if (!encontrados.isEmpty()) {
+            alternativas.add("v.associado_id in (:associados)");
+            params.put("associados", encontrados);
+        }
+        condicoes.add("(" + String.join(" or ", alternativas) + ")");
     }
 
     private Page<Resumo> pagina(String where, String ordem, Map<String, Object> params, int pagina, int tamanho) {
@@ -172,10 +189,15 @@ public class ConsultaAtendimento {
                 .optional();
     }
 
-    /** Item da linha do tempo: mensagem ou evento, em ordem cronológica. */
+    /**
+     * Item da linha do tempo: mensagem ou evento. {@code cursor} é a posição do item na ordem da linha do
+     * tempo (ver {@link Cursor}); {@code ocorridoEm} é o horário exibido (o do WhatsApp, para mensagens
+     * recebidas).
+     */
     public record ItemLinhaDoTempo(
             String tipo,
             long id,
+            String cursor,
             Instant ocorridoEm,
             Long atendimentoId,
             String direcao,
@@ -189,81 +211,324 @@ public class ConsultaAtendimento {
             String evento,
             Long usuarioAlvoId,
             Long associadoId,
-            String motivo) {}
+            String motivo,
+            String etapaFalha,
+            Instant atualizadoEm,
+            AnexoResumo anexo) {
+
+        ItemLinhaDoTempo comAnexo(AnexoResumo novo) {
+            return new ItemLinhaDoTempo(
+                    tipo,
+                    id,
+                    cursor,
+                    ocorridoEm,
+                    atendimentoId,
+                    direcao,
+                    tipoMensagem,
+                    tipoExterno,
+                    texto,
+                    situacao,
+                    erroCodigo,
+                    erroTitulo,
+                    autorId,
+                    evento,
+                    usuarioAlvoId,
+                    associadoId,
+                    motivo,
+                    etapaFalha,
+                    atualizadoEm,
+                    novo);
+        }
+    }
+
+    /** Anexo de uma mensagem, sem conteúdo nem endereço de armazenamento. */
+    public record AnexoResumo(
+            long id, String categoria, String mime, String nome, Long tamanho, String situacao, String erro) {}
+
+    /** Página da linha do tempo, em ordem cronológica; {@code anterior} é nulo no início do histórico. */
+    public record PaginaLinhaDoTempo(List<ItemLinhaDoTempo> itens, String anterior) {}
 
     /**
-     * Linha do tempo da conversa (todos os ciclos) ou só de um atendimento. Limitada às últimas
-     * {@code limite} mensagens e aos eventos do mesmo período.
+     * Posição na linha do tempo: (instante de registro em microssegundos, ordem do tipo, id). Mensagens e
+     * eventos usam o instante em que foram gravados ({@code criado_em}/{@code ocorrido_em}, que só cresce
+     * para registros novos), não o horário informado pelo WhatsApp, para que um registro novo nunca caia
+     * no meio de páginas já lidas. Empates no mesmo instante: evento antes de mensagem, depois o id.
+     * Texto: {@code <micros>.<0|1>.<id>}, comparável e validado na entrada.
+     */
+    public record Cursor(long micros, int ordem, long id) {
+
+        private static final Pattern FORMATO = Pattern.compile("(\\d{1,18})\\.([01])\\.(\\d{1,18})");
+
+        public static Optional<Cursor> ler(String texto) {
+            if (texto == null) {
+                return Optional.empty();
+            }
+            var m = FORMATO.matcher(texto);
+            if (!m.matches()) {
+                throw FalhaAtendimento.campoInvalido("antes", "Cursor inválido.");
+            }
+            return Optional.of(
+                    new Cursor(Long.parseLong(m.group(1)), Integer.parseInt(m.group(2)), Long.parseLong(m.group(3))));
+        }
+
+        static Cursor de(Instant registro, int ordem, long id) {
+            return new Cursor(registro.getEpochSecond() * 1_000_000L + registro.getNano() / 1_000, ordem, id);
+        }
+
+        Instant instante() {
+            return Instant.ofEpochSecond(Math.floorDiv(micros, 1_000_000L), Math.floorMod(micros, 1_000_000L) * 1_000L);
+        }
+
+        @Override
+        public String toString() {
+            return micros + "." + ordem + "." + id;
+        }
+    }
+
+    private static final int ORDEM_EVENTO = 0;
+    private static final int ORDEM_MENSAGEM = 1;
+
+    /**
+     * Uma página da linha do tempo da conversa (todos os ciclos) ou só de um atendimento: os {@code
+     * tamanho} itens imediatamente anteriores a {@code antes} (ou os mais recentes, sem cursor). Mensagens
+     * e eventos entram na mesma ordenação; cada tabela contribui no máximo {@code tamanho + 1} linhas,
+     * lidas pelos índices {@code (conversa_id, criado_em, id)} e {@code (conversa_id, ocorrido_em, id)}.
      */
     @Transactional(readOnly = true)
-    public List<ItemLinhaDoTempo> linhaDoTempo(long conversa, Long somenteAtendimento, int limite) {
+    public PaginaLinhaDoTempo linhaDoTempo(long conversa, Long somenteAtendimento, Cursor antes, int tamanho) {
+        int limite = tamanho + 1;
         String filtroAtendimento = somenteAtendimento == null ? "" : " and atendimento_id = :atendimento";
-        var mensagens = jdbc.sql(
-                        "select id, criado_em, horario_externo, atendimento_id, direcao, tipo, tipo_externo, texto,"
-                                + " situacao, erro_codigo, erro_titulo, autor_usuario_id from atd_mensagem where conversa_id = :c"
-                                + filtroAtendimento + " order by criado_em desc, id desc limit :limite")
-                .param("c", conversa)
-                .param("limite", limite);
+        String sql = "(select 'MENSAGEM' as tipo, id, criado_em as registro, coalesce(horario_externo, criado_em)"
+                + " as ocorrido, atendimento_id, direcao, tipo as tipo_mensagem, tipo_externo, texto, situacao,"
+                + " erro_codigo, erro_titulo, autor_usuario_id, null as evento, null as usuario_alvo_id,"
+                + " null as associado_id, null as motivo, etapa_falha, atualizado_em from atd_mensagem"
+                + " where conversa_id = :c" + filtroAtendimento
+                + antes("criado_em", ORDEM_MENSAGEM, antes) + " order by criado_em desc, id desc limit :limite)"
+                + " union all"
+                + " (select 'EVENTO', id, ocorrido_em, ocorrido_em, atendimento_id, null, null, null, null, null,"
+                + " null, null, autor_usuario_id, tipo, usuario_alvo_id, associado_id, motivo, null, null from atd_evento"
+                + " where conversa_id = :c" + filtroAtendimento + antes("ocorrido_em", ORDEM_EVENTO, antes)
+                + " order by ocorrido_em desc, id desc limit :limite)"
+                + " order by registro desc, tipo desc, id desc limit :limite";
+        var consulta = jdbc.sql(sql).param("c", conversa).param("limite", limite);
         if (somenteAtendimento != null) {
-            mensagens = mensagens.param("atendimento", somenteAtendimento);
+            consulta = consulta.param("atendimento", somenteAtendimento);
         }
-        List<ItemLinhaDoTempo> itens = new ArrayList<>(mensagens
-                .query((rs, n) -> new ItemLinhaDoTempo(
+        if (antes != null) {
+            consulta = consulta.param("antesEm", Timestamp.from(antes.instante()))
+                    .param("antesOrdem", antes.ordem())
+                    .param("antesId", antes.id());
+        }
+        List<ItemLinhaDoTempo> itens = new ArrayList<>(consulta.query((rs, n) -> {
+                    boolean mensagem = "MENSAGEM".equals(rs.getString("tipo"));
+                    long id = rs.getLong("id");
+                    String cursor = Cursor.de(instante(rs, "registro"), mensagem ? ORDEM_MENSAGEM : ORDEM_EVENTO, id)
+                            .toString();
+                    return new ItemLinhaDoTempo(
+                            mensagem ? "MENSAGEM" : "EVENTO",
+                            id,
+                            cursor,
+                            instante(rs, "ocorrido"),
+                            rs.getObject("atendimento_id", Long.class),
+                            rs.getString("direcao"),
+                            rs.getString("tipo_mensagem"),
+                            rs.getString("tipo_externo"),
+                            rs.getString("texto"),
+                            rs.getString("situacao"),
+                            rs.getObject("erro_codigo", Integer.class),
+                            rs.getString("erro_titulo"),
+                            rs.getObject("autor_usuario_id", Long.class),
+                            rs.getString("evento"),
+                            rs.getObject("usuario_alvo_id", Long.class),
+                            rs.getObject("associado_id", Long.class),
+                            rs.getString("motivo"),
+                            rs.getString("etapa_falha"),
+                            instante(rs, "atualizado_em"),
+                            null);
+                })
+                .list());
+        comAnexos(itens);
+        String anterior = null;
+        if (itens.size() > tamanho) {
+            itens.removeLast();
+            anterior = itens.getLast().cursor();
+        }
+        Collections.reverse(itens);
+        return new PaginaLinhaDoTempo(itens, anterior);
+    }
+
+    /** Completa as mensagens da página com o resumo do anexo (uma consulta para a página toda). */
+    private void comAnexos(List<ItemLinhaDoTempo> itens) {
+        List<Long> mensagens = itens.stream()
+                .filter(i -> "MENSAGEM".equals(i.tipo()))
+                .map(ItemLinhaDoTempo::id)
+                .toList();
+        if (mensagens.isEmpty()) {
+            return;
+        }
+        Map<Long, AnexoResumo> porMensagem = new java.util.HashMap<>();
+        jdbc.sql("select mensagem_id, id, categoria, mime_type, nome, tamanho, situacao, erro from atd_anexo"
+                        + " where mensagem_id in (:ids)")
+                .param("ids", mensagens)
+                .query((rs, n) -> {
+                    porMensagem.put(
+                            rs.getLong("mensagem_id"),
+                            new AnexoResumo(
+                                    rs.getLong("id"),
+                                    rs.getString("categoria"),
+                                    rs.getString("mime_type"),
+                                    rs.getString("nome"),
+                                    rs.getObject("tamanho", Long.class),
+                                    rs.getString("situacao"),
+                                    rs.getString("erro")));
+                    return null;
+                })
+                .list();
+        itens.replaceAll(i -> "MENSAGEM".equals(i.tipo()) && porMensagem.containsKey(i.id())
+                ? i.comAnexo(porMensagem.get(i.id()))
+                : i);
+    }
+
+    /** Máximo de mensagens por consulta de situações. */
+    public static final int MAXIMO_SITUACOES = 100;
+
+    /** Situação atual de uma mensagem (e do anexo), para atualizar itens já carregados fora da página recente. */
+    public record SituacaoMensagem(
+            long id,
+            String situacao,
+            Integer erroCodigo,
+            String erroTitulo,
+            String etapaFalha,
+            Instant atualizadoEm,
+            AnexoResumo anexo) {}
+
+    /**
+     * Situações atuais das mensagens informadas, restritas à conversa (ou ao ciclo). Ids de outra conversa
+     * são ignorados. Uma consulta para as mensagens e outra para os anexos, no máximo
+     * {@link #MAXIMO_SITUACOES} ids.
+     */
+    @Transactional(readOnly = true)
+    public List<SituacaoMensagem> situacoes(long conversa, Long somenteAtendimento, List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        var consulta = jdbc.sql("select id, criado_em, situacao, erro_codigo, erro_titulo, etapa_falha, atualizado_em"
+                        + " from atd_mensagem where conversa_id = :c and id in (:ids)"
+                        + (somenteAtendimento == null ? "" : " and atendimento_id = :a"))
+                .param("c", conversa)
+                .param("ids", ids);
+        if (somenteAtendimento != null) {
+            consulta = consulta.param("a", somenteAtendimento);
+        }
+        List<ItemLinhaDoTempo> itens = new ArrayList<>(consulta.query((rs, n) -> new ItemLinhaDoTempo(
                         "MENSAGEM",
                         rs.getLong("id"),
-                        Optional.ofNullable(instante(rs, "horario_externo")).orElse(instante(rs, "criado_em")),
-                        rs.getLong("atendimento_id"),
-                        rs.getString("direcao"),
-                        rs.getString("tipo"),
-                        rs.getString("tipo_externo"),
-                        rs.getString("texto"),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         rs.getString("situacao"),
                         rs.getObject("erro_codigo", Integer.class),
                         rs.getString("erro_titulo"),
-                        rs.getObject("autor_usuario_id", Long.class),
                         null,
                         null,
                         null,
+                        null,
+                        null,
+                        rs.getString("etapa_falha"),
+                        instante(rs, "atualizado_em"),
                         null))
                 .list());
-        Instant desde = itens.stream()
-                .map(ItemLinhaDoTempo::ocorridoEm)
-                .min(Comparator.naturalOrder())
-                .orElse(Instant.EPOCH);
-        if (itens.size() < limite) {
-            desde = Instant.EPOCH;
-        }
-        var eventos = jdbc.sql(
-                        "select id, ocorrido_em, atendimento_id, tipo, autor_usuario_id, usuario_alvo_id, associado_id,"
-                                + " motivo from atd_evento where conversa_id = :c and ocorrido_em >= :desde"
-                                + filtroAtendimento)
-                .param("c", conversa)
-                .param("desde", Timestamp.from(desde));
+        comAnexos(itens);
+        return itens.stream()
+                .map(i -> new SituacaoMensagem(
+                        i.id(),
+                        i.situacao(),
+                        i.erroCodigo(),
+                        i.erroTitulo(),
+                        i.etapaFalha(),
+                        i.atualizadoEm(),
+                        i.anexo()))
+                .toList();
+    }
+
+    /** Item da área Mídia: anexo com a mensagem a que pertence. */
+    public record ItemMidia(
+            long id,
+            long mensagemId,
+            long atendimentoId,
+            String direcao,
+            String categoria,
+            String mime,
+            String nome,
+            Long tamanho,
+            String situacao,
+            Instant registradoEm,
+            String texto) {}
+
+    public record PaginaMidia(List<ItemMidia> itens, Long anterior) {}
+
+    /**
+     * Anexos da conversa (ou de um ciclo), do mais recente para o mais antigo, por cursor de id. Só anexos
+     * já vinculados a mensagem (uploads em andamento não aparecem). Filtro opcional por categoria.
+     */
+    @Transactional(readOnly = true)
+    public PaginaMidia midia(long conversa, Long somenteAtendimento, String categoria, Long antes, int tamanho) {
+        StringBuilder sql = new StringBuilder(
+                "select x.id, x.mensagem_id, x.atendimento_id, x.direcao, x.categoria, x.mime_type, x.nome, x.tamanho,"
+                        + " x.situacao, m.criado_em, m.texto from atd_anexo x join atd_mensagem m on m.id = x.mensagem_id"
+                        + " where x.conversa_id = :c");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("c", conversa);
         if (somenteAtendimento != null) {
-            eventos = eventos.param("atendimento", somenteAtendimento);
+            sql.append(" and x.atendimento_id = :a");
+            params.put("a", somenteAtendimento);
         }
-        itens.addAll(eventos.query((rs, n) -> new ItemLinhaDoTempo(
-                        "EVENTO",
+        if (categoria != null) {
+            sql.append(" and x.categoria = :categoria");
+            params.put("categoria", categoria);
+        }
+        if (antes != null) {
+            sql.append(" and x.id < :antes");
+            params.put("antes", antes);
+        }
+        sql.append(" order by x.id desc limit :limite");
+        params.put("limite", tamanho + 1);
+        var consulta = jdbc.sql(sql.toString());
+        for (var p : params.entrySet()) {
+            consulta = consulta.param(p.getKey(), p.getValue());
+        }
+        List<ItemMidia> itens = new ArrayList<>(consulta.query((rs, n) -> new ItemMidia(
                         rs.getLong("id"),
-                        instante(rs, "ocorrido_em"),
-                        rs.getObject("atendimento_id", Long.class),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        rs.getObject("autor_usuario_id", Long.class),
-                        rs.getString("tipo"),
-                        rs.getObject("usuario_alvo_id", Long.class),
-                        rs.getObject("associado_id", Long.class),
-                        rs.getString("motivo")))
+                        rs.getLong("mensagem_id"),
+                        rs.getLong("atendimento_id"),
+                        rs.getString("direcao"),
+                        rs.getString("categoria"),
+                        rs.getString("mime_type"),
+                        rs.getString("nome"),
+                        rs.getObject("tamanho", Long.class),
+                        rs.getString("situacao"),
+                        instante(rs, "criado_em"),
+                        rs.getString("texto")))
                 .list());
-        itens.sort(Comparator.comparing(ItemLinhaDoTempo::ocorridoEm)
-                .thenComparing(ItemLinhaDoTempo::tipo)
-                .thenComparing(ItemLinhaDoTempo::id));
-        return itens;
+        Long anterior = null;
+        if (itens.size() > tamanho) {
+            itens.removeLast();
+            anterior = itens.getLast().id();
+        }
+        return new PaginaMidia(itens, anterior);
+    }
+
+    /** Registros estritamente anteriores ao cursor, na ordem (registro, ordem do tipo, id). */
+    private static String antes(String coluna, int ordem, Cursor antes) {
+        if (antes == null) {
+            return "";
+        }
+        return " and (" + coluna + " < :antesEm or (" + coluna + " = :antesEm and (" + ordem + " < :antesOrdem or ("
+                + ordem + " = :antesOrdem and id < :antesId))))";
     }
 
     @Transactional(readOnly = true)

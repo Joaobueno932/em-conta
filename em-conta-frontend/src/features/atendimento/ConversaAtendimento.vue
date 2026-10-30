@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
@@ -8,22 +8,31 @@ import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { codigoDoErro, describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
 
+import AnexoMensagem from './AnexoMensagem.vue'
 import {
+  ACEITOS,
   assumir,
+  type CategoriaAnexo,
   chavesAtendimento,
+  enviarAnexo,
+  formatarTamanho,
+  ROTULO_CATEGORIA,
+  TAMANHO_MAXIMO_LEGENDA,
+  validarArquivo,
   encerrar,
   formatarDataHora,
   formatarHora,
   INTERVALO_MS,
-  linhaDoTempo,
   nomeContato,
   obterDetalhe,
   responder,
   responsaveis,
   ROTULO_EVENTO,
   ROTULO_SITUACAO_MENSAGEM,
+  SITUACOES_SEM_ENVIO,
   transferir,
 } from './atendimento-api'
+import { useLinhaDoTempo } from './use-linha-do-tempo'
 
 /**
  * Conversa (AT-02/AT-04/AT-05): linha do tempo, assumir, responder, transferir e encerrar. Só o
@@ -41,11 +50,8 @@ const detalhe = useQuery({
   queryFn: () => obterDetalhe(http, props.id),
   refetchInterval: INTERVALO_MS,
 })
-const linha = useQuery({
-  queryKey: computed(() => chavesAtendimento.linha(props.id, false)),
-  queryFn: () => linhaDoTempo(http, props.id),
-  refetchInterval: INTERVALO_MS,
-})
+const linha = useLinhaDoTempo(toRef(props, 'id'), false, true)
+const recente = linha.recente
 
 const resumo = computed(() => detalhe.data.value?.resumo)
 const souResponsavel = computed(
@@ -53,7 +59,8 @@ const souResponsavel = computed(
 )
 const janelaAberta = computed(() => {
   const ate = detalhe.data.value?.janelaAbertaAte
-  return !!ate && new Date(ate).getTime() > Date.now()
+  // Aberta até o instante exato do limite, inclusive (mesma regra do servidor).
+  return !!ate && Date.now() <= new Date(ate).getTime()
 })
 const pode = (p: string) => temPermissao(usuario.value, p)
 
@@ -121,29 +128,107 @@ const transferirMut = useMutation({
   onSettled: atualizar,
 })
 
-// Resposta: a chave de idempotência só muda depois de um envio registrado, então repetir após uma
-// falha de rede não duplica a mensagem.
+// Resposta: a chave de idempotência identifica a operação (este atendimento + este texto, já sem
+// espaços nas pontas, que é o que o servidor compara). Repetir um texto cujo envio não teve resposta
+// reutiliza a chave daquela tentativa e não duplica a mensagem; texto editado é outra operação, com
+// outra chave.
 const texto = ref('')
-const chave = ref(crypto.randomUUID())
+const tentativas = new Map<string, string>()
+const operacao = (id: number, conteudo: string) => JSON.stringify([id, conteudo])
+function chaveDa(id: number, conteudo: string) {
+  let chave = tentativas.get(operacao(id, conteudo))
+  if (!chave) {
+    chave = crypto.randomUUID()
+    tentativas.set(operacao(id, conteudo), chave)
+  }
+  return chave
+}
 const responderMut = useMutation({
-  mutationFn: () => responder(http, props.id, texto.value.trim(), chave.value),
-  onSuccess: () => {
+  mutationFn: (conteudo: string) =>
+    responder(http, props.id, conteudo, chaveDa(props.id, conteudo)),
+  onSuccess: (_, conteudo) => {
     texto.value = ''
-    chave.value = crypto.randomUUID()
+    tentativas.delete(operacao(props.id, conteudo))
   },
   onSettled: atualizar,
 })
-watch(texto, (novo, antigo) => {
-  // Texto diferente é outra mensagem.
-  if (!responderMut.isPending.value && novo !== antigo && responderMut.isError.value) {
-    chave.value = crypto.randomUUID()
-    responderMut.reset()
-  }
+watch(texto, () => {
+  if (!responderMut.isPending.value && responderMut.isError.value) responderMut.reset()
 })
-function enviar() {
-  if (!texto.value.trim() || responderMut.isPending.value) return
-  responderMut.mutate()
+// Anexo: validação antecipada (tipo, extensão, tamanho); o servidor confere tudo de novo, inclusive o
+// conteúdo. A chave identifica a operação (atendimento + arquivo + legenda): repetir após falha de rede
+// reutiliza a chave; trocar o arquivo ou a legenda é outra operação.
+const arquivo = ref<{ arquivo: File; categoria: CategoriaAnexo } | null>(null)
+const erroArquivo = ref('')
+const seletor = ref<HTMLInputElement | null>(null)
+function selecionarArquivo(evento: Event) {
+  const entrada = evento.target as HTMLInputElement
+  const escolhido = entrada.files?.[0]
+  entrada.value = ''
+  if (!escolhido) return
+  const resultado = validarArquivo(escolhido)
+  if (resultado.erro !== undefined) {
+    erroArquivo.value = resultado.erro
+    arquivo.value = null
+    return
+  }
+  erroArquivo.value = ''
+  arquivo.value = { arquivo: escolhido, categoria: resultado.categoria }
+  anexoMut.reset()
 }
+function removerArquivo() {
+  arquivo.value = null
+  erroArquivo.value = ''
+  anexoMut.reset()
+}
+const aceitaLegenda = computed(() => arquivo.value?.categoria !== 'AUDIO')
+const anexoMut = useMutation({
+  mutationFn: (dados: { arquivo: File; legenda: string }) =>
+    enviarAnexo(
+      http,
+      props.id,
+      dados.arquivo,
+      dados.legenda,
+      chaveDa(props.id, operacaoArquivo(dados.arquivo, dados.legenda)),
+    ),
+  onSuccess: (_, dados) => {
+    tentativas.delete(operacao(props.id, operacaoArquivo(dados.arquivo, dados.legenda)))
+    arquivo.value = null
+    texto.value = ''
+  },
+  onSettled: atualizar,
+})
+const operacaoArquivo = (f: File, legenda: string) =>
+  `arquivo:${f.name}:${f.size}:${f.lastModified}:${legenda}`
+
+function enviar() {
+  if (arquivo.value) {
+    const legenda = aceitaLegenda.value ? texto.value.trim() : ''
+    if (anexoMut.isPending.value || legenda.length > TAMANHO_MAXIMO_LEGENDA) return
+    anexoMut.mutate({ arquivo: arquivo.value.arquivo, legenda })
+    return
+  }
+  const conteudo = texto.value.trim()
+  if (!conteudo || responderMut.isPending.value) return
+  responderMut.mutate(conteudo)
+}
+const enviando = computed(() => responderMut.isPending.value || anexoMut.isPending.value)
+
+// "Ver na conversa" (área Mídia): rola até a mensagem, se já estiver carregada.
+const avisoMensagem = ref('')
+async function irParaMensagem(mensagemId: number) {
+  avisoMensagem.value = ''
+  await nextTick()
+  const alvo = rolagem.value?.querySelector<HTMLElement>(`#mensagem-${mensagemId}`)
+  if (!alvo) {
+    avisoMensagem.value =
+      'Esta mensagem ainda não está carregada. Use “Carregar mensagens anteriores” para chegar até ela.'
+    return
+  }
+  alvo.scrollIntoView({ block: 'center' })
+  alvo.focus()
+}
+defineExpose({ irParaMensagem })
 
 const motivoComposer = computed(() => {
   if (!detalhe.data.value) return ''
@@ -159,13 +244,28 @@ const motivoComposer = computed(() => {
 
 const opcoes = ref(false)
 const rolagem = ref<HTMLElement | null>(null)
+const perto = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 80
+
+// Item novo no fim: desce só se a pessoa já estava no fim (não tira quem está lendo mensagens antigas).
 watch(
-  () => linha.data.value?.length,
-  async () => {
+  () => linha.itens.value[linha.itens.value.length - 1]?.cursor,
+  async (novo, antigo) => {
+    const el = rolagem.value
+    const descer = !antigo || !el || perto(el)
     await nextTick()
-    if (rolagem.value) rolagem.value.scrollTop = rolagem.value.scrollHeight
+    if (descer && rolagem.value) rolagem.value.scrollTop = rolagem.value.scrollHeight
   },
+  { flush: 'pre' },
 )
+
+// Conteúdo anterior entra acima: mantém o mesmo trecho visível.
+async function carregarAnteriores() {
+  const el = rolagem.value
+  const doFim = el ? el.scrollHeight - el.scrollTop : 0
+  await linha.carregarAnteriores()
+  await nextTick()
+  if (el) el.scrollTop = el.scrollHeight - doFim
+}
 </script>
 
 <template>
@@ -273,12 +373,35 @@ watch(
       </form>
 
       <div ref="rolagem" class="linha" aria-live="polite" aria-label="Mensagens">
-        <p v-if="linha.isPending.value" role="status">Carregando mensagens…</p>
-        <AlertaMensagem v-else-if="linha.isError.value" tipo="erro">
-          {{ describeApiError(linha.error.value) }}
+        <p v-if="recente.isPending.value" role="status">Carregando mensagens…</p>
+        <AlertaMensagem v-else-if="recente.isError.value" tipo="erro">
+          {{ describeApiError(recente.error.value) }}
         </AlertaMensagem>
         <template v-else>
-          <template v-for="item in linha.data.value" :key="`${item.tipo}-${item.id}`">
+          <div class="anteriores">
+            <p v-if="linha.carregandoAnteriores.value" role="status">
+              Carregando mensagens anteriores…
+            </p>
+            <template v-else-if="linha.erroAnteriores.value">
+              <AlertaMensagem tipo="erro">
+                Não foi possível carregar as mensagens anteriores.
+                {{ describeApiError(linha.erroAnteriores.value) }}
+              </AlertaMensagem>
+              <button type="button" class="secundario" @click="carregarAnteriores">
+                Tentar de novo
+              </button>
+            </template>
+            <button
+              v-else-if="linha.temAnteriores.value"
+              type="button"
+              class="secundario"
+              @click="carregarAnteriores"
+            >
+              Carregar mensagens anteriores
+            </button>
+            <p v-else class="ajuda">Início do histórico</p>
+          </div>
+          <template v-for="item in linha.itens.value" :key="`${item.tipo}-${item.id}`">
             <p v-if="item.tipo === 'EVENTO'" class="evento">
               {{ formatarDataHora(item.ocorridoEm) }} —
               <template v-if="item.evento === 'ATENDIMENTO_INICIADO'">{{
@@ -291,15 +414,38 @@ watch(
                 <template v-if="item.motivo">({{ item.motivo }})</template>
               </template>
             </p>
-            <div v-else class="mensagem" :class="item.direcao === 'SAIDA' ? 'saida' : 'entrada'">
+            <div
+              v-else
+              :id="`mensagem-${item.id}`"
+              class="mensagem"
+              :class="item.direcao === 'SAIDA' ? 'saida' : 'entrada'"
+              tabindex="-1"
+            >
               <p v-if="item.tipoMensagem === 'NAO_SUPORTADO'" class="ajuda">
                 Mensagem do tipo “{{ item.tipoExterno }}” não suportada nesta versão.
               </p>
+              <template v-else-if="item.anexo">
+                <AnexoMensagem
+                  :atendimento="id"
+                  :anexo="item.anexo"
+                  :legenda="item.texto"
+                  :pode-tentar-de-novo="
+                    item.direcao === 'ENTRADA' &&
+                    souResponsavel &&
+                    resumo.situacao === 'EM_ATENDIMENTO' &&
+                    pode('atendimento:responder')
+                  "
+                />
+                <p v-if="item.texto" class="texto">{{ item.texto }}</p>
+              </template>
               <p v-else class="texto">{{ item.texto }}</p>
               <p class="meta">
                 <span v-if="item.autor">{{ item.autor.nome }} · </span>
                 {{ formatarHora(item.ocorridoEm) }}
-                <span v-if="item.direcao === 'SAIDA'" :class="{ falha: item.situacao === 'FALHA' }">
+                <span
+                  v-if="item.direcao === 'SAIDA'"
+                  :class="{ falha: SITUACOES_SEM_ENVIO.includes(item.situacao ?? '') }"
+                >
                   · {{ ROTULO_SITUACAO_MENSAGEM[item.situacao ?? ''] }}
                   <template v-if="item.situacao === 'FALHA' && item.erroTitulo"
                     >: {{ item.erroTitulo }}</template
@@ -314,27 +460,75 @@ watch(
       <AlertaMensagem v-if="!detalhe.data.value?.canalConfigurado" tipo="aviso">
         Canal não configurado
       </AlertaMensagem>
+      <p v-if="avisoMensagem" class="ajuda" role="status">{{ avisoMensagem }}</p>
+      <div v-if="arquivo" class="selecionado" role="group" aria-label="Arquivo selecionado">
+        <span class="nome">{{ arquivo.arquivo.name }}</span>
+        <span class="ajuda"
+          >{{ ROTULO_CATEGORIA[arquivo.categoria] }} ·
+          {{ formatarTamanho(arquivo.arquivo.size) }}</span
+        >
+        <button
+          type="button"
+          class="link"
+          :disabled="anexoMut.isPending.value"
+          :aria-label="`Remover o arquivo ${arquivo.arquivo.name}`"
+          @click="removerArquivo"
+        >
+          Remover
+        </button>
+      </div>
+      <AlertaMensagem v-if="erroArquivo" tipo="erro">{{ erroArquivo }}</AlertaMensagem>
       <form class="composer" @submit.prevent="enviar">
-        <label for="resposta" class="visualmente-oculto">Mensagem</label>
+        <input
+          ref="seletor"
+          type="file"
+          class="visualmente-oculto"
+          tabindex="-1"
+          aria-hidden="true"
+          :accept="ACEITOS"
+          @change="selecionarArquivo"
+        />
+        <button
+          type="button"
+          class="secundario"
+          :disabled="!!motivoComposer || enviando"
+          @click="seletor?.click()"
+        >
+          Anexar arquivo
+        </button>
+        <label for="resposta" class="visualmente-oculto">{{
+          arquivo ? 'Legenda (opcional)' : 'Mensagem'
+        }}</label>
         <textarea
           id="resposta"
           v-model="texto"
           rows="2"
-          maxlength="4096"
-          :disabled="!!motivoComposer"
-          :placeholder="motivoComposer || 'Digite uma mensagem'"
+          :maxlength="arquivo ? TAMANHO_MAXIMO_LEGENDA : 4096"
+          :disabled="!!motivoComposer || (!!arquivo && !aceitaLegenda)"
+          :placeholder="
+            motivoComposer ||
+            (arquivo
+              ? aceitaLegenda
+                ? 'Legenda (opcional)'
+                : 'O WhatsApp não aceita legenda em áudio.'
+              : 'Digite uma mensagem')
+          "
           @keydown.enter.exact.prevent="enviar"
         ></textarea>
         <button
           type="submit"
-          :disabled="!!motivoComposer || !texto.trim() || responderMut.isPending.value"
+          :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
         >
-          {{ responderMut.isPending.value ? 'Enviando…' : 'Enviar' }}
+          {{ enviando ? 'Enviando…' : 'Enviar' }}
         </button>
       </form>
       <p v-if="motivoComposer && detalhe.data.value?.canalConfigurado" class="ajuda">
         {{ motivoComposer }}
       </p>
+      <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
+        {{ describeApiError(anexoMut.error.value) }} O arquivo foi mantido; tentar de novo não
+        duplica a mensagem.
+      </AlertaMensagem>
       <AlertaMensagem v-if="responderMut.isError.value" tipo="erro">
         {{ describeApiError(responderMut.error.value) }} O texto foi mantido; tentar de novo não
         duplica a mensagem.
@@ -421,6 +615,19 @@ watch(
   border-radius: 8px;
 }
 
+.anteriores {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.anteriores p {
+  margin: 0;
+}
+
 .evento {
   align-self: center;
   margin: 0;
@@ -466,6 +673,25 @@ watch(
   display: flex;
   gap: 0.5rem;
   align-items: flex-end;
+}
+
+.selecionado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed var(--cor-borda);
+  border-radius: 8px;
+}
+
+.selecionado .nome {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mensagem:focus-visible {
+  outline: 2px solid var(--cor-destaque-borda);
 }
 
 .composer textarea {

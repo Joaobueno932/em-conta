@@ -17,6 +17,12 @@ spring:
           time_zone: UTC
   flyway:
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      # Teto do multipart (anexos do atendimento). O limite por tipo é aplicado de novo na leitura
+      # (emconta.atendimento.anexos); ao aumentar o de documentos, aumente também estes valores.
+      max-file-size: ${EMCONTA_ANEXO_MAXIMO:17MB}
+      max-request-size: ${EMCONTA_ANEXO_MAXIMO_REQUISICAO:18MB}
   session:
     jdbc:
       initialize-schema: never # tabelas criadas pela migration V1, não pelo Spring Session
@@ -49,6 +55,18 @@ emconta:
     verify-token: ${WHATSAPP_VERIFY_TOKEN:}
     graph-url: ${WHATSAPP_GRAPH_URL:https://graph.facebook.com}
     graph-version: ${WHATSAPP_GRAPH_VERSION:v23.0}
+    # Hosts HTTPS de onde a mídia pode ser baixada com o token (o da URL devolvida pela consulta de
+    # mídia). Qualquer outro destino é recusado sem enviar o token.
+    hosts-midia: ${WHATSAPP_HOSTS_MIDIA:lookaside.fbsbx.com}
+  armazenamento:
+    # Armazenamento privado de objetos (S3/MinIO) dos anexos. Sem endpoint, bucket e credenciais os
+    # anexos não são recebidos nem enviados. Nunca coloque valores reais aqui.
+    endpoint: ${ARMAZENAMENTO_ENDPOINT:}
+    regiao: ${ARMAZENAMENTO_REGIAO:us-east-1}
+    bucket: ${ARMAZENAMENTO_BUCKET:}
+    chave-acesso: ${ARMAZENAMENTO_CHAVE_ACESSO:}
+    chave-secreta: ${ARMAZENAMENTO_CHAVE_SECRETA:}
+    criar-bucket: ${ARMAZENAMENTO_CRIAR_BUCKET:false}
   security:
     # Libera /v3/api-docs e /swagger-ui sem autenticação. Ligado apenas no profile local.
     openapi-public: false

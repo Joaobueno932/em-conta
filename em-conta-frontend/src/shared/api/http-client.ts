@@ -105,7 +105,9 @@ export function createHttpClient(
     csrfToken: string | null,
   ): Promise<Response> {
     const headers = new Headers({ Accept: 'application/json, application/problem+json' })
-    if (options.body !== undefined) {
+    // FormData (envio de arquivo): o navegador define o multipart com a fronteira.
+    const formulario = options.body instanceof FormData
+    if (options.body !== undefined && !formulario) {
       headers.set('Content-Type', 'application/json')
     }
     if (csrfToken) {
@@ -115,7 +117,12 @@ export function createHttpClient(
       return await fetchFn(`${basePath}${path}`, {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body:
+          options.body === undefined
+            ? undefined
+            : formulario
+              ? (options.body as FormData)
+              : JSON.stringify(options.body),
         credentials: 'same-origin',
         signal: options.signal,
       })

@@ -16,6 +16,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param verifyToken token da verificação inicial do webhook (diferente do App Secret)
  * @param graphUrl URL base da Graph API (substituível em testes por um servidor controlado)
  * @param graphVersion versão da Graph API usada nas chamadas
+ * @param hostsMidia hosts HTTPS de onde a mídia pode ser baixada com o token (URLs devolvidas pela
+ *     consulta de mídia); qualquer outro destino é recusado sem enviar o token
+ * @param timeoutDownload tempo máximo de um download de mídia
  */
 @ConfigurationProperties("emconta.whatsapp")
 public record WhatsAppProperties(
@@ -26,7 +29,9 @@ public record WhatsAppProperties(
         @DefaultValue("https://graph.facebook.com") URI graphUrl,
         @DefaultValue("v23.0") String graphVersion,
         @DefaultValue("5s") Duration timeoutConexao,
-        @DefaultValue("20s") Duration timeoutResposta) {
+        @DefaultValue("20s") Duration timeoutResposta,
+        @DefaultValue("lookaside.fbsbx.com") java.util.List<String> hostsMidia,
+        @DefaultValue("60s") Duration timeoutDownload) {
 
     public boolean configurado() {
         return preenchido(accessToken) && preenchido(phoneNumberId) && preenchido(appSecret) && preenchido(verifyToken);

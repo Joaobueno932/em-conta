@@ -1,6 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { ADMIN_EMAIL, ADMIN_SENHA, paginaDoAdministrador } from './apoio'
+import {
+  abrirUsuarioNaLista,
+  ADMIN_EMAIL,
+  ADMIN_SENHA,
+  criarUsuarioAtivo,
+  entrar,
+  paginaDoAdministrador,
+  SENHA_PADRAO,
+} from './apoio'
 import { GraphControlada, NUMERO_TESTE, SEGREDO_TESTE, webhookDeTeste } from './whatsapp-controlado'
 
 /**
@@ -149,4 +157,72 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   await expect(page.getByText('Aguardando atendimento')).toBeVisible()
   await expect(page.getByText('Esqueci de perguntar uma coisa')).toBeVisible()
   await expect(page.getByText(codigoEncerrado.replace('Atendimento ', ''))).toHaveCount(0)
+})
+
+test('transferência entre dois atendentes: só o novo responsável responde e encerra', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000)
+  const admin = await paginaDoAdministrador(browser)
+  const marca = Date.now().toString(36).toUpperCase()
+  const nomeAtendente = `Atendente E2E ${marca}`
+  const nomeContato = `Contato Transferência ${marca}`
+  const waId = `55679${aleatorio(8)}`
+
+  // Segundo atendente: convite real (Mailpit) e perfil Administrador atribuído pela interface.
+  const { email, page: atendente } = await criarUsuarioAtivo(browser, admin, nomeAtendente)
+  await admin.goto('/admin/usuarios')
+  await abrirUsuarioNaLista(admin, nomeAtendente)
+  await admin.getByLabel('Administrador').check()
+  await admin.getByRole('button', { name: 'Salvar perfis' }).click()
+  await expect(admin.getByText(/Administrador/).first()).toBeVisible()
+  await entrar(atendente, email, SENHA_PADRAO)
+  await expect(atendente.getByRole('button', { name: 'Sair' })).toBeVisible()
+
+  expect(
+    (
+      await webhookDeTeste.mensagem(
+        admin.request,
+        waId,
+        nomeContato,
+        'Preciso falar com o financeiro',
+      )
+    ).status(),
+  ).toBe(200)
+  await admin.goto('/atendimento')
+  await expect(async () => {
+    await abrirNaFila(admin, nomeContato, nomeContato)
+  }).toPass({ timeout: 20_000 })
+  await admin.getByRole('button', { name: 'Assumir' }).click()
+  await expect(admin.getByText(/Em atendimento com/)).toBeVisible()
+
+  await admin.getByRole('button', { name: 'Transferir' }).click()
+  await admin.getByLabel('Transferir para').selectOption({ label: nomeAtendente })
+  await admin.getByLabel('Motivo (opcional)').fill('Assunto financeiro')
+  await admin.getByRole('button', { name: 'Confirmar transferência' }).click()
+  await expect(admin.getByText(`Em atendimento com ${nomeAtendente}`)).toBeVisible()
+  await expect(admin.getByText(/transferiu o atendimento\s+para/)).toBeVisible()
+  // O antigo responsável perde as ações, na tela e no servidor.
+  await expect(admin.getByRole('button', { name: 'Transferir' })).toHaveCount(0)
+  await expect(admin.getByRole('button', { name: 'Encerrar' })).toHaveCount(0)
+  await expect(admin.getByLabel('Mensagem')).toBeDisabled()
+  const id = new URL(admin.url()).searchParams.get('id')
+  const xsrf = (await admin.context().cookies()).find((c) => c.name === 'XSRF-TOKEN')?.value ?? ''
+  const direto = await admin.request.post(`/api/v1/atendimento/atendimentos/${id}/encerramento`, {
+    data: { versao: 999 },
+    headers: { 'X-XSRF-TOKEN': xsrf },
+  })
+  expect(direto.status()).toBe(409)
+  expect(((await direto.json()) as { codigo: string }).codigo).toBe('NAO_E_RESPONSAVEL')
+
+  // O novo responsável responde e encerra.
+  await atendente.goto(`/atendimento?id=${id}`)
+  await expect(atendente.getByText(`Em atendimento com ${nomeAtendente}`)).toBeVisible()
+  await atendente.getByLabel('Mensagem').fill('Olá! Sou do financeiro.')
+  await atendente.getByRole('button', { name: 'Enviar' }).click()
+  await expect.poll(() => graph.envios.some((e) => e.para === waId), { timeout: 15_000 }).toBe(true)
+  await expect(atendente.getByText(/Aceita pelo WhatsApp/)).toBeVisible({ timeout: 15_000 })
+  atendente.once('dialog', (d) => d.accept())
+  await atendente.getByRole('button', { name: 'Encerrar' }).click()
+  await expect(atendente.getByText('Encerrado', { exact: true })).toBeVisible()
 })

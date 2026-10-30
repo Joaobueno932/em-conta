@@ -75,6 +75,24 @@ public class CatalogoAssociados {
     }
 
     /**
+     * Ids de associados cujo nome (PF) ou razão social (PJ), ambos no campo {@code nome}, contém o trecho.
+     * Só ids: outros módulos filtram por eles sem receber documento nem contatos. Limitado a {@code limite}.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> idsPorNome(String termo, int limite) {
+        String limpo = termo == null ? "" : termo.strip();
+        if (limpo.length() < 2) {
+            return List.of();
+        }
+        String trecho = "%" + limpo.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        return jdbc.sql("select a.id from associado a where a.nome like :trecho escape '!' order by a.id limit :limite")
+                .param("trecho", trecho)
+                .param("limite", limite)
+                .query(Long.class)
+                .list();
+    }
+
+    /**
      * Associados com algum contato ativo cujo telefone coincide com o número informado (com ou sem o
      * DDI 55). Pode devolver vários; nunca escolhe por quem atende.
      */

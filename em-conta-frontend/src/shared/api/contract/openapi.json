@@ -1469,7 +1469,7 @@
             "description": "Transferido"
           },
           "409": {
-            "description": "CONFLITO_CONCORRENTE ou ATENDIMENTO_SEM_RESPONSAVEL"
+            "description": "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE"
           }
         }
       }
@@ -1514,7 +1514,7 @@
             }
           },
           "409": {
-            "description": "NAO_E_RESPONSAVEL ou JANELA_ENCERRADA",
+            "description": "NAO_E_RESPONSAVEL, JANELA_ENCERRADA ou CHAVE_IDEMPOTENCIA_REUTILIZADA",
             "content": {
               "application/json": {
                 "schema": {
@@ -1569,7 +1569,7 @@
             "description": "Encerrado"
           },
           "409": {
-            "description": "CONFLITO_CONCORRENTE ou ATENDIMENTO_ENCERRADO"
+            "description": "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE"
           }
         }
       }
@@ -1598,6 +1598,140 @@
           },
           "409": {
             "description": "ATENDIMENTO_JA_ASSUMIDO ou ATENDIMENTO_ENCERRADO"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/anexos": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Registra um anexo (imagem, PDF ou áudio) para envio assíncrono (atendimento:responder)",
+        "operationId": "enviarAnexoAtendimento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "arquivo": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "legenda": {
+                    "type": "string"
+                  },
+                  "chaveIdempotencia": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "arquivo",
+                  "chaveIdempotencia"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Registrado como PENDENTE; upload à Meta e envio vêm depois",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "DADOS_INVALIDOS (tipo, extensão, conteúdo, legenda ou chave)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NAO_E_RESPONSAVEL, JANELA_ENCERRADA ou CHAVE_IDEMPOTENCIA_REUTILIZADA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "ARQUIVO_MUITO_GRANDE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "CANAL_NAO_CONFIGURADO, ARMAZENAMENTO_NAO_CONFIGURADO ou ARMAZENAMENTO_INDISPONIVEL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaRegistrada"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/anexos/{anexo}/nova-tentativa": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Baixa de novo um anexo recebido que falhou; só o responsável (atendimento:responder)",
+        "operationId": "novaTentativaAnexo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "anexo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Voltou para a fila de download"
+          },
+          "409": {
+            "description": "NAO_E_RESPONSAVEL ou NOVA_TENTATIVA_INDISPONIVEL"
           }
         }
       }
@@ -2490,12 +2624,89 @@
         }
       }
     },
+    "/api/v1/atendimento/atendimentos/{id}/midia": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Anexos da conversa (ou só deste atendimento), do mais recente, por cursor (atendimento:consultar)",
+        "operationId": "midiaAtendimento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "somenteEste",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "IMAGEM",
+                "DOCUMENTO",
+                "AUDIO"
+              ],
+              "pattern": "IMAGEM|DOCUMENTO|AUDIO"
+            }
+          },
+          {
+            "name": "antes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaMidia"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/atendimentos/{id}/linha-do-tempo": {
       "get": {
         "tags": [
           "Atendimento"
         ],
-        "summary": "Mensagens e eventos da conversa (ou só deste atendimento) (atendimento:consultar)",
+        "summary": "Página de mensagens e eventos da conversa (ou só deste atendimento), da mais recente para trás por cursor (atendimento:consultar)",
         "operationId": "linhaDoTempo",
         "parameters": [
           {
@@ -2515,6 +2726,84 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "antes",
+            "in": "query",
+            "description": "Cursor de um item: devolve os itens anteriores a ele",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "DADOS_INVALIDOS (cursor ou tamanho)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaLinhaDoTempo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/linha-do-tempo/situacoes": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Situação atual de mensagens já carregadas, até 100 por consulta (atendimento:consultar)",
+        "operationId": "situacoesMensagens",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "somenteEste",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "maxItems": 100,
+              "minItems": 1
+            }
           }
         ],
         "responses": {
@@ -2525,7 +2814,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ItemLinhaDoTempo"
+                    "$ref": "#/components/schemas/SituacaoMensagem"
                   }
                 }
               }
@@ -2565,6 +2854,80 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/anexos/{anexo}/conteudo": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Conteúdo de um anexo da conversa (ou só deste atendimento) (atendimento:consultar)",
+        "operationId": "conteudoAnexoAtendimento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "anexo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "somenteEste",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Faixa pedida em Range"
+          },
+          "404": {
+            "description": "ANEXO_NAO_ENCONTRADO"
           }
         }
       }
@@ -4638,6 +5001,138 @@
           "versaoConversa"
         ]
       },
+      "ItemMidia": {
+        "type": "object",
+        "description": "Anexo listado na área Mídia",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mensagemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "atendimentoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "direcao": {
+            "type": "string",
+            "enum": [
+              "ENTRADA",
+              "SAIDA"
+            ]
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "IMAGEM",
+              "DOCUMENTO",
+              "AUDIO"
+            ]
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "situacao": {
+            "type": "string"
+          },
+          "registradoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "legenda": {
+            "type": "string",
+            "description": "Legenda"
+          }
+        },
+        "required": [
+          "atendimentoId",
+          "categoria",
+          "direcao",
+          "id",
+          "mensagemId",
+          "registradoEm",
+          "situacao"
+        ]
+      },
+      "PaginaMidia": {
+        "type": "object",
+        "description": "Página da área Mídia, do mais recente para o mais antigo",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemMidia"
+            }
+          },
+          "anterior": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cursor (id) para a próxima página; ausente no fim"
+          }
+        },
+        "required": [
+          "itens"
+        ]
+      },
+      "AnexoAtendimento": {
+        "type": "object",
+        "description": "Anexo de uma mensagem; o conteúdo só por rota autenticada",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "categoria": {
+            "type": "string",
+            "enum": [
+              "IMAGEM",
+              "DOCUMENTO",
+              "AUDIO"
+            ]
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "nome": {
+            "type": "string",
+            "description": "Nome original higienizado (só exibição)"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "situacao": {
+            "type": "string",
+            "enum": [
+              "RECEBENDO",
+              "PENDENTE",
+              "PROCESSANDO",
+              "FALHA_TEMPORARIA",
+              "DISPONIVEL",
+              "FALHA",
+              "NAO_SUPORTADO"
+            ]
+          },
+          "erro": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "categoria",
+          "id",
+          "situacao"
+        ]
+      },
       "ItemLinhaDoTempo": {
         "type": "object",
         "description": "Mensagem ou evento do atendimento",
@@ -4652,6 +5147,10 @@
           "id": {
             "type": "integer",
             "format": "int64"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Posição do item na linha do tempo; use como \"antes\" para a página anterior"
           },
           "ocorridoEm": {
             "type": "string",
@@ -4672,6 +5171,9 @@
             "type": "string",
             "enum": [
               "TEXTO",
+              "IMAGEM",
+              "DOCUMENTO",
+              "AUDIO",
               "NAO_SUPORTADO"
             ]
           },
@@ -4693,7 +5195,8 @@
               "ENTREGUE",
               "LIDA",
               "FALHA",
-              "DESCONHECIDA"
+              "DESCONHECIDA",
+              "JANELA_EXPIRADA"
             ]
           },
           "erroCodigo": {
@@ -4717,12 +5220,82 @@
           },
           "motivo": {
             "type": "string"
+          },
+          "etapaFalha": {
+            "type": "string",
+            "description": "Etapa da falha de uma mensagem de saída: upload do arquivo ou envio",
+            "enum": [
+              "UPLOAD",
+              "ENVIO"
+            ]
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Última mudança da mensagem (situação ou anexo)"
+          },
+          "anexo": {
+            "$ref": "#/components/schemas/AnexoAtendimento"
+          }
+        },
+        "required": [
+          "cursor",
+          "id",
+          "ocorridoEm",
+          "tipo"
+        ]
+      },
+      "PaginaLinhaDoTempo": {
+        "type": "object",
+        "description": "Página da linha do tempo, em ordem cronológica",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemLinhaDoTempo"
+            }
+          },
+          "anterior": {
+            "type": "string",
+            "description": "Cursor para a página anterior; ausente no início do histórico"
+          }
+        },
+        "required": [
+          "itens"
+        ]
+      },
+      "SituacaoMensagem": {
+        "type": "object",
+        "description": "Situação atual de uma mensagem já carregada",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "situacao": {
+            "type": "string"
+          },
+          "erroCodigo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "erroTitulo": {
+            "type": "string"
+          },
+          "etapaFalha": {
+            "type": "string"
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "anexo": {
+            "$ref": "#/components/schemas/AnexoAtendimento"
           }
         },
         "required": [
           "id",
-          "ocorridoEm",
-          "tipo"
+          "situacao"
         ]
       },
       "AssociadoResumo": {

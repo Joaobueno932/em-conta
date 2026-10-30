@@ -7,7 +7,7 @@ verificados com Spring Modulith). Banco MySQL/InnoDB `utf8mb4`, schema exclusiva
 > e troca de senha, administração de usuários, perfis e permissões) + **cadastro de associados PF/PJ,
 > contatos e unidades consumidoras**, com histórico + **fazendas, usinas e vínculos cadastrais UC →
 > usina** + **atendimento via WhatsApp** (Cloud API direta; canal "não configurado" enquanto as
-> variáveis não forem preenchidas). Detalhes em [docs/seguranca.md](docs/seguranca.md),
+> variáveis não forem preenchidas), com anexos (imagem, PDF e áudio) no MinIO privado. Detalhes em [docs/seguranca.md](docs/seguranca.md),
 > [docs/associados.md](docs/associados.md), [docs/usinas.md](docs/usinas.md) e
 > [docs/atendimento.md](docs/atendimento.md).
 
@@ -113,9 +113,9 @@ e-mails de convite e de recuperação aparecem no Mailpit: http://localhost:8025
 
 ### Endpoints de atendimento
 
-Base `/api/v1/atendimento` (fila, conversa, resposta, transferência, encerramento, vínculo com
-associado, histórico) e o webhook público `/api/v1/integracoes/whatsapp/webhook`. Lista completa,
-permissões, variáveis `WHATSAPP_*` e homologação: [docs/atendimento.md](docs/atendimento.md).
+Base `/api/v1/atendimento` (fila, conversa, resposta, anexos e área Mídia, transferência,
+encerramento, vínculo com associado, histórico) e o webhook público `/api/v1/integracoes/whatsapp/webhook`. Lista completa,
+permissões, variáveis `WHATSAPP_*` e `ARMAZENAMENTO_*` e homologação: [docs/atendimento.md](docs/atendimento.md).
 
 Erros vêm em Problem Details com o campo `codigo` (ex.: `CREDENCIAIS_INVALIDAS`,
 `MUITAS_TENTATIVAS`, `SESSAO_EXPIRADA`, `TOKEN_INVALIDO`, `ULTIMO_ADMINISTRADOR`, `CREDENCIAL_ALTERADA`,

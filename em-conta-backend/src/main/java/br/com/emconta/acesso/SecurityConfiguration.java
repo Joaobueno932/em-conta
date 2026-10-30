@@ -148,13 +148,20 @@ class SecurityConfiguration {
                             "/api/v1/atendimento/atendimentos",
                             "/api/v1/atendimento/atendimentos/*",
                             "/api/v1/atendimento/atendimentos/*/linha-do-tempo",
+                            "/api/v1/atendimento/atendimentos/*/linha-do-tempo/situacoes",
+                            "/api/v1/atendimento/atendimentos/*/midia",
+                            "/api/v1/atendimento/atendimentos/*/anexos/*/conteudo",
                             "/api/v1/atendimento/historico")
                     .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
             auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/presenca")
                     .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
             auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/assuncao")
                     .hasAuthority(Permissao.ATENDIMENTO_ASSUMIR.autoridade());
-            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/mensagens")
+            auth.requestMatchers(
+                            HttpMethod.POST,
+                            "/api/v1/atendimento/atendimentos/*/mensagens",
+                            "/api/v1/atendimento/atendimentos/*/anexos",
+                            "/api/v1/atendimento/atendimentos/*/anexos/*/nova-tentativa")
                     .hasAuthority(Permissao.ATENDIMENTO_RESPONDER.autoridade());
             auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/transferencia")
                     .hasAuthority(Permissao.ATENDIMENTO_TRANSFERIR.autoridade());

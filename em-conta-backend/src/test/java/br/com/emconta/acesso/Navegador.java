@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import tools.jackson.databind.json.JsonMapper;
@@ -58,6 +59,22 @@ public final class Navegador {
         return mutavel(comCorpo(MockMvcRequestBuilders.put(url), corpo));
     }
 
+    /** POST multipart (arquivo e campos de texto), com o cabeçalho CSRF. */
+    public MockHttpServletResponse multipart(
+            String url, org.springframework.mock.web.MockMultipartFile arquivo, Map<String, String> campos) {
+        var builder = MockMvcRequestBuilders.multipart(url).file(arquivo);
+        campos.forEach((nome, valor) -> builder.file(new org.springframework.mock.web.MockMultipartFile(
+                nome, "", "text/plain", valor.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        return mutavel(builder);
+    }
+
+    /** GET com cabeçalhos adicionais (ex.: Range). */
+    public MockHttpServletResponse get(String url, Map<String, String> cabecalhos) {
+        MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.get(url);
+        cabecalhos.forEach(builder::header);
+        return executar(builder);
+    }
+
     /** POST sem cabeçalho CSRF (para verificar a proteção). */
     public MockHttpServletResponse postSemCsrf(String url, Object corpo) {
         return executar(comCorpo(MockMvcRequestBuilders.post(url), corpo));
@@ -84,14 +101,14 @@ public final class Navegador {
         return builder.contentType(MediaType.APPLICATION_JSON).content(texto);
     }
 
-    private MockHttpServletResponse mutavel(MockHttpServletRequestBuilder builder) {
+    private MockHttpServletResponse mutavel(AbstractMockHttpServletRequestBuilder<?> builder) {
         if (!cookies.containsKey(XSRF)) {
             get("/api/v1/auth/csrf");
         }
         return executar(builder.header("X-XSRF-TOKEN", cookies.get(XSRF)));
     }
 
-    private MockHttpServletResponse executar(MockHttpServletRequestBuilder builder) {
+    private MockHttpServletResponse executar(AbstractMockHttpServletRequestBuilder<?> builder) {
         builder.with(request -> {
             request.setRemoteAddr(ip);
             return request;

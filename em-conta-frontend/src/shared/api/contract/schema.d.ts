@@ -489,6 +489,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/atendimentos/{id}/anexos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registra um anexo (imagem, PDF ou áudio) para envio assíncrono (atendimento:responder) */
+        post: operations["enviarAnexoAtendimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/anexos/{anexo}/nova-tentativa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Baixa de novo um anexo recebido que falhou; só o responsável (atendimento:responder) */
+        post: operations["novaTentativaAnexo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/associados": {
         parameters: {
             query?: never;
@@ -798,6 +832,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/atendimentos/{id}/midia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anexos da conversa (ou só deste atendimento), do mais recente, por cursor (atendimento:consultar) */
+        get: operations["midiaAtendimento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/atendimentos/{id}/linha-do-tempo": {
         parameters: {
             query?: never;
@@ -805,8 +856,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Mensagens e eventos da conversa (ou só deste atendimento) (atendimento:consultar) */
+        /** Página de mensagens e eventos da conversa (ou só deste atendimento), da mais recente para trás por cursor (atendimento:consultar) */
         get: operations["linhaDoTempo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/linha-do-tempo/situacoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Situação atual de mensagens já carregadas, até 100 por consulta (atendimento:consultar) */
+        get: operations["situacoesMensagens"];
         put?: never;
         post?: never;
         delete?: never;
@@ -824,6 +892,23 @@ export interface paths {
         };
         /** Associados com contato no mesmo telefone; só sugestão (atendimento:vincular-associado) */
         get: operations["associadosSugeridos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/anexos/{anexo}/conteudo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conteúdo de um anexo da conversa (ou só deste atendimento) (atendimento:consultar) */
+        get: operations["conteudoAnexoAtendimento"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1517,12 +1602,60 @@ export interface components {
             janelaAbertaAte?: string;
             canalConfigurado: boolean;
         };
+        /** @description Anexo listado na área Mídia */
+        ItemMidia: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            mensagemId: number;
+            /** Format: int64 */
+            atendimentoId: number;
+            /** @enum {string} */
+            direcao: "ENTRADA" | "SAIDA";
+            /** @enum {string} */
+            categoria: "IMAGEM" | "DOCUMENTO" | "AUDIO";
+            mimeType?: string;
+            nome?: string;
+            /** Format: int64 */
+            tamanho?: number;
+            situacao: string;
+            /** Format: date-time */
+            registradoEm: string;
+            /** @description Legenda */
+            legenda?: string;
+        };
+        /** @description Página da área Mídia, do mais recente para o mais antigo */
+        PaginaMidia: {
+            itens: components["schemas"]["ItemMidia"][];
+            /**
+             * Format: int64
+             * @description Cursor (id) para a próxima página; ausente no fim
+             */
+            anterior?: number;
+        };
+        /** @description Anexo de uma mensagem; o conteúdo só por rota autenticada */
+        AnexoAtendimento: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            categoria: "IMAGEM" | "DOCUMENTO" | "AUDIO";
+            mimeType?: string;
+            /** @description Nome original higienizado (só exibição) */
+            nome?: string;
+            /** Format: int64 */
+            tamanho?: number;
+            /** @enum {string} */
+            situacao: "RECEBENDO" | "PENDENTE" | "PROCESSANDO" | "FALHA_TEMPORARIA" | "DISPONIVEL" | "FALHA" | "NAO_SUPORTADO";
+            erro?: string;
+        };
         /** @description Mensagem ou evento do atendimento */
         ItemLinhaDoTempo: {
             /** @enum {string} */
             tipo: "MENSAGEM" | "EVENTO";
             /** Format: int64 */
             id: number;
+            /** @description Posição do item na linha do tempo; use como "antes" para a página anterior */
+            cursor: string;
             /** Format: date-time */
             ocorridoEm: string;
             /** Format: int64 */
@@ -1530,12 +1663,12 @@ export interface components {
             /** @enum {string} */
             direcao?: "ENTRADA" | "SAIDA";
             /** @enum {string} */
-            tipoMensagem?: "TEXTO" | "NAO_SUPORTADO";
+            tipoMensagem?: "TEXTO" | "IMAGEM" | "DOCUMENTO" | "AUDIO" | "NAO_SUPORTADO";
             /** @description Tipo informado pelo canal (ex.: image, audio) */
             tipoExterno?: string;
             texto?: string;
             /** @enum {string} */
-            situacao?: "RECEBIDA" | "PENDENTE" | "ENVIANDO" | "ACEITA" | "ENVIADA" | "ENTREGUE" | "LIDA" | "FALHA" | "DESCONHECIDA";
+            situacao?: "RECEBIDA" | "PENDENTE" | "ENVIANDO" | "ACEITA" | "ENVIADA" | "ENTREGUE" | "LIDA" | "FALHA" | "DESCONHECIDA" | "JANELA_EXPIRADA";
             /** Format: int32 */
             erroCodigo?: number;
             erroTitulo?: string;
@@ -1544,6 +1677,36 @@ export interface components {
             usuarioAlvo?: components["schemas"]["UsuarioAtendimento"];
             associado?: components["schemas"]["AssociadoAtendimento"];
             motivo?: string;
+            /**
+             * @description Etapa da falha de uma mensagem de saída: upload do arquivo ou envio
+             * @enum {string}
+             */
+            etapaFalha?: "UPLOAD" | "ENVIO";
+            /**
+             * Format: date-time
+             * @description Última mudança da mensagem (situação ou anexo)
+             */
+            atualizadoEm?: string;
+            anexo?: components["schemas"]["AnexoAtendimento"];
+        };
+        /** @description Página da linha do tempo, em ordem cronológica */
+        PaginaLinhaDoTempo: {
+            itens: components["schemas"]["ItemLinhaDoTempo"][];
+            /** @description Cursor para a página anterior; ausente no início do histórico */
+            anterior?: string;
+        };
+        /** @description Situação atual de uma mensagem já carregada */
+        SituacaoMensagem: {
+            /** Format: int64 */
+            id: number;
+            situacao: string;
+            /** Format: int32 */
+            erroCodigo?: number;
+            erroTitulo?: string;
+            etapaFalha?: string;
+            /** Format: date-time */
+            atualizadoEm?: string;
+            anexo?: components["schemas"]["AnexoAtendimento"];
         };
         /** @description Linha da listagem; documento parcialmente mascarado */
         AssociadoResumo: {
@@ -2598,7 +2761,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description CONFLITO_CONCORRENTE ou ATENDIMENTO_SEM_RESPONSAVEL */
+            /** @description NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2631,7 +2794,7 @@ export interface operations {
                     "application/json": components["schemas"]["RespostaRegistrada"];
                 };
             };
-            /** @description NAO_E_RESPONSAVEL ou JANELA_ENCERRADA */
+            /** @description NAO_E_RESPONSAVEL, JANELA_ENCERRADA ou CHAVE_IDEMPOTENCIA_REUTILIZADA */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2673,7 +2836,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description CONFLITO_CONCORRENTE ou ATENDIMENTO_ENCERRADO */
+            /** @description NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2701,6 +2864,101 @@ export interface operations {
                 content?: never;
             };
             /** @description ATENDIMENTO_JA_ASSUMIDO ou ATENDIMENTO_ENCERRADO */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    enviarAnexoAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    arquivo: string;
+                    legenda?: string;
+                    chaveIdempotencia: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Registrado como PENDENTE; upload à Meta e envio vêm depois */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+            /** @description DADOS_INVALIDOS (tipo, extensão, conteúdo, legenda ou chave) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+            /** @description NAO_E_RESPONSAVEL, JANELA_ENCERRADA ou CHAVE_IDEMPOTENCIA_REUTILIZADA */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+            /** @description ARQUIVO_MUITO_GRANDE */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+            /** @description CANAL_NAO_CONFIGURADO, ARMAZENAMENTO_NAO_CONFIGURADO ou ARMAZENAMENTO_INDISPONIVEL */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaRegistrada"];
+                };
+            };
+        };
+    };
+    novaTentativaAnexo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                anexo: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Voltou para a fila de download */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description NAO_E_RESPONSAVEL ou NOVA_TENTATIVA_INDISPONIVEL */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3229,10 +3487,13 @@ export interface operations {
             };
         };
     };
-    linhaDoTempo: {
+    midiaAtendimento: {
         parameters: {
             query?: {
                 somenteEste?: boolean;
+                categoria?: "IMAGEM" | "DOCUMENTO" | "AUDIO";
+                antes?: number;
+                tamanho?: number;
             };
             header?: never;
             path: {
@@ -3248,7 +3509,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ItemLinhaDoTempo"][];
+                    "application/json": components["schemas"]["PaginaMidia"];
+                };
+            };
+        };
+    };
+    linhaDoTempo: {
+        parameters: {
+            query?: {
+                somenteEste?: boolean;
+                /** @description Cursor de um item: devolve os itens anteriores a ele */
+                antes?: string;
+                tamanho?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DADOS_INVALIDOS (cursor ou tamanho) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginaLinhaDoTempo"];
+                };
+            };
+        };
+    };
+    situacoesMensagens: {
+        parameters: {
+            query: {
+                somenteEste?: boolean;
+                ids: number[];
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SituacaoMensagem"][];
                 };
             };
         };
@@ -3272,6 +3585,48 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AssociadoAtendimento"][];
                 };
+            };
+        };
+    };
+    conteudoAnexoAtendimento: {
+        parameters: {
+            query?: {
+                somenteEste?: boolean;
+                download?: boolean;
+            };
+            header?: {
+                Range?: string;
+            };
+            path: {
+                id: number;
+                anexo: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description Faixa pedida em Range */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ANEXO_NAO_ENCONTRADO */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

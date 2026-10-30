@@ -94,11 +94,17 @@ final class AtendimentoApi {
             String tipo,
 
             @Schema(requiredMode = REQUIRED) long id,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    description = "Posição do item na linha do tempo; use como \"antes\" para a página anterior")
+            String cursor,
+
             @Schema(requiredMode = REQUIRED) Instant ocorridoEm,
             Long atendimentoId,
             @Schema(allowableValues = {"ENTRADA", "SAIDA"}) String direcao,
 
-            @Schema(allowableValues = {"TEXTO", "NAO_SUPORTADO"})
+            @Schema(allowableValues = {"TEXTO", "IMAGEM", "DOCUMENTO", "AUDIO", "NAO_SUPORTADO"})
             String tipoMensagem,
 
             @Schema(description = "Tipo informado pelo canal (ex.: image, audio)")
@@ -116,7 +122,8 @@ final class AtendimentoApi {
                         "ENTREGUE",
                         "LIDA",
                         "FALHA",
-                        "DESCONHECIDA"
+                        "DESCONHECIDA",
+                        "JANELA_EXPIRADA"
                     })
             String situacao,
 
@@ -126,7 +133,109 @@ final class AtendimentoApi {
             String evento,
             UsuarioResponse usuarioAlvo,
             AssociadoResponse associado,
-            String motivo) {}
+            String motivo,
+
+            @Schema(
+                    allowableValues = {"UPLOAD", "ENVIO"},
+                    description = "Etapa da falha de uma mensagem de saída: upload do arquivo ou envio")
+            String etapaFalha,
+
+            @Schema(description = "Última mudança da mensagem (situação ou anexo)")
+            Instant atualizadoEm,
+
+            AnexoResponse anexo) {}
+
+    @Schema(name = "AnexoAtendimento", description = "Anexo de uma mensagem; o conteúdo só por rota autenticada")
+    record AnexoResponse(
+            @Schema(requiredMode = REQUIRED) long id,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO"})
+            String categoria,
+
+            String mimeType,
+
+            @Schema(description = "Nome original higienizado (só exibição)")
+            String nome,
+
+            Long tamanho,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    allowableValues = {
+                        "RECEBENDO",
+                        "PENDENTE",
+                        "PROCESSANDO",
+                        "FALHA_TEMPORARIA",
+                        "DISPONIVEL",
+                        "FALHA",
+                        "NAO_SUPORTADO"
+                    })
+            String situacao,
+
+            String erro) {
+
+        static AnexoResponse de(br.com.emconta.atendimento.nucleo.ConsultaAtendimento.AnexoResumo anexo) {
+            return anexo == null
+                    ? null
+                    : new AnexoResponse(
+                            anexo.id(),
+                            anexo.categoria(),
+                            anexo.mime(),
+                            anexo.nome(),
+                            anexo.tamanho(),
+                            anexo.situacao(),
+                            anexo.erro());
+        }
+    }
+
+    @Schema(name = "SituacaoMensagem", description = "Situação atual de uma mensagem já carregada")
+    record SituacaoResponse(
+            @Schema(requiredMode = REQUIRED) long id,
+            @Schema(requiredMode = REQUIRED) String situacao,
+            Integer erroCodigo,
+            String erroTitulo,
+            String etapaFalha,
+            Instant atualizadoEm,
+            AnexoResponse anexo) {}
+
+    @Schema(name = "ItemMidia", description = "Anexo listado na área Mídia")
+    record ItemMidiaResponse(
+            @Schema(requiredMode = REQUIRED) long id,
+            @Schema(requiredMode = REQUIRED) long mensagemId,
+            @Schema(requiredMode = REQUIRED) long atendimentoId,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    allowableValues = {"ENTRADA", "SAIDA"})
+            String direcao,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO"})
+            String categoria,
+
+            String mimeType,
+            String nome,
+            Long tamanho,
+            @Schema(requiredMode = REQUIRED) String situacao,
+            @Schema(requiredMode = REQUIRED) Instant registradoEm,
+            @Schema(description = "Legenda") String legenda) {}
+
+    @Schema(name = "PaginaMidia", description = "Página da área Mídia, do mais recente para o mais antigo")
+    record PaginaMidiaResponse(
+            @Schema(requiredMode = REQUIRED) List<ItemMidiaResponse> itens,
+
+            @Schema(description = "Cursor (id) para a próxima página; ausente no fim")
+            Long anterior) {}
+
+    @Schema(name = "PaginaLinhaDoTempo", description = "Página da linha do tempo, em ordem cronológica")
+    record PaginaLinhaDoTempoResponse(
+            @Schema(requiredMode = REQUIRED) List<ItemResponse> itens,
+
+            @Schema(description = "Cursor para a página anterior; ausente no início do histórico")
+            String anterior) {}
 
     @Schema(name = "TransferenciaRequest")
     record TransferenciaRequest(

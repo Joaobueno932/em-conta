@@ -190,6 +190,10 @@ public class Recebimento {
         long conversa = conversa(contato, agora);
         long atendimento = atendimentoAberto(conversa, agora);
         boolean texto = "text".equals(m.tipo()) && m.texto() != null;
+        FormatosAnexo.Categoria categoria = categoria(m);
+        String tipoMensagem = texto ? "TEXTO" : categoria != null ? categoria.name() : "NAO_SUPORTADO";
+        String conteudo =
+                texto ? m.texto() : categoria != null ? legenda(m.midia().legenda()) : null;
         try {
             jdbc.sql("insert into atd_mensagem (correlacao, conversa_id, atendimento_id, direcao, tipo, tipo_externo,"
                             + " texto, id_externo, situacao, horario_externo, criado_em, atualizado_em)"
@@ -198,9 +202,9 @@ public class Recebimento {
                     .param("correlacao", UUID.randomUUID().toString())
                     .param("conversa", conversa)
                     .param("atendimento", atendimento)
-                    .param("tipo", texto ? "TEXTO" : "NAO_SUPORTADO")
+                    .param("tipo", tipoMensagem)
                     .param("tipoExterno", m.tipo())
-                    .param("texto", texto ? m.texto() : null)
+                    .param("texto", conteudo)
                     .param("idExterno", m.idExterno())
                     .param("horario", m.horario() == null ? null : Timestamp.from(m.horario()))
                     .param("agora", Timestamp.from(agora))
@@ -208,12 +212,72 @@ public class Recebimento {
         } catch (DuplicateKeyException e) {
             return; // a mesma mensagem chegou por outra entrega ao mesmo tempo
         }
+        if (categoria != null) {
+            registrarAnexo(m, categoria, conversa, atendimento, agora);
+        }
         Instant horario = m.horario() != null ? m.horario() : agora;
         jdbc.sql("update atd_conversa set ultima_entrada_em = greatest(coalesce(ultima_entrada_em, :h), :h),"
                         + " ultima_mensagem_em = greatest(coalesce(ultima_mensagem_em, :agora), :agora) where id = :id")
                 .param("h", Timestamp.from(horario))
                 .param("agora", Timestamp.from(agora))
                 .param("id", conversa)
+                .update();
+    }
+
+    private static FormatosAnexo.Categoria categoria(MensagemRecebida m) {
+        if (m.midia() == null) {
+            return null;
+        }
+        return switch (m.tipo()) {
+            case "image" -> FormatosAnexo.Categoria.IMAGEM;
+            case "document" -> FormatosAnexo.Categoria.DOCUMENTO;
+            case "audio" -> FormatosAnexo.Categoria.AUDIO;
+            default -> null;
+        };
+    }
+
+    private static String legenda(String legenda) {
+        if (legenda == null || legenda.isBlank()) {
+            return null;
+        }
+        return legenda.length() > Atendimentos.TAMANHO_MAXIMO_TEXTO
+                ? legenda.substring(0, Atendimentos.TAMANHO_MAXIMO_TEXTO)
+                : legenda;
+    }
+
+    /**
+     * Anexo recebido: registrado na mesma transação da mensagem, antes de qualquer download (que é feito
+     * depois por {@link Midias}). MIME fora da lista aceita, ou de outra categoria, fica NAO_SUPORTADO e
+     * nada é baixado. Só metadados do webhook são gravados; nunca a URL temporária.
+     */
+    private void registrarAnexo(
+            MensagemRecebida m, FormatosAnexo.Categoria categoria, long conversa, long atendimento, Instant agora) {
+        long mensagem = jdbc.sql("select id from atd_mensagem where id_externo = :id")
+                .param("id", m.idExterno())
+                .query(Long.class)
+                .single();
+        var midia = m.midia();
+        boolean suportado = FormatosAnexo.porMime(midia.mimeType())
+                        .filter(f -> f.categoria() == categoria)
+                        .isPresent()
+                && midia.id() != null
+                && midia.id().matches("[A-Za-z0-9_.-]{1,128}");
+        String mime = FormatosAnexo.mimeBase(midia.mimeType());
+        jdbc.sql("insert into atd_anexo (mensagem_id, conversa_id, atendimento_id, direcao, categoria, mime_type, nome,"
+                        + " sha256_provedor, id_midia_externo, situacao, erro, proxima_tentativa_em, criado_em, atualizado_em)"
+                        + " values (:m, :c, :a, 'ENTRADA', :categoria, :mime, :nome, :sha, :midia, :situacao, :erro, :agora,"
+                        + " :agora, :agora)")
+                .param("m", mensagem)
+                .param("c", conversa)
+                .param("a", atendimento)
+                .param("categoria", categoria.name())
+                .param("mime", mime == null || mime.length() > 100 ? null : mime)
+                .param("nome", FormatosAnexo.nomeSeguro(midia.nomeArquivo()))
+                .param("sha", midia.sha256() == null || midia.sha256().length() > 100 ? null : midia.sha256())
+                .param("midia", suportado ? midia.id() : null)
+                .param("situacao", suportado ? "PENDENTE" : "NAO_SUPORTADO")
+                .param("erro", suportado ? null : "Formato não suportado nesta versão")
+                .param("agora", Timestamp.from(agora))
                 .update();
     }
 

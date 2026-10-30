@@ -243,11 +243,11 @@ envia autoridades: o `Ator` de cada operação é montado das permissões calcul
 | `vinculos-usina:consultar` | `GET /api/v1/usinas/{id}/vinculos`, `GET /api/v1/associados/{id}/vinculos-usina` |
 | `vinculos-usina:criar` | `GET /api/v1/vinculos-usina/ucs-candidatas`, `POST /api/v1/usinas/{id}/vinculos` |
 | `vinculos-usina:encerrar` | `POST /api/v1/usinas/{id}/vinculos/{vinculoId}/encerramento` |
-| `atendimento:consultar` | `GET /api/v1/atendimento/canal`, `GET`/`PUT …/presenca`, `GET …/atendimentos`, `GET …/atendimentos/{id}`, `GET …/atendimentos/{id}/linha-do-tempo`, `GET …/historico` |
+| `atendimento:consultar` | `GET /api/v1/atendimento/canal`, `GET`/`PUT …/presenca`, `GET …/atendimentos`, `GET …/atendimentos/{id}`, `GET …/atendimentos/{id}/linha-do-tempo` e `…/linha-do-tempo/situacoes`, `GET …/atendimentos/{id}/midia`, `GET …/atendimentos/{id}/anexos/{anexo}/conteudo` (só anexo da conversa do atendimento), `GET …/historico` |
 | `atendimento:assumir` | `POST /api/v1/atendimento/atendimentos/{id}/assuncao` |
-| `atendimento:responder` | `POST /api/v1/atendimento/atendimentos/{id}/mensagens` (só o responsável; destino de transferência precisa desta permissão) |
-| `atendimento:transferir` | `POST …/atendimentos/{id}/transferencia`, `GET /api/v1/atendimento/responsaveis` |
-| `atendimento:encerrar` | `POST …/atendimentos/{id}/encerramento` |
+| `atendimento:responder` | `POST /api/v1/atendimento/atendimentos/{id}/mensagens`, `POST …/{id}/anexos` (multipart, com CSRF) e `POST …/{id}/anexos/{anexo}/nova-tentativa` (só o responsável; destino de transferência precisa desta permissão) |
+| `atendimento:transferir` | `POST …/atendimentos/{id}/transferencia` (só o responsável atual, em andamento), `GET /api/v1/atendimento/responsaveis` |
+| `atendimento:encerrar` | `POST …/atendimentos/{id}/encerramento` (só o responsável atual, em andamento) |
 | `atendimento:vincular-associado` | `PUT …/atendimentos/{id}/associado`, `GET …/atendimentos/{id}/associados-sugeridos`, `GET /api/v1/atendimento/associados` |
 | `atendimento:reprocessar` | `GET /api/v1/atendimento/webhook-falhas`, `POST …/webhook-eventos/{id}/reprocessamento` |
 | (público, assinatura HMAC) | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` — ver [atendimento.md](atendimento.md#provedor) |

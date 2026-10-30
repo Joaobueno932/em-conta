@@ -40,7 +40,7 @@ public class Atendimentos {
     /** Janela de atendimento da Cloud API: texto livre só até 24 h após a última mensagem do cliente. */
     static final Duration JANELA = Duration.ofHours(24);
 
-    private static final Pattern CHAVE = Pattern.compile("[A-Za-z0-9-]{8,64}");
+    static final Pattern CHAVE = Pattern.compile("[A-Za-z0-9-]{8,64}");
 
     private final JdbcClient jdbc;
     private final Autoria autoria;
@@ -56,7 +56,7 @@ public class Atendimentos {
         this.clock = clock;
     }
 
-    private record Estado(long id, long conversaId, String situacao, Long responsavel, long versao) {}
+    record Estado(long id, long conversaId, String situacao, Long responsavel, long versao) {}
 
     private Estado travar(long atendimento) {
         return jdbc.sql(
@@ -92,11 +92,7 @@ public class Atendimentos {
     @Transactional
     public void transferir(long ator, long atendimento, long versao, Long destino, String motivo) {
         Estado estado = travar(atendimento);
-        exigirVersao(estado, versao);
-        if (!"EM_ATENDIMENTO".equals(estado.situacao())) {
-            throw FalhaAtendimento.conflito(
-                    "ATENDIMENTO_SEM_RESPONSAVEL", "Só é possível transferir um atendimento em andamento.");
-        }
+        exigirResponsavel(ator, estado, versao, "transferir");
         String motivoLimpo = limpar(motivo, 500, "motivo");
         Instant agora = clock.instant();
         if (destino == null) {
@@ -134,10 +130,7 @@ public class Atendimentos {
     @Transactional
     public void encerrar(long ator, long atendimento, long versao) {
         Estado estado = travar(atendimento);
-        exigirVersao(estado, versao);
-        if ("ENCERRADO".equals(estado.situacao())) {
-            throw FalhaAtendimento.conflito("ATENDIMENTO_ENCERRADO", "Este atendimento já foi encerrado.");
-        }
+        exigirResponsavel(ator, estado, versao, "encerrar");
         Instant agora = clock.instant();
         jdbc.sql("update atd_atendimento set situacao = 'ENCERRADO', encerrado_em = :agora, encerrado_por = :ator,"
                         + " versao = versao + 1 where id = :id")
@@ -149,8 +142,15 @@ public class Atendimentos {
     }
 
     /**
-     * Enfileira uma resposta de texto (outbox). Não envia: o {@link Envio} envia depois. A chave de
-     * idempotência do cliente faz uma repetição da mesma requisição devolver a mesma mensagem.
+     * Enfileira uma resposta de texto (outbox). Não envia: o {@link Envio} envia depois.
+     *
+     * <p>Idempotência: a chave do cliente identifica uma operação (autor + atendimento + texto já
+     * normalizado com {@code strip()}, o mesmo texto que é gravado e enviado). A repetição exata devolve a
+     * mesma mensagem, sem nova gravação nem novo envio, inclusive depois de transferência ou encerramento.
+     * A mesma chave com outro autor, atendimento ou texto é recusada com 409
+     * {@code CHAVE_IDEMPOTENCIA_REUTILIZADA}. A garantia é a restrição única do banco: na disputa entre
+     * requisições simultâneas, a perdedora recebe chave duplicada, relê a vencedora e aplica a mesma
+     * comparação.
      *
      * @return id da mensagem
      */
@@ -159,45 +159,21 @@ public class Atendimentos {
         if (chaveIdempotencia == null || !CHAVE.matcher(chaveIdempotencia).matches()) {
             throw FalhaAtendimento.campoInvalido("chaveIdempotencia", "Chave de idempotência inválida.");
         }
-        Optional<Map<String, Object>> repetida = jdbc
-                .sql("select id, autor_usuario_id from atd_mensagem where chave_idempotencia = :chave")
-                .param("chave", chaveIdempotencia)
-                .query()
-                .listOfRows()
-                .stream()
-                .findFirst();
-        if (repetida.isPresent()) {
-            if (((Number) repetida.get().get("autor_usuario_id")).longValue() != ator) {
-                throw FalhaAtendimento.campoInvalido("chaveIdempotencia", "Chave de idempotência inválida.");
-            }
-            return ((Number) repetida.get().get("id")).longValue();
-        }
         String conteudo = texto == null ? "" : texto.strip();
         if (conteudo.isEmpty() || conteudo.length() > TAMANHO_MAXIMO_TEXTO) {
             throw FalhaAtendimento.campoInvalido(
                     "texto", "Escreva uma mensagem de 1 a " + TAMANHO_MAXIMO_TEXTO + " caracteres.");
         }
+        Operacao pedida = new Operacao(ator, atendimento, conteudo);
+        Optional<Long> repetida = repeticao(chaveIdempotencia, pedida, false);
+        if (repetida.isPresent()) {
+            return repetida.get();
+        }
         if (!canal.configurado()) {
             throw FalhaAtendimento.canalNaoConfigurado();
         }
-        Estado estado = travar(atendimento);
-        if (!"EM_ATENDIMENTO".equals(estado.situacao())
-                || estado.responsavel() == null
-                || estado.responsavel() != ator) {
-            throw FalhaAtendimento.conflito("NAO_E_RESPONSAVEL", "Assuma o atendimento para responder esta conversa.");
-        }
+        Estado estado = exigirPodeResponder(ator, atendimento, true);
         Instant agora = clock.instant();
-        Instant ultimaEntrada = jdbc.sql("select ultima_entrada_em from atd_conversa where id = :id")
-                .param("id", estado.conversaId())
-                .query((rs, n) ->
-                        rs.getTimestamp(1) == null ? null : rs.getTimestamp(1).toInstant())
-                .single();
-        if (ultimaEntrada == null || ultimaEntrada.plus(JANELA).isBefore(agora)) {
-            throw FalhaAtendimento.conflito(
-                    "JANELA_ENCERRADA",
-                    "Passaram mais de 24 horas desde a última mensagem do cliente. Pelas regras do WhatsApp, só é"
-                            + " possível responder com um modelo de mensagem aprovado, que ainda não está disponível.");
-        }
         try {
             jdbc.sql(
                             "insert into atd_mensagem (correlacao, conversa_id, atendimento_id, direcao, autor_usuario_id, tipo,"
@@ -213,7 +189,10 @@ public class Atendimentos {
                     .param("chave", chaveIdempotencia)
                     .update();
         } catch (DuplicateKeyException e) {
-            throw FalhaAtendimento.conflito("REQUISICAO_REPETIDA", "Esta mensagem já foi registrada.");
+            // Outra requisição com a mesma chave gravou primeiro (o INSERT esperou a confirmação dela).
+            return repeticao(chaveIdempotencia, pedida, true)
+                    .orElseThrow(
+                            () -> FalhaAtendimento.conflito("REQUISICAO_REPETIDA", "Esta mensagem já foi registrada."));
         }
         jdbc.sql("update atd_conversa set ultima_mensagem_em = :agora where id = :id")
                 .param("agora", Timestamp.from(agora))
@@ -223,6 +202,92 @@ public class Atendimentos {
                 .param("chave", chaveIdempotencia)
                 .query(Long.class)
                 .single();
+    }
+
+    /**
+     * Regras para registrar uma resposta (texto ou anexo): atendimento EM_ATENDIMENTO, o ator é o
+     * responsável atual e a janela de 24 h está aberta. Com {@code travar}, a linha do atendimento fica
+     * travada até o fim da transação (use ao gravar); sem, é só uma conferência antecipada.
+     */
+    Estado exigirPodeResponder(long ator, long atendimento, boolean travar) {
+        Estado estado = travar ? travar(atendimento) : ler(atendimento);
+        if (!"EM_ATENDIMENTO".equals(estado.situacao())
+                || estado.responsavel() == null
+                || estado.responsavel() != ator) {
+            throw FalhaAtendimento.conflito("NAO_E_RESPONSAVEL", "Assuma o atendimento para responder esta conversa.");
+        }
+        Instant ultimaEntrada = jdbc.sql("select ultima_entrada_em from atd_conversa where id = :id")
+                .param("id", estado.conversaId())
+                .query((rs, n) ->
+                        rs.getTimestamp(1) == null ? null : rs.getTimestamp(1).toInstant())
+                .single();
+        if (!janelaAberta(ultimaEntrada, clock.instant())) {
+            throw FalhaAtendimento.conflito(
+                    "JANELA_ENCERRADA",
+                    "Passaram mais de 24 horas desde a última mensagem do cliente. Pelas regras do WhatsApp, só é"
+                            + " possível responder com um modelo de mensagem aprovado, que ainda não está disponível.");
+        }
+        return estado;
+    }
+
+    /** Só situação e responsável (ações que não enviam nada ao contato, como baixar de novo um anexo). */
+    Estado exigirPodeResponderSemJanela(long ator, long atendimento) {
+        Estado estado = ler(atendimento);
+        if (!"EM_ATENDIMENTO".equals(estado.situacao())
+                || estado.responsavel() == null
+                || estado.responsavel() != ator) {
+            throw FalhaAtendimento.conflito("NAO_E_RESPONSAVEL", "Só o responsável atual pode fazer isto.");
+        }
+        return estado;
+    }
+
+    private Estado ler(long atendimento) {
+        return jdbc.sql("select id, conversa_id, situacao, responsavel_id, versao from atd_atendimento where id = :id")
+                .param("id", atendimento)
+                .query((rs, n) -> new Estado(
+                        rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getObject(4, Long.class), rs.getLong(5)))
+                .optional()
+                .orElseThrow(() ->
+                        FalhaAtendimento.naoEncontrado("ATENDIMENTO_NAO_ENCONTRADO", "Atendimento não encontrado."));
+    }
+
+    /** Janela de 24 h: aberta até o instante exato {@code ultimaEntrada + 24 h}, inclusive. */
+    static boolean janelaAberta(Instant ultimaEntrada, Instant agora) {
+        return ultimaEntrada != null && !agora.isAfter(ultimaEntrada.plus(JANELA));
+    }
+
+    private record Operacao(long autor, long atendimento, String texto) {}
+
+    /**
+     * Mensagem já registrada com a chave, se for a mesma operação; outra operação com a mesma chave é
+     * conflito. {@code atual} usa leitura com trava, que enxerga a linha confirmada por outra transação
+     * depois do início desta.
+     */
+    private Optional<Long> repeticao(String chave, Operacao pedida, boolean atual) {
+        Optional<Map<String, Object>> linha = jdbc
+                .sql("select id, autor_usuario_id, atendimento_id, tipo, texto from atd_mensagem"
+                        + " where chave_idempotencia = :chave" + (atual ? " for share" : ""))
+                .param("chave", chave)
+                .query()
+                .listOfRows()
+                .stream()
+                .findFirst();
+        if (linha.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, Object> registrada = linha.get();
+        Object autor = registrada.get("autor_usuario_id");
+        boolean mesma = autor != null
+                && "TEXTO".equals(registrada.get("tipo"))
+                && ((Number) autor).longValue() == pedida.autor()
+                && ((Number) registrada.get("atendimento_id")).longValue() == pedida.atendimento()
+                && pedida.texto().equals(registrada.get("texto"));
+        if (!mesma) {
+            throw FalhaAtendimento.conflito(
+                    "CHAVE_IDEMPOTENCIA_REUTILIZADA",
+                    "Esta chave de idempotência já foi usada em outra mensagem. Nada foi registrado.");
+        }
+        return Optional.of(((Number) registrada.get("id")).longValue());
     }
 
     /**
@@ -270,7 +335,26 @@ public class Atendimentos {
                 agora);
     }
 
-    private static void exigirVersao(Estado estado, long versao) {
+    /**
+     * Transferir, devolver e encerrar: só em EM_ATENDIMENTO, só pelo responsável atual e só sobre a versão
+     * que a pessoa viu. A linha já está travada ({@link #travar}) até o fim da transação, então nada muda
+     * entre esta verificação e a gravação. Não há exceção por perfil: administrador também precisa ser o
+     * responsável.
+     */
+    private static void exigirResponsavel(long ator, Estado estado, long versao, String acao) {
+        switch (estado.situacao()) {
+            case "ENCERRADO" ->
+                throw FalhaAtendimento.conflito("ATENDIMENTO_ENCERRADO", "Este atendimento já foi encerrado.");
+            case "AGUARDANDO" ->
+                throw FalhaAtendimento.conflito(
+                        "ATENDIMENTO_SEM_RESPONSAVEL",
+                        "Só é possível " + acao + " um atendimento em andamento. Assuma-o primeiro.");
+            default -> {}
+        }
+        if (estado.responsavel() == null || estado.responsavel() != ator) {
+            throw FalhaAtendimento.conflito(
+                    "NAO_E_RESPONSAVEL", "Só o responsável atual pode " + acao + " este atendimento.");
+        }
         if (estado.versao() != versao) {
             throw conflitoConcorrente();
         }

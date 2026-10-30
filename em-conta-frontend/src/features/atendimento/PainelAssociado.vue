@@ -16,13 +16,14 @@ import {
   vincularAssociado,
   type AssociadoAtendimento,
 } from './atendimento-api'
+import MidiaConversa from './MidiaConversa.vue'
 
 /**
  * Painel do associado (AT-06). Telefone igual não vincula sozinho: as sugestões só aparecem para o
  * atendente escolher. Trocar ou remover um vínculo exige motivo e fica no histórico.
  */
 const props = defineProps<{ id: number }>()
-const emit = defineEmits<{ fechar: [] }>()
+const emit = defineEmits<{ fechar: []; abrirMensagem: [mensagemId: number] }>()
 
 const http = useHttpClient()
 const queryClient = useQueryClient()
@@ -181,10 +182,7 @@ function confirmar(associadoId?: number) {
         </div>
       </div>
 
-      <section class="midia" aria-labelledby="titulo-midia">
-        <h3 id="titulo-midia">Mídia</h3>
-        <p class="ajuda">Anexos ainda não estão disponíveis nesta versão.</p>
-      </section>
+      <MidiaConversa :atendimento="id" @abrir-mensagem="(m) => emit('abrirMensagem', m)" />
     </template>
   </aside>
 </template>
@@ -237,10 +235,5 @@ h3 {
   list-style: none;
   padding: 0;
   margin: 0.25rem 0;
-}
-
-.midia {
-  border-top: 1px solid var(--cor-borda);
-  padding-top: 0.5rem;
 }
 </style>

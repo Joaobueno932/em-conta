@@ -5,9 +5,11 @@ import br.com.emconta.associados.CatalogoAssociados;
 import br.com.emconta.associados.CatalogoAssociados.ResumoAssociado;
 import br.com.emconta.atendimento.nucleo.Atendimentos;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento;
+import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Cursor;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Resumo;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Visao;
 import br.com.emconta.atendimento.nucleo.Recebimento;
+import br.com.emconta.atendimento.web.AtendimentoApi.AnexoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.AssociadoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.CanalResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.ContagensResponse;
@@ -15,6 +17,7 @@ import br.com.emconta.atendimento.web.AtendimentoApi.DetalheResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.EncerramentoRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.FalhaWebhookResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.ItemResponse;
+import br.com.emconta.atendimento.web.AtendimentoApi.PaginaLinhaDoTempoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.PaginaResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.PresencaRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.PresencaResponse;
@@ -26,6 +29,7 @@ import br.com.emconta.atendimento.web.AtendimentoApi.UsuarioResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.VinculoRequest;
 import br.com.emconta.integracoes.WhatsAppCloud;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -167,10 +171,21 @@ class AtendimentoController {
     @GetMapping("/atendimentos/{id}/linha-do-tempo")
     @Operation(
             operationId = "linhaDoTempo",
-            summary = "Mensagens e eventos da conversa (ou só deste atendimento) (atendimento:consultar)")
-    List<ItemResponse> linhaDoTempo(@PathVariable long id, @RequestParam(defaultValue = "false") boolean somenteEste) {
+            summary = "Página de mensagens e eventos da conversa (ou só deste atendimento), da mais recente para"
+                    + " trás por cursor (atendimento:consultar)")
+    @ApiResponse(responseCode = "400", description = "DADOS_INVALIDOS (cursor ou tamanho)")
+    PaginaLinhaDoTempoResponse linhaDoTempo(
+            @PathVariable long id,
+            @RequestParam(defaultValue = "false") boolean somenteEste,
+            @Parameter(description = "Cursor de um item: devolve os itens anteriores a ele")
+                    @RequestParam(required = false)
+                    @Size(max = 40)
+                    String antes,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(ConsultaAtendimento.TAMANHO_MAXIMO_PAGINA) int tamanho) {
+        Cursor cursor = Cursor.ler(antes).orElse(null);
         var detalhe = consulta.detalhe(id).orElseThrow(AtendimentoController::naoEncontrado);
-        var itens = consulta.linhaDoTempo(detalhe.resumo().conversaId(), somenteEste ? id : null, 200);
+        var pagina = consulta.linhaDoTempo(detalhe.resumo().conversaId(), somenteEste ? id : null, cursor, tamanho);
+        var itens = pagina.itens();
         Set<Long> usuarios = new HashSet<>();
         Set<Long> ids = new HashSet<>();
         itens.forEach(i -> {
@@ -180,25 +195,31 @@ class AtendimentoController {
         });
         Map<Long, String> nomes = autoria.nomes(usuarios);
         Map<Long, ResumoAssociado> porId = indexar(associados.porIds(ids));
-        return itens.stream()
-                .map(i -> new ItemResponse(
-                        i.tipo(),
-                        i.id(),
-                        i.ocorridoEm(),
-                        i.atendimentoId(),
-                        i.direcao(),
-                        i.tipoMensagem(),
-                        i.tipoExterno(),
-                        i.texto(),
-                        i.situacao(),
-                        i.erroCodigo(),
-                        i.erroTitulo(),
-                        usuario(i.autorId(), nomes),
-                        i.evento(),
-                        usuario(i.usuarioAlvoId(), nomes),
-                        associado(porId.get(i.associadoId())),
-                        i.motivo()))
-                .toList();
+        return new PaginaLinhaDoTempoResponse(
+                itens.stream()
+                        .map(i -> new ItemResponse(
+                                i.tipo(),
+                                i.id(),
+                                i.cursor(),
+                                i.ocorridoEm(),
+                                i.atendimentoId(),
+                                i.direcao(),
+                                i.tipoMensagem(),
+                                i.tipoExterno(),
+                                i.texto(),
+                                i.situacao(),
+                                i.erroCodigo(),
+                                i.erroTitulo(),
+                                usuario(i.autorId(), nomes),
+                                i.evento(),
+                                usuario(i.usuarioAlvoId(), nomes),
+                                associado(porId.get(i.associadoId())),
+                                i.motivo(),
+                                i.etapaFalha(),
+                                i.atualizadoEm(),
+                                AnexoResponse.de(i.anexo())))
+                        .toList(),
+                pagina.anterior());
     }
 
     @PostMapping("/atendimentos/{id}/assuncao")
@@ -215,7 +236,10 @@ class AtendimentoController {
             operationId = "transferirAtendimento",
             summary = "Transfere para outro responsável ou devolve à fila (atendimento:transferir)")
     @ApiResponse(responseCode = "204", description = "Transferido")
-    @ApiResponse(responseCode = "409", description = "CONFLITO_CONCORRENTE ou ATENDIMENTO_SEM_RESPONSAVEL")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE")
     ResponseEntity<Void> transferir(@PathVariable long id, @Valid @RequestBody TransferenciaRequest corpo) {
         atendimentos.transferir(autoria.usuarioAtual(), id, corpo.versao(), corpo.destinoId(), corpo.motivo());
         return ResponseEntity.noContent().build();
@@ -224,7 +248,10 @@ class AtendimentoController {
     @PostMapping(path = "/atendimentos/{id}/encerramento", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(operationId = "encerrarAtendimento", summary = "Encerra o atendimento (atendimento:encerrar)")
     @ApiResponse(responseCode = "204", description = "Encerrado")
-    @ApiResponse(responseCode = "409", description = "CONFLITO_CONCORRENTE ou ATENDIMENTO_ENCERRADO")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE")
     ResponseEntity<Void> encerrar(@PathVariable long id, @Valid @RequestBody EncerramentoRequest corpo) {
         atendimentos.encerrar(autoria.usuarioAtual(), id, corpo.versao());
         return ResponseEntity.noContent().build();
@@ -235,7 +262,9 @@ class AtendimentoController {
             operationId = "responderAtendimento",
             summary = "Registra resposta de texto para envio assíncrono (atendimento:responder)")
     @ApiResponse(responseCode = "202", description = "Registrada como PENDENTE; envio e entrega vêm depois")
-    @ApiResponse(responseCode = "409", description = "NAO_E_RESPONSAVEL ou JANELA_ENCERRADA")
+    @ApiResponse(
+            responseCode = "409",
+            description = "NAO_E_RESPONSAVEL, JANELA_ENCERRADA ou CHAVE_IDEMPOTENCIA_REUTILIZADA")
     @ApiResponse(responseCode = "503", description = "CANAL_NAO_CONFIGURADO")
     ResponseEntity<RespostaResponse> responder(@PathVariable long id, @Valid @RequestBody RespostaRequest corpo) {
         long mensagem = atendimentos.responder(autoria.usuarioAtual(), id, corpo.texto(), corpo.chaveIdempotencia());

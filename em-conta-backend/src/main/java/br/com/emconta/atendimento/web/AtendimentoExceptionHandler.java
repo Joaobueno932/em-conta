@@ -23,6 +23,17 @@ class AtendimentoExceptionHandler {
         return problema(falha.status(), falha.codigo(), falha.getMessage(), falha.campo(), request);
     }
 
+    /** Multipart acima do teto configurado: recusado antes de chegar ao serviço. */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ResponseEntity<ProblemDetail> muitoGrande(Exception falha, HttpServletRequest request) {
+        return problema(
+                HttpStatus.CONTENT_TOO_LARGE,
+                "ARQUIVO_MUITO_GRANDE",
+                "Arquivo acima do limite aceito.",
+                "arquivo",
+                request);
+    }
+
     @ExceptionHandler(NaoEncontrado.class)
     ResponseEntity<ProblemDetail> naoEncontrado(NaoEncontrado falha, HttpServletRequest request) {
         return problema(HttpStatus.NOT_FOUND, "ATENDIMENTO_NAO_ENCONTRADO", falha.getMessage(), null, request);

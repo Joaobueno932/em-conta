@@ -21,10 +21,12 @@ class ProcessamentoAtendimento {
 
     private final Recebimento recebimento;
     private final Envio envio;
+    private final Midias midias;
 
-    ProcessamentoAtendimento(Recebimento recebimento, Envio envio) {
+    ProcessamentoAtendimento(Recebimento recebimento, Envio envio, Midias midias) {
         this.recebimento = recebimento;
         this.envio = envio;
+        this.midias = midias;
     }
 
     @Scheduled(
@@ -34,6 +36,7 @@ class ProcessamentoAtendimento {
         try {
             recebimento.processarPendentes(50);
             envio.enviarPendentes(20);
+            midias.processarPendentes(10);
         } catch (RuntimeException e) {
             log.warn(
                     "Atendimento: falha no processamento periódico ({})",

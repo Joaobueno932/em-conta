@@ -10,12 +10,14 @@ import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
 import {
   chavesAtendimento,
   formatarDataHora,
-  linhaDoTempo,
   nomeContato,
   obterDetalhe,
   ROTULO_EVENTO,
   ROTULO_SITUACAO_MENSAGEM,
 } from './atendimento-api'
+import AnexoMensagem from './AnexoMensagem.vue'
+import MidiaConversa from './MidiaConversa.vue'
+import { useLinhaDoTempo } from './use-linha-do-tempo'
 
 /** Detalhe de um atendimento (HG-03), somente leitura: só as mensagens e eventos deste ciclo. */
 const props = defineProps<{ id: string }>()
@@ -26,11 +28,17 @@ const detalhe = useQuery({
   queryKey: computed(() => chavesAtendimento.detalhe(id.value)),
   queryFn: () => obterDetalhe(http, id.value),
 })
-const linha = useQuery({
-  queryKey: computed(() => chavesAtendimento.linha(id.value, true)),
-  queryFn: () => linhaDoTempo(http, id.value, true),
-})
+// Somente leitura e só deste ciclo; páginas anteriores sob demanda, sem consulta periódica.
+const linha = useLinhaDoTempo(id, true, false)
+const recente = linha.recente
 const resumo = computed(() => detalhe.data.value?.resumo)
+
+/** "Ver na conversa" na área Mídia: vai até a mensagem, se já estiver carregada. */
+function irPara(mensagemId: number) {
+  const alvo = document.getElementById(`mensagem-${mensagemId}`)
+  alvo?.scrollIntoView({ block: 'center' })
+  alvo?.focus()
+}
 </script>
 
 <template>
@@ -68,41 +76,80 @@ const resumo = computed(() => detalhe.data.value?.resumo)
         </div>
       </dl>
 
+      <MidiaConversa :atendimento="id" somente-este @abrir-mensagem="irPara" />
+
       <h2>Mensagens e eventos</h2>
-      <p v-if="linha.isPending.value" role="status">Carregando…</p>
-      <AlertaMensagem v-else-if="linha.isError.value" tipo="erro">
-        {{ describeApiError(linha.error.value) }}
+      <p v-if="recente.isPending.value" role="status">Carregando…</p>
+      <AlertaMensagem v-else-if="recente.isError.value" tipo="erro">
+        {{ describeApiError(recente.error.value) }}
       </AlertaMensagem>
-      <ol v-else class="cartao linha">
-        <li v-for="item in linha.data.value" :key="`${item.tipo}-${item.id}`">
-          <span class="ajuda">{{ formatarDataHora(item.ocorridoEm) }}</span>
-          <template v-if="item.tipo === 'EVENTO'">
-            <em>
-              {{ item.autor?.nome }} {{ ROTULO_EVENTO[item.evento ?? ''] ?? item.evento }}
-              <template v-if="item.usuarioAlvo">para {{ item.usuarioAlvo.nome }}</template>
-              <template v-if="item.associado">{{ item.associado.nome }}</template>
-              <template v-if="item.motivo">({{ item.motivo }})</template>
-            </em>
+      <template v-else>
+        <div class="anteriores">
+          <p v-if="linha.carregandoAnteriores.value" role="status">
+            Carregando mensagens anteriores…
+          </p>
+          <template v-else-if="linha.erroAnteriores.value">
+            <AlertaMensagem tipo="erro">
+              Não foi possível carregar as mensagens anteriores.
+              {{ describeApiError(linha.erroAnteriores.value) }}
+            </AlertaMensagem>
+            <button type="button" class="secundario" @click="linha.carregarAnteriores()">
+              Tentar de novo
+            </button>
           </template>
-          <template v-else>
-            <strong
-              >{{
-                item.direcao === 'ENTRADA' ? 'Contato' : (item.autor?.nome ?? 'Equipe')
-              }}:</strong
-            >
-            <span class="texto">
-              {{
-                item.tipoMensagem === 'NAO_SUPORTADO'
-                  ? `[${item.tipoExterno} não suportado]`
-                  : item.texto
-              }}
-            </span>
-            <span v-if="item.direcao === 'SAIDA'" class="ajuda">
-              {{ ROTULO_SITUACAO_MENSAGEM[item.situacao ?? ''] }}
-            </span>
-          </template>
-        </li>
-      </ol>
+          <button
+            v-else-if="linha.temAnteriores.value"
+            type="button"
+            class="secundario"
+            @click="linha.carregarAnteriores()"
+          >
+            Carregar mensagens anteriores
+          </button>
+          <p v-else class="ajuda">Início do histórico</p>
+        </div>
+        <ol class="cartao linha">
+          <li
+            v-for="item in linha.itens.value"
+            :id="item.tipo === 'MENSAGEM' ? `mensagem-${item.id}` : undefined"
+            :key="`${item.tipo}-${item.id}`"
+            tabindex="-1"
+          >
+            <span class="ajuda">{{ formatarDataHora(item.ocorridoEm) }}</span>
+            <template v-if="item.tipo === 'EVENTO'">
+              <em>
+                {{ item.autor?.nome }} {{ ROTULO_EVENTO[item.evento ?? ''] ?? item.evento }}
+                <template v-if="item.usuarioAlvo">para {{ item.usuarioAlvo.nome }}</template>
+                <template v-if="item.associado">{{ item.associado.nome }}</template>
+                <template v-if="item.motivo">({{ item.motivo }})</template>
+              </em>
+            </template>
+            <template v-else>
+              <strong
+                >{{
+                  item.direcao === 'ENTRADA' ? 'Contato' : (item.autor?.nome ?? 'Equipe')
+                }}:</strong
+              >
+              <AnexoMensagem
+                v-if="item.anexo"
+                :atendimento="id"
+                :anexo="item.anexo"
+                :legenda="item.texto"
+                somente-este
+              />
+              <span class="texto">
+                {{
+                  item.tipoMensagem === 'NAO_SUPORTADO'
+                    ? `[${item.tipoExterno} não suportado]`
+                    : item.texto
+                }}
+              </span>
+              <span v-if="item.direcao === 'SAIDA'" class="ajuda">
+                {{ ROTULO_SITUACAO_MENSAGEM[item.situacao ?? ''] }}
+              </span>
+            </template>
+          </li>
+        </ol>
+      </template>
     </template>
   </main>
 </template>
@@ -121,6 +168,14 @@ const resumo = computed(() => detalhe.data.value?.resumo)
 
 .dados dd {
   margin: 0;
+}
+
+.anteriores {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
 }
 
 .linha {

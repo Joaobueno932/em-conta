@@ -90,7 +90,7 @@ $env:EM_CONTA_API_PROXY_TARGET = "http://localhost:8090"
 npm run test:e2e
 ```
 
-A jornada de atendimento (`e2e/atendimento.spec.ts`) usa um **ambiente externo controlado, só de
+As jornadas de atendimento (`e2e/atendimento.spec.ts` e `e2e/anexos.spec.ts`) usam um **ambiente externo controlado, só de
 teste** (`e2e/whatsapp-controlado.ts`): um servidor local no lugar da Graph API e webhooks assinados
 com segredo fictício. Nada vai para a Meta nem para o número oficial. A API de testes recebe valores
 fictícios (escolha os seus; não são credenciais):
@@ -100,6 +100,10 @@ fictícios (escolha os seus; não são credenciais):
 #   -e WHATSAPP_ACCESS_TOKEN=e2e-ficticio -e WHATSAPP_PHONE_NUMBER_ID=e2e-numero-ficticio
 #   -e WHATSAPP_APP_SECRET=e2e-segredo-ficticio -e WHATSAPP_VERIFY_TOKEN=e2e-ficticio
 #   -e WHATSAPP_GRAPH_URL=http://host.docker.internal:8099
+# anexos (e2e/anexos.spec.ts): MinIO local com um bucket só dos testes, criado pela API
+#   -e ARMAZENAMENTO_ENDPOINT=http://minio:9000 -e ARMAZENAMENTO_BUCKET=emconta-e2e
+#   -e ARMAZENAMENTO_CHAVE_ACESSO=<usuário do MinIO local> -e ARMAZENAMENTO_CHAVE_SECRETA=<senha>
+#   -e ARMAZENAMENTO_CRIAR_BUCKET=true
 $env:E2E_WHATSAPP_APP_SECRET = "e2e-segredo-ficticio"        # o mesmo da API de testes
 $env:E2E_WHATSAPP_PHONE_NUMBER_ID = "e2e-numero-ficticio"
 # $env:E2E_GRAPH_PORT = "8099"                                # padrão

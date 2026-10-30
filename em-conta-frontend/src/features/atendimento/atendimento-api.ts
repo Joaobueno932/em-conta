@@ -22,6 +22,8 @@ export const chavesAtendimento = {
     ['atendimento', 'fila', visao, busca, pagina] as const,
   detalhe: (id: number) => ['atendimento', 'detalhe', id] as const,
   linha: (id: number, somenteEste: boolean) => ['atendimento', 'linha', id, somenteEste] as const,
+  midia: (id: number, somenteEste: boolean, categoria: string) =>
+    ['atendimento', 'midia', id, somenteEste, categoria] as const,
   historico: (busca: string, de: string, ate: string, pagina: number) =>
     ['atendimento', 'historico', busca, de, ate, pagina] as const,
   canal: ['atendimento', 'canal'] as const,
@@ -41,7 +43,12 @@ export const ROTULO_SITUACAO_MENSAGEM: Record<string, string> = {
   LIDA: 'Lida',
   FALHA: 'Falha no envio',
   DESCONHECIDA: 'Resultado desconhecido — confirme com o cliente antes de reenviar',
+  JANELA_EXPIRADA:
+    'Não enviada: a janela de 24 horas expirou antes do envio. Nada foi enviado ao WhatsApp; o contato precisa mandar uma nova mensagem',
 }
+
+/** Situações de saída que terminaram sem envio confirmado pelo canal. */
+export const SITUACOES_SEM_ENVIO = ['FALHA', 'JANELA_EXPIRADA']
 
 export const ROTULO_EVENTO: Record<string, string> = {
   ATENDIMENTO_INICIADO: 'Novo atendimento na fila',
@@ -64,10 +71,166 @@ export function obterDetalhe(http: HttpClient, id: number) {
   return http.get<Detalhe>(`/v1/atendimento/atendimentos/${id}`)
 }
 
-export function linhaDoTempo(http: HttpClient, id: number, somenteEste = false) {
-  return http.get<Item[]>(
-    `/v1/atendimento/atendimentos/${id}/linha-do-tempo?somenteEste=${somenteEste}`,
+export type PaginaLinhaDoTempo = components['schemas']['PaginaLinhaDoTempo']
+
+/** Itens por página da linha do tempo (o servidor aceita até 100). */
+export const TAMANHO_LINHA = 50
+
+/**
+ * Uma página da linha do tempo, em ordem cronológica: as mais recentes ou, com `antes`, as
+ * imediatamente anteriores a esse cursor.
+ */
+export function linhaDoTempo(
+  http: HttpClient,
+  id: number,
+  opcoes: { somenteEste?: boolean; antes?: string } = {},
+) {
+  const params = new URLSearchParams({
+    somenteEste: String(opcoes.somenteEste ?? false),
+    tamanho: String(TAMANHO_LINHA),
+  })
+  if (opcoes.antes) params.set('antes', opcoes.antes)
+  return http.get<PaginaLinhaDoTempo>(`/v1/atendimento/atendimentos/${id}/linha-do-tempo?${params}`)
+}
+
+/**
+ * Compara cursores (`<micros>.<ordem>.<id>`): a ordem da linha do tempo, igual à do servidor.
+ * Microssegundos desde 1970 cabem com folga em `number` (abaixo de 2^53).
+ */
+export function compararCursor(a: string, b: string): number {
+  const [ma = 0, oa = 0, ia = 0] = a.split('.').map(Number)
+  const [mb = 0, ob = 0, ib = 0] = b.split('.').map(Number)
+  return ma - mb || oa - ob || ia - ib
+}
+
+export type Anexo = components['schemas']['AnexoAtendimento']
+export type ItemMidia = components['schemas']['ItemMidia']
+export type PaginaMidia = components['schemas']['PaginaMidia']
+export type SituacaoMensagem = components['schemas']['SituacaoMensagem']
+export type CategoriaAnexo = 'IMAGEM' | 'DOCUMENTO' | 'AUDIO'
+
+/** Máximo de mensagens por consulta de situações (igual ao servidor). */
+export const MAXIMO_SITUACOES = 100
+
+/**
+ * Situações atuais de mensagens já carregadas que estão fora da página recente (para atualizar, por
+ * exemplo, "Aceita" → "Entregue" sem recarregar o histórico).
+ */
+export function situacoes(http: HttpClient, id: number, ids: number[], somenteEste = false) {
+  const params = new URLSearchParams({ somenteEste: String(somenteEste), ids: ids.join(',') })
+  return http.get<SituacaoMensagem[]>(
+    `/v1/atendimento/atendimentos/${id}/linha-do-tempo/situacoes?${params}`,
   )
+}
+
+export function midia(
+  http: HttpClient,
+  id: number,
+  opcoes: { somenteEste?: boolean; categoria?: CategoriaAnexo; antes?: number } = {},
+) {
+  const params = new URLSearchParams({
+    somenteEste: String(opcoes.somenteEste ?? false),
+    tamanho: '20',
+  })
+  if (opcoes.categoria) params.set('categoria', opcoes.categoria)
+  if (opcoes.antes) params.set('antes', String(opcoes.antes))
+  return http.get<PaginaMidia>(`/v1/atendimento/atendimentos/${id}/midia?${params}`)
+}
+
+/**
+ * Endereço do conteúdo de um anexo (rota autenticada pela sessão; nunca o armazenamento direto).
+ * `somenteEste` restringe ao ciclo consultado (histórico).
+ */
+export function conteudoAnexo(
+  atendimento: number,
+  anexo: number,
+  opcoes: { somenteEste?: boolean; download?: boolean } = {},
+) {
+  const params = new URLSearchParams()
+  if (opcoes.somenteEste) params.set('somenteEste', 'true')
+  if (opcoes.download) params.set('download', 'true')
+  const query = params.size ? `?${params}` : ''
+  return `/api/v1/atendimento/atendimentos/${atendimento}/anexos/${anexo}/conteudo${query}`
+}
+
+export function enviarAnexo(
+  http: HttpClient,
+  id: number,
+  arquivo: File,
+  legenda: string,
+  chaveIdempotencia: string,
+) {
+  const dados = new FormData()
+  dados.append('arquivo', arquivo)
+  if (legenda) dados.append('legenda', legenda)
+  dados.append('chaveIdempotencia', chaveIdempotencia)
+  return http.request<components['schemas']['RespostaRegistrada']>(
+    'POST',
+    `/v1/atendimento/atendimentos/${id}/anexos`,
+    { body: dados },
+  )
+}
+
+export function novaTentativaAnexo(http: HttpClient, id: number, anexo: number) {
+  return http.request<void>(
+    'POST',
+    `/v1/atendimento/atendimentos/${id}/anexos/${anexo}/nova-tentativa`,
+  )
+}
+
+/** Formatos aceitos (a mesma lista do servidor) e limites padrão da aplicação. */
+export const FORMATOS_ANEXO: { mime: string; categoria: CategoriaAnexo; extensoes: string[] }[] = [
+  { mime: 'image/jpeg', categoria: 'IMAGEM', extensoes: ['jpg', 'jpeg'] },
+  { mime: 'image/png', categoria: 'IMAGEM', extensoes: ['png'] },
+  { mime: 'application/pdf', categoria: 'DOCUMENTO', extensoes: ['pdf'] },
+  { mime: 'audio/ogg', categoria: 'AUDIO', extensoes: ['ogg', 'opus'] },
+  { mime: 'audio/mpeg', categoria: 'AUDIO', extensoes: ['mp3'] },
+  { mime: 'audio/mp4', categoria: 'AUDIO', extensoes: ['m4a'] },
+  { mime: 'audio/aac', categoria: 'AUDIO', extensoes: ['aac'] },
+  { mime: 'audio/amr', categoria: 'AUDIO', extensoes: ['amr'] },
+]
+
+export const LIMITE_ANEXO: Record<CategoriaAnexo, number> = {
+  IMAGEM: 5 * 1024 * 1024,
+  DOCUMENTO: 16 * 1024 * 1024,
+  AUDIO: 16 * 1024 * 1024,
+}
+
+export const TAMANHO_MAXIMO_LEGENDA = 1024
+
+export const ACEITOS = FORMATOS_ANEXO.flatMap((f) => [
+  f.mime,
+  ...f.extensoes.map((e) => `.${e}`),
+]).join(',')
+
+export const ROTULO_CATEGORIA: Record<CategoriaAnexo, string> = {
+  IMAGEM: 'Imagem',
+  DOCUMENTO: 'PDF',
+  AUDIO: 'Áudio',
+}
+
+/** Validação antecipada (o servidor confere de novo, inclusive o conteúdo). */
+export function validarArquivo(
+  arquivo: File,
+): { categoria: CategoriaAnexo; erro?: undefined } | { erro: string; categoria?: undefined } {
+  const extensao = arquivo.name.includes('.') ? arquivo.name.split('.').pop()!.toLowerCase() : ''
+  const formato = FORMATOS_ANEXO.find((f) => f.mime === arquivo.type)
+  if (!formato)
+    return { erro: 'Tipo não suportado. Envie JPEG, PNG, PDF ou áudio (AAC, AMR, MP3, M4A, OGG).' }
+  if (!formato.extensoes.includes(extensao))
+    return { erro: `A extensão “.${extensao}” não corresponde ao tipo do arquivo.` }
+  if (arquivo.size === 0) return { erro: 'O arquivo está vazio.' }
+  if (arquivo.size > LIMITE_ANEXO[formato.categoria])
+    return {
+      erro: `Arquivo acima do limite de ${formatarTamanho(LIMITE_ANEXO[formato.categoria])} para ${ROTULO_CATEGORIA[formato.categoria].toLowerCase()}.`,
+    }
+  return { categoria: formato.categoria }
+}
+
+export function formatarTamanho(bytes: number | undefined) {
+  if (bytes === undefined) return ''
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
 export function historico(
