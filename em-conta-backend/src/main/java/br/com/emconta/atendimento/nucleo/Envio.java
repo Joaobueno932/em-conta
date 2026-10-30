@@ -50,6 +50,8 @@ public class Envio {
     static final Duration RESERVA_EXPIRADA = Duration.ofMinutes(2);
     static final String JANELA_EXPIRADA =
             "Não enviada: a janela de 24 horas expirou antes do envio. Nada foi enviado ao WhatsApp.";
+    static final String JANELA_EXPIRADA_APOS_UPLOAD = "Não enviada: a janela de 24 horas expirou durante a preparação."
+            + " O arquivo foi carregado no WhatsApp, mas nenhuma mensagem foi enviada ao contato.";
 
     private final JdbcClient jdbc;
     private final WhatsAppCloud canal;
@@ -105,6 +107,12 @@ public class Envio {
                 continue;
             }
             Optional<String> idMidia = enviarArquivo(r);
+            // Ler o armazenamento e subir o arquivo levam tempo: a janela é conferida de novo logo antes
+            // da chamada que envia a mensagem ao contato (sobra só o intervalo inevitável até a requisição).
+            if (idMidia.isPresent() && !janelaAberta(r.id())) {
+                expirarDepoisDoUpload(r);
+                continue;
+            }
             if (idMidia.isPresent()) {
                 FormatosAnexo.Categoria categoria =
                         FormatosAnexo.Categoria.valueOf(r.anexo().categoria());
@@ -239,6 +247,37 @@ public class Envio {
                 }
             }
         }
+    }
+
+    /** Janela de 24 h com a última entrada atual da conversa da mensagem e o relógio da aplicação. */
+    private boolean janelaAberta(long mensagem) {
+        Instant entrada = jdbc.sql("select v.ultima_entrada_em from atd_mensagem m join atd_conversa v"
+                        + " on v.id = m.conversa_id where m.id = :id")
+                .param("id", mensagem)
+                .query((rs, n) ->
+                        rs.getTimestamp(1) == null ? null : rs.getTimestamp(1).toInstant())
+                .single();
+        return Atendimentos.janelaAberta(entrada, clock.instant());
+    }
+
+    /**
+     * A janela expirou depois do upload: o arquivo já está na Meta (o id da mídia fica gravado no anexo),
+     * mas nenhuma mensagem foi enviada ao contato. Situação final, sem nova tentativa automática.
+     */
+    private void expirarDepoisDoUpload(Reserva reserva) {
+        Instant agora = clock.instant();
+        transacao.executeWithoutResult(status -> {
+            int alteradas = jdbc.sql("update atd_mensagem set situacao = 'JANELA_EXPIRADA', erro_codigo = null,"
+                            + " erro_titulo = :motivo, etapa_falha = null, proxima_tentativa_em = null,"
+                            + " atualizado_em = :agora where id = :id and situacao = 'ENVIANDO'")
+                    .param("motivo", JANELA_EXPIRADA_APOS_UPLOAD)
+                    .param("agora", Timestamp.from(agora))
+                    .param("id", reserva.id())
+                    .update();
+            if (alteradas > 0) {
+                historico(reserva.id(), "JANELA_EXPIRADA", null, JANELA_EXPIRADA_APOS_UPLOAD, agora);
+            }
+        });
     }
 
     private void falharUpload(Reserva reserva, FalhaMidia falha) {
