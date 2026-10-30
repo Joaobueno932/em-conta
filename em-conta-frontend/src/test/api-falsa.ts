@@ -12,7 +12,7 @@ import { createHttpClient } from '@/shared/api/http-client'
 import { jsonResponse, testConfig } from './render-with-providers'
 
 type Resposta = Response | Promise<Response>
-export type Rotas = Record<string, (init?: RequestInit) => Resposta>
+export type Rotas = Record<string, (init?: RequestInit, url?: string) => Resposta>
 
 /** Respostas falsas por "MÉTODO /caminho" (a query string é ignorada se não houver rota exata). */
 export function apiFalsa(rotas: Rotas) {
@@ -21,7 +21,9 @@ export function apiFalsa(rotas: Rotas) {
     const chave = `${init?.method ?? 'GET'} ${String(input)}`
     chamadas.push(chave)
     const responder = rotas[chave] ?? rotas[chave.replace(/\?.*$/, '')]
-    return responder ? responder(init) : problema(404, 'NAO_ENCONTRADO', 'Não encontrado.')
+    return responder
+      ? responder(init, String(input))
+      : problema(404, 'NAO_ENCONTRADO', 'Não encontrado.')
   })
   return { fetchFn, chamadas }
 }

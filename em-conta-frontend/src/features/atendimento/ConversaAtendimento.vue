@@ -457,6 +457,23 @@ async function carregarAnteriores() {
         </template>
       </div>
 
+      <div v-if="linha.erroLacuna.value" class="lacuna">
+        <AlertaMensagem tipo="erro">
+          Algumas mensagens recentes ainda não foram carregadas.
+          {{ describeApiError(linha.erroLacuna.value) }}
+        </AlertaMensagem>
+        <button
+          type="button"
+          class="secundario"
+          :disabled="linha.recuperandoLacunas.value"
+          @click="linha.recuperarLacunas()"
+        >
+          Tentar de novo
+        </button>
+      </div>
+      <p v-else-if="linha.lacunaPendente.value" class="ajuda" role="status">
+        Carregando mensagens recentes…
+      </p>
       <AlertaMensagem v-if="!detalhe.data.value?.canalConfigurado" tipo="aviso">
         Canal não configurado
       </AlertaMensagem>
