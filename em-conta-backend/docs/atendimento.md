@@ -41,7 +41,7 @@ fictício.
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
-## Modelo (V6, V7, V8)
+## Modelo (V6 a V9)
 
 | Tabela | Conteúdo |
 |---|---|
@@ -53,6 +53,7 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
 | `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo) |
 | `atd_webhook_evento` | caixa de entrada do webhook (corpo bruto, hash único, situação, tentativas) |
 | `atd_anexo` | V8: anexo da mensagem (categoria, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
+| `atd_objeto_pendente` | V9: diário durável de objetos do armazenamento que podem ter ficado sem dono no recebimento (`GRAVANDO` antes de gravar, `REMOVER` quando excedente), com tentativas, próxima tentativa e erro; `atd_anexo.reserva` guarda o token da reserva vigente |
 | `atd_presenca` | presença manual do atendente (Disponível/Ausente; não afeta distribuição) |
 
 ## Consistência, eventos e repetição
@@ -193,7 +194,11 @@ se não conferir com o arquivo baixado, o anexo fica em FALHA (não é disponibi
    depois marca `DISPONIVEL`. Falhas temporárias (rede, 5xx, URL expirada, armazenamento) voltam com
    espera crescente (30 s × 2ⁿ) até 5 tentativas; falhas definitivas (tipo divergente, conteúdo
    inválido, hash, limite, destino não autorizado, mídia inexistente) ficam `FALHA` com o motivo.
-   Reserva abandonada (queda) volta para nova tentativa depois de 5 min. O responsável pode pedir
+   Cada reserva tem um token próprio (`atd_anexo.reserva`). Renovação (antes de cada etapa externa),
+   conclusão e falha só valem com o token vigente; a recuperação de reservas com mais de 5 min sem
+   renovação apaga o token, o que invalida a execução anterior: ela não consegue mais concluir, falhar
+   nem mudar tentativas e metadados. Cada etapa externa tem tempo máximo próprio (timeouts da Graph API e
+   do armazenamento), bem abaixo dos 5 min, e a renovação entre elas mantém viva a reserva de quem avança. O responsável pode pedir
    "Tentar de novo" de um anexo em FALHA (só baixa de novo; nada é enviado ao contato).
 
 SSRF: o download só vai para HTTPS em host de `WHATSAPP_HOSTS_MIDIA` (padrão `lookaside.fbsbx.com`)
@@ -225,35 +230,60 @@ são gravadas.
 3. O anexo é registrado como `RECEBENDO`, o objeto é gravado no MinIO e, numa transação com o
    atendimento travado, as regras são conferidas de novo e a mensagem `PENDENTE` é criada. Falha do
    armazenamento → 503 `ARMAZENAMENTO_INDISPONIVEL`, nada registrado.
-4. O `Envio` (outbox) revalida a janela, faz o upload à Meta (`POST /media`, fora de transação; o id
+4. O `Envio` (outbox) revalida a janela na reserva, faz o upload à Meta (`POST /media`, fora de transação; o id
    da mídia fica gravado para não repetir) e envia a mensagem pelo id. Falha no upload: temporária volta
    à fila (até 3), definitiva vira FALHA com `etapaFalha = UPLOAD`; falha no envio, `ENVIO`; resultado
-   desconhecido no envio → `DESCONHECIDA`, sem reenvio. Upload concluído não é entrega: valem ACEITA,
+   desconhecido no envio → `DESCONHECIDA`, sem reenvio. Depois de ler o arquivo e do upload, a janela é
+   conferida de novo (relógio da aplicação e última entrada atual da conversa) imediatamente antes da
+   chamada que envia a mensagem; se expirou, a mensagem fica `JANELA_EXPIRADA` com o motivo "o arquivo
+   foi carregado no WhatsApp, mas nenhuma mensagem foi enviada", sem nova tentativa, e o id da mídia
+   fica gravado. Resta só o intervalo inevitável entre essa conferência e a requisição. Upload concluído não é entrega: valem ACEITA,
    ENVIADA, ENTREGUE e LIDA pelo webhook.
 
 ### Arquivos órfãos e uploads abandonados
 
-- Upload do atendente que não virou mensagem (falha entre gravar o objeto e registrar a mensagem, ou
-  queda do processo): a linha `RECEBENDO` sem mensagem é removida junto com o objeto pela limpeza
-  periódica (`Midias.limparUploadsAbandonados`, idade mínima `emconta.atendimento.anexos.upload-abandonado`,
-  padrão 1 h). Anexos com mensagem nunca entram nessa limpeza.
-- Download recebido: o objeto só é gravado depois de validado e, se a marcação final falhar, é removido
-  na hora. Se até essa remoção falhar, o objeto fica sem linha no banco: para encontrá-lo, liste as
-  chaves `atendimento/anexos/` do bucket e compare com `atd_anexo.chave_objeto`; remova só as que não
-  estiverem em nenhuma linha e tenham mais de 1 h. Esse procedimento é manual nesta versão.
+- **Recebimento:** antes de gravar o objeto, a execução registra no diário `atd_objeto_pendente` a
+  chave e o seu token (`GRAVANDO`), na mesma transação que confere que a reserva ainda é dela. A
+  conclusão vincula a chave ao anexo e apaga a linha na mesma transação; se a reserva foi perdida, a
+  linha vira `REMOVER` (upsert: volta mesmo se a limpeza já a tiver apagado) e a remoção é tentada na
+  hora. Queda entre gravar e concluir: a linha `GRAVANDO` fica e, depois de 6 min, a limpeza confere.
+- **Limpeza** (`Midias.limparObjetosPendentes`, no mesmo agendador, 20 por ciclo): reivindica linhas
+  vencidas com `SKIP LOCKED`, adia a próxima tentativa (30 s, 1 min, 2 min… até 1 h) antes de soltar a
+  trava e remove fora de transação. Só remove se nenhum anexo aponta para a chave e, para `GRAVANDO`,
+  se o token não é mais o vigente; um token apagado nunca volta, então aquela execução não consegue
+  mais vincular a chave. Objeto vinculado sai do diário sem ser removido. Remover objeto inexistente
+  conta como sucesso; falha fica com `erro` e é tentada de novo. Nenhuma varredura do bucket inteiro.
+- **Upload do atendente:** a linha `RECEBENDO` é gravada antes do objeto. A limpeza de uploads
+  abandonados (mais de `upload-abandonado`, padrão 1 h) primeiro reivindica a linha
+  (`RECEBENDO → FALHA`, condicional), o que impede a vinculação a uma mensagem (que passa a recusar com
+  503 `UPLOAD_EXPIRADO`); depois remove o objeto e apaga a linha. Falha na remoção: a linha `FALHA` sem
+  mensagem volta no ciclo seguinte. Anexos com mensagem nunca entram nessa limpeza.
 
 ### Atualização de situações na tela
 
 A página recente da linha do tempo é consultada a cada 5 s; as mensagens já carregadas fora dela e
 ainda sujeitas a mudança (PENDENTE, ENVIANDO, ACEITA, ENVIADA, ENTREGUE, DESCONHECIDA ou anexo em
-processamento) são conferidas em lote por `…/linha-do-tempo/situacoes` (até 100 por consulta). A tela
-mantém a versão com `atualizadoEm` mais novo, sem recarregar páginas nem mudar a posição de leitura.
+processamento) são conferidas em lote por `…/linha-do-tempo/situacoes` (até 100 por consulta, uma
+consulta por ciclo, sem sobreposição), em **rodízio**: cada lote começa onde o anterior parou e volta
+ao início no fim, então toda mensagem elegível é conferida em no máximo ⌈n / 100⌉ ciclos, mesmo que as
+mais novas continuem elegíveis (ENTREGUE ainda vira LIDA; DESCONHECIDA pode ser reconciliada). A tela
+mantém a versão com `atualizadoEm` mais novo, sem recarregar páginas nem mudar a posição de leitura; o
+rodízio recomeça ao trocar de conversa.
+
+Lacunas: se entre duas consultas chegarem mais mensagens do que cabem na página recente, o intervalo
+que faltou vira uma lacuna explícita (cursor de continuação e o último item já carregado). Ela é
+recuperada em até 20 páginas por ciclo; cada página bem-sucedida avança o cursor, então falha de rede
+ou o limite por ciclo não perdem o progresso nem o restante. A falha aparece na conversa com "Tentar de
+novo", e a próxima consulta periódica também retoma; lacunas de outra conversa são descartadas.
 
 ### Busca pelo associado
 
 Fila e histórico também encontram pelo nome do associado vinculado (nome da PF ou razão social da
-PJ, campo `nome` do cadastro). O atendimento pede ao módulo de associados só os ids (`CatalogoAssociados.idsPorNome`,
-até 200) e filtra por eles, sem junção entre módulos, sem duplicar resultados e sem expor documento.
+PJ, campo `nome` do cadastro), sem corte: o módulo de associados fornece o critério como projeção de
+ids (`CatalogoAssociados.criterioPorNome`, uma subconsulta só de ids que ele mesmo monta), e o
+atendimento a usa em `associado_id in (...)`. O banco resolve a semijunção; não há limite de ids, carga
+de associados em memória, junção de linhas (sem duplicar atendimentos) nem exposição de documento.
+Total, páginas e ordenação continuam os mesmos da consulta.
 
 ## Configurar e homologar
 
