@@ -35,8 +35,17 @@ cd ..
 # 2b. Sem JDK local: imagem Docker na rede do Compose
 docker build -t em-conta-backend .
 docker run --rm --name emconta-api --network em-conta_default -p 127.0.0.1:8080:8080 `
-  -e SPRING_PROFILES_ACTIVE=local,api -e DB_HOST=mysql -e DB_PORT=3306 em-conta-backend
+  -e SPRING_PROFILES_ACTIVE=local,api -e DB_HOST=mysql -e DB_PORT=3306 `
+  --env-file infra/armazenamento.env em-conta-backend
 ```
+
+`infra/.env` é lido só pelo Docker Compose (MySQL, MinIO etc.); ele **não** chega ao processo da
+API. A API recebe as variáveis pelo `docker run` (`-e` e `--env-file`) ou pelo ambiente da IDE. Os
+anexos do atendimento precisam de `ARMAZENAMENTO_*`: gere-as uma vez com
+`bash infra/armazenamento-local.sh`, que cria no MinIO local uma conta de serviço restrita ao bucket
+de trabalho (`MINIO_BUCKET`) e grava `infra/armazenamento.env` (ignorado pelo Git, sem exibir a
+senha). Sem esse arquivo a API sobe normalmente, com anexos indisponíveis. O WhatsApp continua
+desabilitado enquanto não houver `WHATSAPP_*` (ver [docs/atendimento.md](docs/atendimento.md)).
 
 Pela IDE: execute `br.com.emconta.EmContaApplication` com os profiles `local,api` (ou
 `local,worker`). No container, para os e-mails irem ao Mailpit do Compose, acrescente

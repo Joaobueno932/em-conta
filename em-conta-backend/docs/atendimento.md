@@ -208,6 +208,15 @@ são gravadas.
 
 ### Armazenamento e acesso
 
+**Ambiente local de trabalho:** `bash infra/armazenamento-local.sh` (a partir de `em-conta-backend`)
+cria no MinIO do Compose a conta de serviço `emconta-api-local`, com a política
+`infra/minio/politica-api.json` (só `GetObject`, `PutObject`, `DeleteObject` e listagem no bucket
+`MINIO_BUCKET`), confere que o bucket continua privado e grava `infra/armazenamento.env` (ignorado pelo
+Git) com `ARMAZENAMENTO_*`. A API recebe esse arquivo por `--env-file` no `docker run` — o
+`infra/.env` só alimenta o Compose. O bucket de trabalho (`emconta-local`) e o de testes e2e
+(`emconta-e2e`) são separados; a conta restrita não acessa o de testes nem administra o MinIO. Rodar o
+script de novo reaproveita a credencial existente.
+
 - MinIO/S3 privado (`emconta.armazenamento.*`), cliente S3 mínimo com assinatura SigV4 (sem SDK).
   Chave opaca `atendimento/anexos/<uuid>`; o nome original é só metadado de exibição, higienizado
   (sem diretórios, caracteres de controle, marcas de direção de texto nem reservados; até 120).
