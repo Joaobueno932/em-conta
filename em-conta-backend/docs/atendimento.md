@@ -211,11 +211,19 @@ são gravadas.
 **Ambiente local de trabalho:** `bash infra/armazenamento-local.sh` (a partir de `em-conta-backend`)
 cria no MinIO do Compose a conta de serviço `emconta-api-local`, com a política
 `infra/minio/politica-api.json` (só `GetObject`, `PutObject`, `DeleteObject` e listagem no bucket
-`MINIO_BUCKET`), confere que o bucket continua privado e grava `infra/armazenamento.env` (ignorado pelo
-Git) com `ARMAZENAMENTO_*`. A API recebe esse arquivo por `--env-file` no `docker run` — o
-`infra/.env` só alimenta o Compose. O bucket de trabalho (`emconta-local`) e o de testes e2e
-(`emconta-e2e`) são separados; a conta restrita não acessa o de testes nem administra o MinIO. Rodar o
-script de novo reaproveita a credencial existente.
+`MINIO_BUCKET`) e grava `infra/armazenamento.env` (ignorado pelo Git) com `ARMAZENAMENTO_*`. A API
+recebe esse arquivo por `--env-file` no `docker run` — o `infra/.env` só alimenta o Compose. O bucket
+de trabalho (`emconta-local`) e o de testes e2e (`emconta-e2e`) são separados. O script:
+
+- para antes de qualquer alteração se o bucket tiver acesso anônimo (não é privado), com mensagem
+  explicando o que conferir; ele nunca muda a política anônima;
+- trata falha ao vincular a política como erro (só "já vinculada" é aceito) e confere em seguida que
+  a conta tem exatamente a política `emconta-api-local`;
+- com a credencial restrita, confere que lista o bucket de trabalho e que **não** acessa o de testes
+  nem a administração do MinIO;
+- só depois grava o arquivo, de forma atômica (arquivo temporário + `mv`): falha em qualquer etapa
+  mantém o arquivo anterior intacto. Rodar de novo reaproveita a credencial existente. Segredos não
+  aparecem na saída nem na linha de comando (vão pela entrada padrão do `docker exec`).
 
 - MinIO/S3 privado (`emconta.armazenamento.*`), cliente S3 mínimo com assinatura SigV4 (sem SDK).
   Chave opaca `atendimento/anexos/<uuid>`; o nome original é só metadado de exibição, higienizado
