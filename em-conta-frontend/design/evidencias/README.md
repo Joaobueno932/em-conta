@@ -1,5 +1,8 @@
 # Evidências visuais — estrutura global e Atendimento
 
+> Atualizado depois: título no cabeçalho global, presença única e só duas visões na fila. Ver
+> [atendimento-compacto/](atendimento-compacto/README.md).
+
 Comparação da implementação com os frames aprovados AT-01 a AT-06 do arquivo Figma
 "Em Conta — Protótipo" (`IlVXijVBwWrqfmjVX8QdDz`, seção "🎧 Atendimento — Conversas").
 
