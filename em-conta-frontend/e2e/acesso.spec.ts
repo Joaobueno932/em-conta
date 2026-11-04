@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import {
+  abrirMenuConta,
   abrirUsuarioNaLista,
   ADMIN_EMAIL,
   ADMIN_SENHA,
@@ -8,6 +9,7 @@ import {
   entrar,
   linkDoEmail,
   paginaDoAdministrador,
+  sairDaConta,
   SENHA_PADRAO,
 } from './apoio'
 
@@ -39,7 +41,7 @@ test('login, sessão, rota protegida e logout', async ({ page, context }) => {
     expect(item).not.toContain(ADMIN_SENHA)
   }
 
-  await page.getByRole('button', { name: 'Sair' }).click()
+  await sairDaConta(page)
   await expect(page).toHaveURL(/\/entrar\?motivo=saiu/)
   await page.goto('/admin/usuarios')
   await expect(page).toHaveURL(/\/entrar\?redirect=/)
@@ -101,6 +103,7 @@ test('desativação encerra a sessão aberta e a próxima ação leva ao login',
   await expect(admin.getByTestId('situacao')).toHaveText('Desativado')
 
   // A pessoa ainda vê a tela, mas a próxima chamada à API é recusada pelo servidor.
+  await abrirMenuConta(page)
   await page.getByRole('link', { name: 'Alterar senha' }).click()
   await page.getByLabel('Senha atual').fill(SENHA_PADRAO)
   await page.getByLabel('Nova senha', { exact: true }).fill('qualquer outra senha longa')

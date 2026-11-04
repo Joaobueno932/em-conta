@@ -201,10 +201,12 @@ test('Mídia abre mensagem antiga não carregada; teclado e painéis sem sobrepo
   const painel = await caixa('#painel-associado')
   expect(sobrepoem(conversa, painel)).toBe(false)
   expect(painel.y).toBeGreaterThanOrEqual(conversa.y + conversa.height)
-  // O compositor continua alcançável (sem ação escondida atrás de outro painel).
-  const mensagem = page.getByLabel('Mensagem')
-  await mensagem.scrollIntoViewIfNeeded()
-  await expect(mensagem).toBeInViewport()
+  // A área de resposta continua alcançável (sem ação escondida atrás de outro painel). Aguardando,
+  // ela é a faixa que pede para assumir (AT-03), e a ação de assumir também fica acessível.
+  const resposta = page.getByText('Assuma o atendimento para responder esta conversa.')
+  await resposta.scrollIntoViewIfNeeded()
+  await expect(resposta).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Assumir atendimento' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )

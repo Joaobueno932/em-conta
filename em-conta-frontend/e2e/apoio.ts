@@ -55,8 +55,20 @@ export async function paginaDoAdministrador(browser: Browser) {
   const page = await contexto.newPage()
   await page.goto('/entrar')
   await entrar(page, ADMIN_EMAIL, ADMIN_SENHA)
-  await expect(page.getByRole('button', { name: 'Sair' })).toBeVisible()
+  await expect(botaoConta(page)).toBeVisible()
   return page
+}
+
+/** Botão da conta no cabeçalho (avatar e nome); abre o menu com Alterar senha e Sair. */
+export const botaoConta = (page: Page) => page.getByRole('button', { name: /menu da conta/ })
+
+export async function abrirMenuConta(page: Page) {
+  await botaoConta(page).click()
+}
+
+export async function sairDaConta(page: Page) {
+  await abrirMenuConta(page)
+  await page.getByRole('button', { name: 'Sair' }).click()
 }
 
 /**

@@ -1,7 +1,7 @@
 /*
  * Estilos globais. Cores, raios e tipografia seguem as variáveis `cor/*` do protótipo no Figma
- * ("Em Conta — Protótipo", telas de Associados). A fonte Inter é usada quando instalada no sistema;
- * não é baixada pela aplicação.
+ * ("Em Conta — Protótipo"; medidas da estrutura global e do Atendimento tiradas dos exports AT-01 a
+ * AT-06 em design/referencias). A fonte Inter vem empacotada (@fontsource-variable/inter), sem CDN.
  */
 :root {
   --cor-texto: #1e2420;
@@ -19,9 +19,17 @@
   --cor-erro: #b42318;
   --cor-foco: #1b7f3a;
   --raio: 8px;
+  --raio-controle: 10px;
+  --raio-cartao: 12px;
+  --cor-avatar: #2f7d4c;
+  --cor-pdf: #e0312f;
+  --sombra-menu: 0 12px 32px rgb(30 36 32 / 12%);
+  --largura-lateral: 294px;
+  --largura-lateral-recolhida: 84px;
+  --altura-topo: 73px;
 
   accent-color: var(--cor-destaque);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
   color: var(--cor-texto);
   background: var(--cor-fundo);
   line-height: 1.5;
@@ -282,6 +290,15 @@ td a:hover {
   background: var(--cor-superficie-2);
   color: var(--cor-texto-2);
   font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 .visualmente-oculto {

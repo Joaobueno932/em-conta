@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
@@ -12,6 +12,8 @@ import IconeTraco from '@/shared/components/IconeTraco.vue'
 import {
   buscarAssociados,
   chavesAtendimento,
+  formatarData,
+  iniciais,
   obterDetalhe,
   sugeridos,
   vincularAssociado,
@@ -40,6 +42,9 @@ const detalhe = useQuery({
   queryFn: () => obterDetalhe(http, props.id),
 })
 const atual = computed(() => detalhe.data.value?.resumo.associado)
+
+// Seções recolhíveis do painel (AT-04).
+const secoes = reactive({ atendimento: true })
 
 const editando = ref(false)
 const mostrarEdicao = computed(() => podeVincular.value && (editando.value || !atual.value))
@@ -101,13 +106,29 @@ function confirmar(associadoId?: number) {
     </header>
 
     <p v-if="detalhe.isPending.value" role="status">Carregando…</p>
+    <div v-else-if="detalhe.isError.value">
+      <AlertaMensagem tipo="erro">{{ describeApiError(detalhe.error.value) }}</AlertaMensagem>
+      <button type="button" class="secundario" @click="detalhe.refetch()">Tentar de novo</button>
+    </div>
     <template v-else-if="detalhe.data.value">
       <div v-if="atual" class="atual">
-        <p>
-          <strong>{{ atual.nome }}</strong>
-          <span class="ajuda">{{ atual.tipo }} · {{ atual.documentoMascarado }}</span>
+        <div class="identidade">
+          <span class="avatar" aria-hidden="true">{{ iniciais(atual.nome) }}</span>
+          <p>
+            <strong>{{ atual.nome }}</strong>
+            <span class="ajuda">{{ atual.tipo }} · {{ atual.documentoMascarado }}</span>
+          </p>
+        </div>
+        <p class="contato com-icone">
+          <IconeTraco nome="telefone" />+{{ detalhe.data.value.resumo.contatoNumero }}
         </p>
-        <RouterLink :to="{ name: 'associado', params: { id: atual.id } }">Abrir ficha</RouterLink>
+        <RouterLink
+          :to="{ name: 'associado', params: { id: atual.id } }"
+          class="ver-cadastro com-icone"
+        >
+          <IconeTraco nome="externo" :tamanho="20" />
+          Ver cadastro
+        </RouterLink>
         <button
           v-if="podeVincular && !editando"
           type="button"
@@ -117,7 +138,12 @@ function confirmar(associadoId?: number) {
           Alterar vínculo
         </button>
       </div>
-      <p v-else class="ajuda">Nenhum associado vinculado a esta conversa.</p>
+      <div v-else class="sem-vinculo">
+        <p class="contato com-icone">
+          <IconeTraco nome="telefone" />+{{ detalhe.data.value.resumo.contatoNumero }}
+        </p>
+        <p class="ajuda">Nenhum associado vinculado a esta conversa.</p>
+      </div>
 
       <div v-if="mostrarEdicao" class="edicao">
         <AlertaMensagem v-if="conflito" tipo="aviso">
@@ -189,6 +215,35 @@ function confirmar(associadoId?: number) {
         </div>
       </div>
 
+      <section class="secao" aria-labelledby="titulo-secao-atendimento">
+        <h3 id="titulo-secao-atendimento">
+          <button
+            type="button"
+            class="alternar"
+            :aria-expanded="secoes.atendimento"
+            aria-controls="secao-atendimento"
+            @click="secoes.atendimento = !secoes.atendimento"
+          >
+            Atendimento
+            <IconeTraco :nome="secoes.atendimento ? 'seta-acima' : 'seta-abaixo'" :tamanho="20" />
+          </button>
+        </h3>
+        <dl v-show="secoes.atendimento" id="secao-atendimento" class="dados">
+          <div>
+            <dt class="com-icone"><IconeTraco nome="documento" />Protocolo</dt>
+            <dd>{{ detalhe.data.value.resumo.codigo }}</dd>
+          </div>
+          <div>
+            <dt class="com-icone"><IconeTraco nome="pessoa" />Responsável</dt>
+            <dd>{{ detalhe.data.value.resumo.responsavel?.nome ?? '—' }}</dd>
+          </div>
+          <div>
+            <dt class="com-icone"><IconeTraco nome="historico" />Desde</dt>
+            <dd>{{ formatarData(detalhe.data.value.resumo.iniciadoEm) }}</dd>
+          </div>
+        </dl>
+      </section>
+
       <MidiaConversa
         :atendimento="id"
         @abrir-mensagem="(m, cursor) => emit('abrirMensagem', m, cursor)"
@@ -198,12 +253,15 @@ function confirmar(associadoId?: number) {
 </template>
 
 <style scoped>
+/* AT-04: painel de 278 px que rola por dentro; seções com título de 19 px e divisória. */
 .painel {
   margin: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  overflow-y: auto;
 }
 
 .topo {
@@ -214,7 +272,14 @@ function confirmar(associadoId?: number) {
 
 .topo h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.topo .botao-icone {
+  width: 40px;
+  height: 40px;
+  background: var(--cor-superficie-2);
 }
 
 h3 {
@@ -222,17 +287,113 @@ h3 {
   font-size: 0.9rem;
 }
 
-.atual p {
-  margin: 0 0 0.25rem;
+.identidade {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.atual .ajuda {
+.identidade p {
+  margin: 0;
+  min-width: 0;
+}
+
+.identidade strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.identidade .ajuda {
   display: block;
 }
 
-.atual a,
-.atual button {
-  margin-right: 0.75rem;
+.avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  background: var(--cor-destaque-suave);
+  color: var(--cor-destaque-forte);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.contato {
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+  font-size: 16px;
+  gap: 12px;
+}
+
+.sem-vinculo .contato {
+  margin-top: 0;
+}
+
+.ver-cadastro {
+  justify-content: center;
+  width: 100%;
+  height: 46px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-controle);
+  color: var(--cor-texto);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ver-cadastro:hover {
+  background: var(--cor-superficie-2);
+}
+
+.secao h3 {
+  margin: 0;
+}
+
+button.alternar {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--cor-borda);
+  border-radius: 0;
+  background: none;
+  color: var(--cor-texto);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.dados {
+  margin: 12px 0 0;
+}
+
+.dados div {
+  display: grid;
+  grid-template-columns: 8.2rem minmax(0, 1fr);
+  align-items: center;
+  min-height: 42px;
+}
+
+.dados dt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--cor-texto-2);
+  font-size: 15px;
+}
+
+.dados dd {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .edicao input[type='search'],

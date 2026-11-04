@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 
+import '@fontsource-variable/inter'
 import './app/estilos.css'
 import App from './app/App.vue'
 import { aoInvalidarSessao, instalarGuardas } from './app/guards'

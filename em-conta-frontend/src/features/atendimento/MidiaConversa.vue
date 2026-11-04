@@ -115,14 +115,13 @@ const itens = computed(() => lista.data.value?.pages.flatMap((p) => p.itens) ?? 
 </template>
 
 <style scoped>
-.midia {
-  border-top: 1px solid var(--cor-borda);
-  padding-top: 0.5rem;
-}
-
+/* Título no mesmo estilo das seções do painel (AT-04). */
 h3 {
-  margin: 0.5rem 0 0.25rem;
-  font-size: 0.9rem;
+  margin: 0 0 12px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--cor-borda);
+  font-size: 19px;
+  font-weight: 600;
 }
 
 .filtros {

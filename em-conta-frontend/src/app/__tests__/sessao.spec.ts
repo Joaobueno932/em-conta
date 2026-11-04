@@ -92,6 +92,7 @@ describe('guardas e ciclo de sessão', () => {
     const { router, queryClient } = await montarApp(fetchFn, '/')
 
     expect(await screen.findByTestId('usuario-email')).toHaveTextContent('ana@x.br')
+    await fireEvent.click(screen.getByRole('button', { name: /menu da conta/ }))
     await fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
 
     await waitFor(() => expect(router.currentRoute.value.name).toBe('entrar'))

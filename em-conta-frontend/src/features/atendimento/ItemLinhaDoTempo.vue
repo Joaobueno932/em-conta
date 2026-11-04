@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import IconeTraco from '@/shared/components/IconeTraco.vue'
+
 import AnexoMensagem from './AnexoMensagem.vue'
 import {
   formatarHora,
@@ -24,6 +26,7 @@ defineProps<{
 
 <template>
   <p v-if="item.tipo === 'EVENTO'" class="evento">
+    <IconeTraco nome="pessoa" :tamanho="16" class="icone-evento" />
     {{ formatarHora(item.ocorridoEm) }} ·
     <template v-if="item.evento === 'ATENDIMENTO_INICIADO'">{{
       ROTULO_EVENTO[item.evento]
@@ -73,30 +76,39 @@ defineProps<{
 </template>
 
 <style scoped>
+/* AT-04: eventos em pílula cinza; balões com 17 px de texto, horário pequeno à direita. */
 .evento {
   align-self: center;
-  margin: 0.25rem 0;
-  padding: 0.2rem 0.75rem;
-  border-radius: 6px;
+  max-width: 85%;
+  margin: 4px 0;
+  padding: 8px 18px;
+  border-radius: 8px;
   background: var(--cor-superficie-2);
   color: var(--cor-texto-2);
-  font-size: 0.8rem;
+  font-size: 15px;
   text-align: center;
+}
+
+.icone-evento {
+  vertical-align: -3px;
+  margin-right: 6px;
 }
 
 .mensagem {
   max-width: 75%;
-  padding: 0.6rem 0.85rem;
-  border-radius: 10px;
+  padding: 9px 17px 7px;
+  border-radius: var(--raio-controle);
   background: var(--cor-superficie);
   border: 1px solid var(--cor-borda);
+  font-size: 17px;
+  line-height: 1.35;
   transition: box-shadow 0.3s;
 }
 
 .mensagem.saida {
   align-self: flex-end;
   background: var(--cor-destaque-suave);
-  border-color: var(--cor-destaque-borda);
+  border-color: var(--cor-destaque-suave);
 }
 
 /* Mensagem aberta pela área Mídia: destaque discreto por alguns segundos. */
@@ -118,9 +130,9 @@ defineProps<{
 }
 
 .meta {
-  font-size: 0.75rem;
+  font-size: 13px;
   color: var(--cor-texto-2);
-  margin-top: 0.2rem !important;
+  margin-top: 4px !important;
   text-align: right;
 }
 

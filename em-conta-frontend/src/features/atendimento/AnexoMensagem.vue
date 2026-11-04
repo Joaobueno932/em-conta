@@ -169,7 +169,7 @@ const estado = computed(() => {
   width: 2rem;
   height: 2.25rem;
   border-radius: 4px;
-  background: var(--cor-erro);
+  background: var(--cor-pdf);
   color: #fff;
   font-size: 0.6rem;
   font-weight: 700;

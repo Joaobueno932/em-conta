@@ -92,8 +92,9 @@ describe('Atendimento', () => {
 
     expect(await screen.findByText('Olá, preciso de ajuda')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Aguardando/ }).textContent).toContain('1')
-    // Ainda não é responsável: não responde.
-    expect((screen.getByLabelText('Mensagem') as HTMLTextAreaElement).disabled).toBe(true)
+    // Ainda não é responsável: não responde (a faixa explica no lugar do campo).
+    expect(screen.queryByLabelText('Mensagem')).toBeNull()
+    expect(screen.getByText('Assuma o atendimento para responder esta conversa.')).toBeTruthy()
 
     await fireEvent.click(screen.getByRole('button', { name: 'Assumir atendimento' }))
     await waitFor(() => expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/assuncao`))
@@ -110,7 +111,8 @@ describe('Atendimento', () => {
     await montarApp(fetchFn, '/atendimento?id=1')
 
     expect((await screen.findAllByText(/Canal não configurado/)).length).toBeGreaterThan(0)
-    expect((screen.getByLabelText('Mensagem') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(screen.queryByLabelText('Mensagem')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Enviar' })).toBeNull()
     expect(chamadas.some((c) => c.startsWith(`POST ${BASE}/atendimentos/1/mensagens`))).toBe(false)
   })
 
@@ -273,7 +275,8 @@ describe('Atendimento', () => {
       ),
     )
     await montarApp(fetchFn, '/atendimento?id=1')
-    expect(await screen.findByPlaceholderText(/Janela de 24 horas encerrada/)).toBeTruthy()
+    expect(await screen.findByText(/Janela de 24 horas encerrada/)).toBeTruthy()
+    expect(screen.queryByLabelText('Mensagem')).toBeNull()
   })
 
   it('atendimento de outra pessoa: sem transferir, encerrar nem responder', async () => {
@@ -282,7 +285,8 @@ describe('Atendimento', () => {
     expect(await screen.findByText(/Em atendimento com Outra Pessoa/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Transferir' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Encerrar' })).toBeNull()
-    expect(screen.getByPlaceholderText('Assuma o atendimento para responder.')).toBeTruthy()
+    expect(screen.getByText(/só quem é responsável responde/)).toBeTruthy()
+    expect(screen.queryByLabelText('Mensagem')).toBeNull()
   })
 
   it('"Ver opções" só oferece o Histórico geral', async () => {

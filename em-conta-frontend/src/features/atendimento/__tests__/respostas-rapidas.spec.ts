@@ -234,10 +234,10 @@ describe('Respostas rápidas na conversa', () => {
       ),
     )
     await montarApp(fetchFn, '/atendimento?id=1')
-    const botao = (await screen.findByRole('button', {
-      name: 'Respostas rápidas',
-    })) as HTMLButtonElement
-    expect(botao.disabled).toBe(true)
+    // Com a janela encerrada o compositor inteiro dá lugar à faixa: nem campo nem respostas rápidas.
+    expect(await screen.findByText(/Janela de 24 horas encerrada/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Respostas rápidas' })).toBeNull()
+    expect(screen.queryByLabelText('Mensagem')).toBeNull()
   })
 
   it('com anexo selecionado o botão fica indisponível e explica', async () => {

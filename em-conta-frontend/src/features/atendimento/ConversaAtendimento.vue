@@ -12,6 +12,7 @@ import IconeTraco from '@/shared/components/IconeTraco.vue'
 import {
   ACEITOS,
   assumir,
+  formatarData,
   type CategoriaAnexo,
   chavesAtendimento,
   enviarAnexo,
@@ -369,7 +370,10 @@ const motivoComposer = computed(() => {
   if (!detalhe.data.value.canalConfigurado)
     return 'Canal não configurado. Não é possível enviar mensagens.'
   if (resumo.value?.situacao === 'ENCERRADO') return 'Atendimento encerrado.'
-  if (!souResponsavel.value) return 'Assuma o atendimento para responder.'
+  if (!souResponsavel.value)
+    return resumo.value?.responsavel
+      ? 'Este atendimento está com outra pessoa: só quem é responsável responde.'
+      : 'Assuma o atendimento para responder esta conversa.'
   if (!janelaAberta.value)
     return 'Janela de 24 horas encerrada: o contato precisa enviar uma nova mensagem.'
   if (!pode('atendimento:responder')) return 'Você não tem permissão para responder.'
@@ -407,35 +411,42 @@ async function carregarAnteriores() {
 
 <template>
   <section class="conversa cartao" aria-labelledby="titulo-conversa">
-    <p v-if="detalhe.isPending.value" role="status">Carregando conversa…</p>
-    <AlertaMensagem v-else-if="detalhe.isError.value" tipo="erro">
-      {{ describeApiError(detalhe.error.value) }}
-    </AlertaMensagem>
+    <div v-if="detalhe.isPending.value" class="estado-conversa" role="status">
+      Carregando conversa…
+    </div>
+    <div v-else-if="detalhe.isError.value" class="estado-conversa">
+      <AlertaMensagem tipo="erro">{{ describeApiError(detalhe.error.value) }}</AlertaMensagem>
+      <button type="button" class="secundario" @click="detalhe.refetch()">Tentar de novo</button>
+    </div>
     <template v-else-if="resumo">
       <header class="topo">
         <span class="avatar" aria-hidden="true">{{
           iniciais(resumo.associado?.nome ?? nomeContato(resumo))
         }}</span>
         <div class="identificacao">
-          <h2 id="titulo-conversa">{{ resumo.associado?.nome ?? nomeContato(resumo) }}</h2>
-          <p class="ajuda">+{{ resumo.contatoNumero }} · {{ resumo.codigo }}</p>
-          <p class="ajuda">
-            <span v-if="resumo.situacao === 'AGUARDANDO'">Aguardando atendimento</span>
-            <span v-else-if="resumo.situacao === 'EM_ATENDIMENTO'">
-              Em atendimento com {{ resumo.responsavel?.nome }}
-            </span>
-            <span v-else>Encerrado</span>
+          <h2 id="titulo-conversa" class="com-icone">
+            <IconeTraco nome="pessoa" :tamanho="18" />
+            <RouterLink
+              v-if="resumo.associado"
+              :to="{ name: 'associado', params: { id: resumo.associado.id } }"
+              >{{ resumo.associado.nome }}</RouterLink
+            >
+            <span v-else>{{ nomeContato(resumo) }}</span>
+          </h2>
+          <p class="telefone com-icone">
+            <IconeTraco nome="telefone" :tamanho="17" />
+            +{{ resumo.contatoNumero }}
           </p>
         </div>
         <div class="acoes">
           <button
             v-if="resumo.situacao === 'AGUARDANDO' && pode('atendimento:assumir')"
             type="button"
-            class="com-icone"
+            class="com-icone assumir"
             :disabled="assumirMut.isPending.value"
             @click="assumirMut.mutate()"
           >
-            <IconeTraco nome="concluir" />
+            <IconeTraco nome="concluir" :tamanho="22" />
             Assumir atendimento
           </button>
           <template v-if="resumo.situacao === 'EM_ATENDIMENTO' && souResponsavel">
@@ -471,7 +482,7 @@ async function carregarAnteriores() {
           <button
             ref="botaoPainel"
             type="button"
-            class="botao-icone"
+            class="botao-icone painel"
             aria-label="Dados do associado"
             title="Dados do associado"
             :aria-expanded="painelAberto"
@@ -490,12 +501,21 @@ async function carregarAnteriores() {
             <IconeTraco nome="fechar" />
           </button>
         </div>
+        <p class="meta">
+          {{ resumo.codigo }} ·
+          <span v-if="resumo.situacao === 'AGUARDANDO'">Aguardando atendimento</span>
+          <span v-else-if="resumo.situacao === 'EM_ATENDIMENTO'"
+            >Em atendimento com {{ resumo.responsavel?.nome }}</span
+          >
+          <span v-else>Encerrado</span>
+          · Desde {{ formatarData(resumo.iniciadoEm) }}
+        </p>
       </header>
 
-      <AlertaMensagem v-if="conflito" tipo="aviso">
+      <AlertaMensagem v-if="conflito" tipo="aviso" class="faixa">
         O atendimento foi alterado por outra pessoa e a tela foi atualizada.
       </AlertaMensagem>
-      <AlertaMensagem v-else-if="erroAcao" tipo="erro">{{
+      <AlertaMensagem v-else-if="erroAcao" tipo="erro" class="faixa">{{
         describeApiError(erroAcao)
       }}</AlertaMensagem>
 
@@ -565,7 +585,7 @@ async function carregarAnteriores() {
         </template>
       </div>
 
-      <div v-if="linha.erroLacuna.value" class="lacuna">
+      <div v-if="linha.erroLacuna.value" class="lacuna faixa">
         <AlertaMensagem tipo="erro">
           Algumas mensagens recentes ainda não foram carregadas.
           {{ describeApiError(linha.erroLacuna.value) }}
@@ -579,198 +599,271 @@ async function carregarAnteriores() {
           Tentar de novo
         </button>
       </div>
-      <p v-else-if="linha.lacunaPendente.value" class="ajuda" role="status">
+      <p v-else-if="linha.lacunaPendente.value" class="ajuda faixa" role="status">
         Carregando mensagens recentes…
       </p>
-      <AlertaMensagem v-if="!detalhe.data.value?.canalConfigurado" tipo="aviso">
-        Canal não configurado
-      </AlertaMensagem>
-      <p v-if="avisoMensagem" class="ajuda" role="status">{{ avisoMensagem }}</p>
-      <div v-if="arquivo" class="selecionado" role="group" aria-label="Arquivo selecionado">
-        <span class="nome">{{ arquivo.arquivo.name }}</span>
-        <span class="ajuda"
-          >{{ ROTULO_CATEGORIA[arquivo.categoria] }} ·
-          {{ formatarTamanho(arquivo.arquivo.size) }}</span
-        >
-        <button
-          type="button"
-          class="link"
-          :disabled="anexoMut.isPending.value"
-          :aria-label="`Remover o arquivo ${arquivo.arquivo.name}`"
-          @click="removerArquivo"
-        >
-          Remover
-        </button>
-      </div>
-      <AlertaMensagem v-if="erroArquivo" tipo="erro">{{ erroArquivo }}</AlertaMensagem>
-      <p
-        v-if="motivoComposer && detalhe.data.value?.canalConfigurado"
-        class="aviso-compositor"
-        role="status"
-      >
-        <IconeTraco nome="informacao" />
+      <p v-if="avisoMensagem" class="ajuda faixa" role="status">{{ avisoMensagem }}</p>
+
+      <!-- AT-03: sem poder responder, a faixa explica o motivo no lugar do compositor. -->
+      <p v-if="motivoComposer" class="aviso-compositor" role="status">
+        <IconeTraco nome="informacao" :tamanho="22" />
         {{ motivoComposer }}
       </p>
-      <form class="composer" @submit.prevent="enviar">
-        <input
-          ref="seletor"
-          type="file"
-          class="visualmente-oculto"
-          tabindex="-1"
-          aria-hidden="true"
-          :accept="ACEITOS"
-          @change="selecionarArquivo"
-        />
-        <label for="resposta" class="visualmente-oculto">{{
-          arquivo ? 'Legenda (opcional)' : 'Mensagem'
-        }}</label>
-        <SeletorRespostasRapidas
-          v-if="respostas"
-          id="seletor-respostas"
-          ref="seletorRespostas"
-          :termo="respostas.barra"
-          @escolher="escolherResposta"
-          @fechar="fecharRespostas"
-        />
-        <div v-if="escolha" class="escolha" role="group" aria-labelledby="escolha-titulo">
-          <p id="escolha-titulo">
-            O campo já tem um rascunho. Como usar “{{ escolha.resposta.titulo }}”?
-          </p>
-          <div class="acoes">
-            <button type="button" @click="decidir('substituir')">Substituir rascunho</button>
-            <button type="button" class="secundario" @click="decidir('inserir')">
-              Inserir no cursor
-            </button>
-            <button type="button" class="link" @click="cancelarEscolha">Cancelar</button>
+      <div v-else class="area-resposta">
+        <p class="aba" aria-hidden="true">Mensagem</p>
+        <div v-if="arquivo" class="selecionado" role="group" aria-label="Arquivo selecionado">
+          <span class="nome">{{ arquivo.arquivo.name }}</span>
+          <span class="ajuda"
+            >{{ ROTULO_CATEGORIA[arquivo.categoria] }} ·
+            {{ formatarTamanho(arquivo.arquivo.size) }}</span
+          >
+          <button
+            type="button"
+            class="link"
+            :disabled="anexoMut.isPending.value"
+            :aria-label="`Remover o arquivo ${arquivo.arquivo.name}`"
+            @click="removerArquivo"
+          >
+            Remover
+          </button>
+        </div>
+        <AlertaMensagem v-if="erroArquivo" tipo="erro">{{ erroArquivo }}</AlertaMensagem>
+        <form class="composer" @submit.prevent="enviar">
+          <input
+            ref="seletor"
+            type="file"
+            class="visualmente-oculto"
+            tabindex="-1"
+            aria-hidden="true"
+            :accept="ACEITOS"
+            @change="selecionarArquivo"
+          />
+          <label for="resposta" class="visualmente-oculto">{{
+            arquivo ? 'Legenda (opcional)' : 'Mensagem'
+          }}</label>
+          <SeletorRespostasRapidas
+            v-if="respostas"
+            id="seletor-respostas"
+            ref="seletorRespostas"
+            :termo="respostas.barra"
+            @escolher="escolherResposta"
+            @fechar="fecharRespostas"
+          />
+          <div v-if="escolha" class="escolha" role="group" aria-labelledby="escolha-titulo">
+            <p id="escolha-titulo">
+              O campo já tem um rascunho. Como usar “{{ escolha.resposta.titulo }}”?
+            </p>
+            <div class="acoes">
+              <button type="button" @click="decidir('substituir')">Substituir rascunho</button>
+              <button type="button" class="secundario" @click="decidir('inserir')">
+                Inserir no cursor
+              </button>
+              <button type="button" class="link" @click="cancelarEscolha">Cancelar</button>
+            </div>
           </div>
-        </div>
-        <p v-if="erroResposta" class="ajuda ajuda--erro" role="alert">{{ erroResposta }}</p>
-        <textarea
-          id="resposta"
-          ref="campoTexto"
-          v-model="texto"
-          rows="2"
-          :maxlength="arquivo ? TAMANHO_MAXIMO_LEGENDA : 4096"
-          :disabled="!!motivoComposer || (!!arquivo && !aceitaLegenda)"
-          :placeholder="
-            motivoComposer ||
-            (arquivo
-              ? aceitaLegenda
-                ? 'Legenda (opcional)'
-                : 'O WhatsApp não aceita legenda em áudio.'
-              : 'Digite uma mensagem…')
-          "
-          :role="pelaBarra ? 'combobox' : undefined"
-          :aria-expanded="pelaBarra ? 'true' : undefined"
-          :aria-controls="pelaBarra ? 'seletor-respostas-lista' : undefined"
-          :aria-activedescendant="pelaBarra ? seletorRespostas?.opcaoAtiva : undefined"
-          @keydown="teclarNoCampo"
-          @input="verificarBarra"
-          @click="verificarBarra"
-          @blur="fecharBarra"
-        ></textarea>
-        <div class="ferramentas">
-          <button
-            type="button"
-            class="botao-icone sem-borda"
-            aria-label="Anexar arquivo"
-            title="Anexar arquivo (imagem, PDF ou áudio)"
-            :disabled="!!motivoComposer || enviando"
-            @click="seletor?.click()"
-          >
-            <IconeTraco nome="anexar" :tamanho="20" />
-          </button>
-          <button
-            v-if="podeRespostas"
-            type="button"
-            class="secundario com-icone"
-            :aria-expanded="!!respostas && !pelaBarra"
-            :aria-describedby="arquivo ? 'respostas-indisponivel' : undefined"
-            :disabled="respostasIndisponiveis"
-            title="Inserir uma resposta rápida (ou digite / no campo)"
-            @click="respostas && !pelaBarra ? fecharRespostas() : abrirRespostas()"
-          >
-            <IconeTraco nome="raio" />
-            Respostas rápidas
-          </button>
-          <span v-if="podeRespostas && arquivo" id="respostas-indisponivel" class="ajuda">
-            Respostas rápidas ficam indisponíveis com anexo selecionado.
-          </span>
-          <span class="espaco"></span>
-          <button
-            type="submit"
-            class="botao-icone enviar"
-            :aria-label="enviando ? 'Enviando…' : 'Enviar'"
-            :title="enviando ? 'Enviando…' : 'Enviar'"
-            :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
-          >
-            <IconeTraco nome="enviar" :tamanho="20" />
-          </button>
-        </div>
-      </form>
-      <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
-        {{ describeApiError(anexoMut.error.value) }} O arquivo foi mantido; tentar de novo não
-        duplica a mensagem.
-      </AlertaMensagem>
-      <AlertaMensagem v-if="responderMut.isError.value" tipo="erro">
-        {{ describeApiError(responderMut.error.value) }} O texto foi mantido; tentar de novo não
-        duplica a mensagem.
-      </AlertaMensagem>
+          <p v-if="erroResposta" class="ajuda ajuda--erro" role="alert">{{ erroResposta }}</p>
+          <textarea
+            id="resposta"
+            ref="campoTexto"
+            v-model="texto"
+            rows="1"
+            :maxlength="arquivo ? TAMANHO_MAXIMO_LEGENDA : 4096"
+            :disabled="!!motivoComposer || (!!arquivo && !aceitaLegenda)"
+            :placeholder="
+              motivoComposer ||
+              (arquivo
+                ? aceitaLegenda
+                  ? 'Legenda (opcional)'
+                  : 'O WhatsApp não aceita legenda em áudio.'
+                : 'Digite uma mensagem…')
+            "
+            :role="pelaBarra ? 'combobox' : undefined"
+            :aria-expanded="pelaBarra ? 'true' : undefined"
+            :aria-controls="pelaBarra ? 'seletor-respostas-lista' : undefined"
+            :aria-activedescendant="pelaBarra ? seletorRespostas?.opcaoAtiva : undefined"
+            @keydown="teclarNoCampo"
+            @input="verificarBarra"
+            @click="verificarBarra"
+            @blur="fecharBarra"
+          ></textarea>
+          <div class="ferramentas">
+            <button
+              type="button"
+              class="botao-icone sem-borda"
+              aria-label="Anexar arquivo"
+              title="Anexar arquivo (imagem, PDF ou áudio)"
+              :disabled="!!motivoComposer || enviando"
+              @click="seletor?.click()"
+            >
+              <IconeTraco nome="anexar" :tamanho="22" />
+            </button>
+            <button
+              v-if="podeRespostas"
+              type="button"
+              class="ferramenta com-icone"
+              :aria-expanded="!!respostas && !pelaBarra"
+              :aria-describedby="arquivo ? 'respostas-indisponivel' : undefined"
+              :disabled="respostasIndisponiveis"
+              title="Inserir uma resposta rápida (ou digite / no campo)"
+              @click="respostas && !pelaBarra ? fecharRespostas() : abrirRespostas()"
+            >
+              <IconeTraco nome="raio" :tamanho="22" />
+              Respostas rápidas
+            </button>
+            <span v-if="podeRespostas && arquivo" id="respostas-indisponivel" class="ajuda">
+              Respostas rápidas ficam indisponíveis com anexo selecionado.
+            </span>
+            <span class="espaco"></span>
+            <button
+              type="submit"
+              class="botao-icone enviar"
+              :aria-label="enviando ? 'Enviando…' : 'Enviar'"
+              :title="enviando ? 'Enviando…' : 'Enviar'"
+              :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
+            >
+              <IconeTraco nome="enviar" :tamanho="26" />
+            </button>
+          </div>
+        </form>
+        <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
+          {{ describeApiError(anexoMut.error.value) }} O arquivo foi mantido; tentar de novo não
+          duplica a mensagem.
+        </AlertaMensagem>
+        <AlertaMensagem v-if="responderMut.isError.value" tipo="erro">
+          {{ describeApiError(responderMut.error.value) }} O texto foi mantido; tentar de novo não
+          duplica a mensagem.
+        </AlertaMensagem>
+      </div>
     </template>
   </section>
 </template>
 
 <style scoped>
+/* AT-03/AT-04/AT-05: cartão da conversa em toda a altura; só a linha do tempo rola. */
 .conversa {
   display: flex;
   flex-direction: column;
   min-width: 0;
   margin: 0;
-  gap: 0.5rem;
+  padding: 0;
+  overflow: hidden;
 }
 
-/* AT-03/AT-04: avatar, nome, telefone e situação à esquerda; ações à direita (descem para a linha
-   de baixo quando não cabem, sem espremer o nome). */
+.estado-conversa {
+  padding: 24px;
+}
+
+.faixa {
+  margin: 8px 16px 0;
+}
+
+/* Cabeçalho (112 px): avatar de 64 px, nome em link, telefone; ações à direita; meta embaixo. */
 .topo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.5rem 0.75rem;
+  display: grid;
+  grid-template-columns: 64px minmax(11rem, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+  flex-shrink: 0;
+  padding: 10px 16px 13px 9px;
   border-bottom: 1px solid var(--cor-borda);
-  padding-bottom: 0.75rem;
 }
 
 .avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
   border-radius: 999px;
   background: var(--cor-destaque-suave);
   color: var(--cor-destaque-forte);
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 500;
 }
 
 .identificacao {
-  flex: 1 1 14rem;
   min-width: 0;
 }
 
 .topo h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
-.topo p {
-  margin: 0.15rem 0 0;
+.topo h2,
+.telefone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topo h2 .icone,
+.telefone .icone {
+  flex-shrink: 0;
+}
+
+.topo h2 a {
+  color: var(--cor-destaque);
+  text-underline-offset: 3px;
+}
+
+.telefone {
+  margin: 2px 0 0;
+  color: var(--cor-texto-2);
+  font-size: 17px;
+}
+
+.telefone .icone {
+  color: var(--cor-destaque);
+}
+
+.meta {
+  grid-column: 1 / -1;
+  margin: 8px 0 0 7px;
+  color: var(--cor-texto-2);
+  font-size: 15px;
 }
 
 .topo .acoes {
-  margin-left: auto;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.topo .acoes button:not(.botao-icone) {
+  height: 46px;
+  padding: 0 16px;
+  white-space: nowrap;
+  border-radius: var(--raio-controle);
+  font-size: 17px;
+}
+
+.topo .acoes .botao-icone {
+  width: 44px;
+  height: 44px;
+}
+
+/* Abrir o painel e fechar a conversa não aparecem no frame: ficam discretos, sem borda. */
+.topo .acoes .botao-icone.sem-borda,
+.topo .acoes .botao-icone.painel {
+  width: 36px;
+  border-color: transparent;
+}
+
+/* AT-03: assumir é a ação principal do estado aguardando. */
+.topo .acoes button.assumir {
+  height: 46px;
+  min-width: 250px;
+  justify-content: center;
+  gap: 12px;
+  border-color: var(--cor-destaque);
+  background: linear-gradient(180deg, #24a94c 0%, var(--cor-destaque) 100%);
+  font-size: 20px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgb(31 157 69 / 25%);
 }
 
 .transferencia {
@@ -778,6 +871,7 @@ async function carregarAnteriores() {
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 0.75rem;
   align-items: end;
+  padding: 12px 16px 0;
 }
 
 .transferencia select,
@@ -792,13 +886,12 @@ async function carregarAnteriores() {
 
 .linha {
   flex: 1;
-  min-height: 18rem;
-  max-height: 60vh;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.75rem 0.25rem;
+  gap: 10px;
+  padding: 14px 16px 16px;
 }
 
 .anteriores {
@@ -817,12 +910,29 @@ async function carregarAnteriores() {
 /* Separador de dia (pílula centralizada, como os eventos). */
 .dia {
   align-self: center;
-  margin: 0.25rem 0;
-  padding: 0.2rem 0.75rem;
-  border-radius: 6px;
+  margin: 4px 0;
+  padding: 8px 20px;
+  border-radius: 8px;
   background: var(--cor-superficie-2);
   color: var(--cor-texto-2);
-  font-size: 0.8rem;
+  font-size: 15px;
+}
+
+/* Área de resposta (AT-04): aba "Mensagem", campo de 48 px e ferramentas abaixo. */
+.area-resposta {
+  flex-shrink: 0;
+  border-top: 1px solid var(--cor-borda);
+  padding: 0 16px 11px;
+}
+
+.aba {
+  display: inline-block;
+  margin: 0 0 12px 12px;
+  padding: 13px 2px 9px;
+  border-bottom: 3px solid var(--cor-destaque);
+  color: var(--cor-destaque);
+  font-size: 17px;
+  font-weight: 500;
 }
 
 .selecionado {
@@ -830,6 +940,7 @@ async function carregarAnteriores() {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.25rem 0.75rem;
+  margin-bottom: 8px;
   padding: 0.4rem 0.6rem;
   border: 1px dashed var(--cor-borda);
   border-radius: 8px;
@@ -840,33 +951,44 @@ async function carregarAnteriores() {
   overflow-wrap: anywhere;
 }
 
-/* AT-03: aviso no lugar da resposta quando ela não é possível. */
+/* AT-03: faixa no lugar da resposta quando ela não é possível. */
 .aviso-compositor {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 10px;
+  min-height: 56px;
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
+  padding: 8px 16px;
+  box-sizing: border-box;
   background: var(--cor-destaque-suave);
   color: var(--cor-destaque-forte);
-  font-size: 0.9rem;
+  font-size: 17px;
   text-align: center;
 }
 
-/* AT-04: campo em toda a largura e, abaixo, anexar à esquerda e enviar à direita. */
+.aviso-compositor .icone {
+  flex-shrink: 0;
+  color: var(--cor-destaque);
+}
+
 .composer {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  border-top: 1px solid var(--cor-borda);
-  padding-top: 0.75rem;
+  gap: 8px;
 }
 
 .composer textarea {
   width: 100%;
+  min-height: 48px;
+  max-height: 10rem;
   box-sizing: border-box;
+  padding: 12px 16px;
+  border-color: var(--cor-borda);
+  border-radius: var(--raio-controle);
+  font-size: 17px;
+  line-height: 1.35;
   resize: vertical;
 }
 
@@ -874,11 +996,46 @@ async function carregarAnteriores() {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 4px 12px;
 }
 
 .ferramentas .espaco {
   flex: 1;
+}
+
+.ferramentas > .botao-icone:first-child {
+  width: 36px;
+  height: 36px;
+}
+
+button.ferramenta {
+  height: 36px;
+  padding: 0 6px;
+  border: none;
+  background: none;
+  color: var(--cor-texto-2);
+  font-size: 15px;
+  gap: 10px;
+}
+
+button.ferramenta .icone {
+  color: var(--cor-texto);
+}
+
+button.ferramenta:hover:not(:disabled) {
+  color: var(--cor-texto);
+}
+
+button.botao-icone.enviar {
+  width: 60px;
+  height: 60px;
+  border-color: var(--cor-destaque);
+  background: var(--cor-destaque);
+  color: #fff;
+}
+
+button.botao-icone.enviar:hover:not(:disabled) {
+  background: var(--cor-destaque-forte);
 }
 
 .escolha {
@@ -891,15 +1048,30 @@ async function carregarAnteriores() {
   margin: 0 0 0.5rem;
 }
 
-button.botao-icone.enviar {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-color: var(--cor-destaque-forte);
-  background: var(--cor-destaque);
-  color: #fff;
-}
+@media (max-width: 60rem) {
+  .topo {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
 
-button.botao-icone.enviar:hover:not(:disabled) {
-  background: var(--cor-destaque-forte);
+  .avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+
+  .topo .acoes {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .topo .acoes button.assumir {
+    min-width: 0;
+  }
+
+  .linha {
+    min-height: 24rem;
+  }
 }
 </style>

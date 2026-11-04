@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 import {
   abrirUsuarioNaLista,
   ADMIN_EMAIL,
+  botaoConta,
   ADMIN_SENHA,
   criarUsuarioAtivo,
   entrar,
@@ -118,7 +119,7 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   const painel = page.getByRole('complementary', { name: 'Associado' })
   await painel.getByRole('radio', { name: new RegExp(razao) }).check()
   await painel.getByRole('button', { name: 'Vincular associado' }).click()
-  await expect(painel.getByRole('link', { name: 'Abrir ficha' })).toBeVisible()
+  await expect(painel.getByRole('link', { name: 'Ver cadastro' })).toBeVisible()
   await expect(page.getByRole('heading', { name: razao, level: 2 })).toBeVisible()
 
   // 4. Transferir: devolver à fila, com motivo; depois assumir de novo e encerrar.
@@ -134,7 +135,9 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Encerrar' }).click()
   await expect(page.getByText('Encerrado', { exact: true })).toBeVisible()
-  await expect(page.getByLabel('Mensagem')).toBeDisabled()
+  // Encerrado: o compositor dá lugar à faixa com o motivo (AT-03).
+  await expect(page.getByLabel('Mensagem')).toHaveCount(0)
+  await expect(page.getByRole('status').filter({ hasText: 'Atendimento encerrado.' })).toBeVisible()
 
   // 5. Histórico geral (pelo menu "Ver opções") e detalhe somente leitura.
   await page.getByRole('button', { name: 'Ver opções' }).click()
@@ -180,7 +183,7 @@ test('transferência entre dois atendentes: só o novo responsável responde e e
   await admin.getByRole('button', { name: 'Salvar perfis' }).click()
   await expect(admin.getByText(/Administrador/).first()).toBeVisible()
   await entrar(atendente, email, SENHA_PADRAO)
-  await expect(atendente.getByRole('button', { name: 'Sair' })).toBeVisible()
+  await expect(botaoConta(atendente)).toBeVisible()
 
   expect(
     (
@@ -208,7 +211,8 @@ test('transferência entre dois atendentes: só o novo responsável responde e e
   // O antigo responsável perde as ações, na tela e no servidor.
   await expect(admin.getByRole('button', { name: 'Transferir' })).toHaveCount(0)
   await expect(admin.getByRole('button', { name: 'Encerrar' })).toHaveCount(0)
-  await expect(admin.getByLabel('Mensagem')).toBeDisabled()
+  await expect(admin.getByLabel('Mensagem')).toHaveCount(0)
+  await expect(admin.getByText(/só quem é responsável responde/)).toBeVisible()
   const id = new URL(admin.url()).searchParams.get('id')
   const xsrf = (await admin.context().cookies()).find((c) => c.name === 'XSRF-TOKEN')?.value ?? ''
   const direto = await admin.request.post(`/api/v1/atendimento/atendimentos/${id}/encerramento`, {

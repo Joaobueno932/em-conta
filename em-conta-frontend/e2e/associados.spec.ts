@@ -1,6 +1,6 @@
 ﻿import { expect, test, type Page } from '@playwright/test'
 
-import { ADMIN_EMAIL, ADMIN_SENHA, paginaDoAdministrador } from './apoio'
+import { ADMIN_EMAIL, ADMIN_SENHA, paginaDoAdministrador, sairDaConta } from './apoio'
 
 /**
  * Jornada de associados e UCs contra o backend real. Cria registros: rode contra um banco isolado
@@ -193,7 +193,7 @@ test('sessão encerrada durante o cadastro leva ao login', async ({ browser }) =
   await page.getByLabel(/Nome completo/).fill('Rascunho')
 
   await outraAba.goto('/')
-  await outraAba.getByRole('button', { name: 'Sair' }).click()
+  await sairDaConta(outraAba)
   await expect(outraAba.getByRole('heading', { name: 'Entrar no Em Conta' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Salvar associado' }).click()
