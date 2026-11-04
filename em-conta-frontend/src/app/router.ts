@@ -136,7 +136,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'atendimento',
         name: 'atendimento',
         component: AtendimentoPage,
-        meta: { permissao: 'atendimento:consultar' },
+        meta: { permissao: 'atendimento:consultar', tituloCabecalho: 'Atendimento' },
       },
       {
         path: 'atendimento/historico',

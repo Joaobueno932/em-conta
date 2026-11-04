@@ -235,17 +235,23 @@ async function encerrar() {
         <path class="linha" d="M1410 168C1450 148 1590 128 1672 146" />
       </svg>
       <header class="topo">
-        <button
-          type="button"
-          class="recolher"
-          aria-controls="menu-lateral"
-          :aria-expanded="!recolhido"
-          :aria-label="recolhido ? 'Expandir menu' : 'Recolher menu'"
-          :title="recolhido ? 'Expandir menu' : 'Recolher menu'"
-          @click="recolhido = !recolhido"
-        >
-          <IconeTraco :nome="recolhido ? 'expandir' : 'recolher'" :tamanho="20" />
-        </button>
+        <div class="inicio-topo">
+          <button
+            type="button"
+            class="recolher"
+            aria-controls="menu-lateral"
+            :aria-expanded="!recolhido"
+            :aria-label="recolhido ? 'Expandir menu' : 'Recolher menu'"
+            :title="recolhido ? 'Expandir menu' : 'Recolher menu'"
+            @click="recolhido = !recolhido"
+          >
+            <IconeTraco :nome="recolhido ? 'expandir' : 'recolher'" :tamanho="20" />
+          </button>
+          <!-- Páginas de área inteira (ex.: Atendimento) levam o título aqui, para liberar altura. -->
+          <h1 v-if="route.meta.tituloCabecalho" class="titulo-contexto">
+            {{ route.meta.tituloCabecalho }}
+          </h1>
+        </div>
         <div ref="areaConta" class="conta" @keydown.esc="fecharConta(true)">
           <button
             ref="botaoConta"
@@ -477,6 +483,23 @@ async function encerrar() {
   border-bottom: 1px solid var(--cor-borda);
 }
 
+.inicio-topo {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.titulo-contexto {
+  margin: 0;
+  overflow: hidden;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 button.recolher {
   display: inline-flex;
   align-items: center;
@@ -628,8 +651,12 @@ button.botao-conta .icone {
   }
 
   .topo {
-    justify-content: flex-end;
+    gap: 12px;
     padding: 0 16px;
+  }
+
+  .titulo-contexto {
+    font-size: 20px;
   }
 
   button.botao-conta .nome {

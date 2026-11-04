@@ -747,6 +747,7 @@ async function carregarAnteriores() {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .estado-conversa {
@@ -827,9 +828,10 @@ async function carregarAnteriores() {
   font-size: 15px;
 }
 
+/* Conversa estreita (ex.: 1280 px): as ações quebram para a linha de baixo em vez de sair do cartão. */
 .topo .acoes {
   justify-content: flex-end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1046,6 +1048,24 @@ button.botao-icone.enviar:hover:not(:disabled) {
 
 .escolha p {
   margin: 0 0 0.5rem;
+}
+
+/* Cartão estreito (painel aberto em 1280–1440 px): as ações descem para uma linha própria. */
+@container (max-width: 760px) {
+  .topo {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .topo .acoes {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .topo .meta {
+    grid-row: 3;
+  }
 }
 
 @media (max-width: 60rem) {

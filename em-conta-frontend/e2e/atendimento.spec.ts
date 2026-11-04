@@ -88,6 +88,16 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   await page.getByRole('link', { name: 'Atendimento', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Atendimento', level: 1 })).toBeVisible()
   await expect(page.getByText('Canal não configurado')).toHaveCount(0)
+  // Título só no cabeçalho global; a fila tem apenas as duas visões, com as contagens reais.
+  await expect(
+    page.getByRole('banner').getByRole('heading', { name: 'Atendimento', level: 1 }),
+  ).toBeVisible()
+  const visoes = page.getByRole('group', { name: 'Visões da fila' }).getByRole('button')
+  await expect(visoes).toHaveCount(2)
+  await expect(visoes.nth(0)).toHaveText(/^Em andamento\s*\d+$/)
+  await expect(visoes.nth(1)).toHaveText(/^Aguardando\s*\d+$/)
+  // Um único seletor de presença, no topo da fila.
+  await expect(page.getByLabel('Sua presença')).toHaveCount(1)
   // O evento entra na caixa de entrada e é processado em segundo plano: a fila atualiza sozinha.
   await expect(async () => {
     await abrirNaFila(page, nome, nome)

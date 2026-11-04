@@ -67,30 +67,14 @@ const disponivel = computed(() => presenca.data.value?.disponivel)
 
 <template>
   <main class="atendimento">
-    <header class="cabecalho-pagina">
-      <div>
-        <h1>Atendimento</h1>
-        <p class="subtitulo">Converse e acompanhe seus associados.</p>
-      </div>
-      <div class="situacoes">
-        <p
-          v-if="canal.data.value && !canal.data.value.configurado"
-          class="aviso-canal"
-          role="status"
-        >
-          <IconeTraco nome="informacao" />
-          <span>
-            <strong>Canal não configurado.</strong> Mensagens não são recebidas nem enviadas até a
-            integração com o WhatsApp ser configurada.
-          </span>
-        </p>
-        <!-- Presença manual simples: só informa os colegas, não muda a distribuição. -->
-        <p v-if="disponivel !== undefined" class="presenca-atual">
-          <span class="ponto" :class="{ ausente: !disponivel }" aria-hidden="true"></span>
-          {{ disponivel ? 'Disponível' : 'Ausente' }}
-        </p>
-      </div>
-    </header>
+    <!-- O título fica no cabeçalho global (meta.tituloCabecalho); aqui só o aviso real do canal. -->
+    <p v-if="canal.data.value && !canal.data.value.configurado" class="aviso-canal" role="status">
+      <IconeTraco nome="informacao" :tamanho="18" />
+      <span>
+        <strong>Canal não configurado.</strong> Mensagens não são recebidas nem enviadas até a
+        integração com o WhatsApp ser configurada.
+      </span>
+    </p>
     <AlertaMensagem v-if="alterarPresenca.isError.value" tipo="erro">
       {{ describeApiError(alterarPresenca.error.value) }}
     </AlertaMensagem>
@@ -98,6 +82,7 @@ const disponivel = computed(() => presenca.data.value?.disponivel)
     <div class="colunas" :class="{ 'sem-painel': !selecionado || !painelAberto }">
       <FilaAtendimento ref="fila" :selecionado="selecionado" @selecionar="selecionar">
         <template #topo>
+          <!-- Presença manual simples: só informa os colegas, não muda a distribuição. -->
           <div v-if="presenca.data.value" class="presenca">
             <span class="ponto" :class="{ ausente: !disponivel }" aria-hidden="true"></span>
             <label for="presenca" class="visualmente-oculto">Sua presença</label>
@@ -147,65 +132,25 @@ const disponivel = computed(() => presenca.data.value?.disponivel)
 </template>
 
 <style scoped>
-/* Frame: conteúdo com 15 px nas bordas; título 12 px mais para dentro; cartões de y 178 a 926. */
+/* Fila, conversa e painel logo abaixo do cabeçalho global, até o fim da janela. */
 .atendimento {
   display: flex;
   flex-direction: column;
+  gap: 10px;
   height: 100%;
-  min-height: 34rem;
+  min-height: 28rem;
   box-sizing: border-box;
-  padding: 0 15px 15px;
+  padding: 12px 15px 15px;
 }
 
-.cabecalho-pagina {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-shrink: 0;
-  padding: 14px 23px 0 12px;
-  min-height: 90px;
-}
-
-.cabecalho-pagina h1 {
-  margin: 0;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
-
-.cabecalho-pagina .subtitulo {
-  margin: 0;
-  color: var(--cor-texto-2);
-  font-size: 18px;
-}
-
-.situacoes {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
-  padding-top: 26px;
-}
-
-.presenca-atual {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 17px;
-  font-weight: 500;
-}
-
-/* Canal desligado: aviso compacto no cabeçalho, sem tomar a área das conversas. */
+/* Canal desligado: uma linha compacta acima das colunas, que quebra em telas estreitas. */
 .aviso-canal {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  max-width: 30rem;
-  margin: -14px 0 0;
-  padding: 8px 12px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 6px 12px;
   border: 1px solid #f0d9a8;
   border-radius: var(--raio-controle);
   background: #fdf6e7;
@@ -216,6 +161,7 @@ const disponivel = computed(() => presenca.data.value?.disponivel)
 
 .aviso-canal .icone {
   flex-shrink: 0;
+  margin-top: 1px;
   color: var(--cor-alerta);
 }
 
@@ -309,44 +255,35 @@ button.contorno:hover {
   background: var(--cor-destaque-suave);
 }
 
-/* Abaixo da largura do frame: o painel desce para baixo e a página rola. */
-/* Fila e conversa mantêm altura limitada (rolagem só dentro delas, leitura preservada); o painel
-   desce para a linha de baixo e a página rola até ele. */
+/* Fila e conversa ocupam a altura que sobra na janela (descontado o aviso do canal, se houver) e
+   rolam por dentro, preservando a leitura; o painel desce para a linha de baixo e a página rola
+   até ele. */
 @media (max-width: 80rem) {
-  .atendimento {
-    height: auto;
-  }
-
   .colunas,
   .colunas.sem-painel {
-    grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-rows: max(32rem, calc(100dvh - 210px)) auto;
+    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-rows: max(28rem, 100%) auto;
   }
 
   .colunas > :nth-child(3) {
     grid-column: 1 / -1;
+    margin-bottom: 15px;
   }
 }
 
 @media (max-width: 60rem) {
+  .atendimento {
+    height: auto;
+  }
+
+  .colunas > :nth-child(3) {
+    margin-bottom: 0;
+  }
+
   .colunas,
   .colunas.sem-painel {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 26rem) max(32rem, calc(100dvh - 140px)) auto;
-  }
-
-  .cabecalho-pagina {
-    flex-direction: column;
-    padding-right: 0;
-  }
-
-  .situacoes {
-    align-items: flex-start;
-    padding-top: 0;
-  }
-
-  .aviso-canal {
-    margin: 0;
   }
 }
 </style>

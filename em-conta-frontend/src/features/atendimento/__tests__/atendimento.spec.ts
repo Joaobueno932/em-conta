@@ -100,6 +100,44 @@ describe('Atendimento', () => {
     await waitFor(() => expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/assuncao`))
   })
 
+  it('mostra só as visões Em andamento e Aguardando, com o título no cabeçalho', async () => {
+    const { fetchFn } = apiFalsa(rotas(detalhe()))
+    await montarApp(fetchFn, '/atendimento')
+
+    const grupo = await screen.findByRole('group', { name: 'Visões da fila' })
+    // Contagens reais vindas do servidor (emAndamento 0, aguardando 1).
+    await waitFor(() =>
+      expect([...grupo.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
+        'Em andamento0',
+        'Aguardando1',
+      ]),
+    )
+    expect(screen.queryByRole('button', { name: /Meus atendimentos|Encerrados/ })).toBeNull()
+    // Um só seletor de presença e o título no cabeçalho global, sem o bloco grande da página.
+    expect(screen.getAllByText('Disponível')).toHaveLength(1)
+    expect(
+      screen.getByRole('heading', { name: 'Atendimento', level: 1 }).closest('header'),
+    ).toBeTruthy()
+    expect(screen.queryByText('Converse e acompanhe seus associados.')).toBeNull()
+  })
+
+  it.each([
+    ['MEUS', 'EM_ANDAMENTO'],
+    ['ENCERRADOS', 'AGUARDANDO'],
+    ['qualquer', 'AGUARDANDO'],
+    ['EM_ANDAMENTO', 'EM_ANDAMENTO'],
+  ])('URL antiga com visao=%s abre %s e sai da URL', async (antiga, esperada) => {
+    const { fetchFn, chamadas } = apiFalsa(rotas(detalhe()))
+    const { router } = await montarApp(fetchFn, `/atendimento?id=1&visao=${antiga}`)
+
+    await waitFor(() => expect(router.currentRoute.value.query).toEqual({ id: '1' }))
+    await waitFor(() =>
+      expect(chamadas.some((c) => c.includes(`/atendimentos?visao=${esperada}&`))).toBe(true),
+    )
+    expect(chamadas.some((c) => /visao=(MEUS|ENCERRADOS)/.test(c))).toBe(false)
+    expect(await screen.findByText('Olá, preciso de ajuda')).toBeTruthy()
+  })
+
   it('sem canal configurado avisa e não permite enviar', async () => {
     const { fetchFn, chamadas } = apiFalsa(
       rotas(

@@ -15,6 +15,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     acesso?: NivelAcesso
     permissao?: string
+    /** Título da página no cabeçalho global, no lugar do título grande do conteúdo. */
+    tituloCabecalho?: string
   }
 }
 

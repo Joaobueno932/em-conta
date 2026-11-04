@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
@@ -16,10 +16,14 @@ import {
   INTERVALO_MS,
   listarFila,
   nomeContato,
-  type Visao,
 } from './atendimento-api'
 
-/** Fila de conversas (AT-01/AT-03): visões, busca no servidor e paginação. */
+/**
+ * Fila de conversas (AT-01/AT-03): visões, busca no servidor e paginação. Nesta página só há
+ * "Em andamento" (todos os atendimentos em curso, de qualquer responsável) e "Aguardando"; os
+ * encerrados ficam no Histórico geral, em "Ver opções".
+ */
+type VisaoFila = 'EM_ANDAMENTO' | 'AGUARDANDO'
 const props = defineProps<{ selecionado: number | null }>()
 const emit = defineEmits<{ selecionar: [id: number] }>()
 
@@ -43,7 +47,20 @@ onMounted(() => document.addEventListener('click', cliqueFora))
 onBeforeUnmount(() => document.removeEventListener('click', cliqueFora))
 
 const http = useHttpClient()
-const visao = ref<Visao>('AGUARDANDO')
+const route = useRoute()
+const router = useRouter()
+
+// Links antigos podem trazer ?visao= com visões que saíram da página (MEUS, ENCERRADOS): abre a
+// visão válida mais próxima e tira o parâmetro da URL, mantendo a conversa selecionada.
+const pedida = route.query.visao
+const visao = ref<VisaoFila>(
+  pedida === 'EM_ANDAMENTO' || pedida === 'MEUS' ? 'EM_ANDAMENTO' : 'AGUARDANDO',
+)
+if (pedida !== undefined) {
+  const query = { ...route.query }
+  delete query.visao
+  void router.replace({ query })
+}
 const termo = ref('')
 const busca = ref('')
 const pagina = ref(0)
@@ -60,17 +77,13 @@ const visoes = computed(() => {
   return [
     { valor: 'EM_ANDAMENTO' as const, rotulo: 'Em andamento', total: c?.emAndamento },
     { valor: 'AGUARDANDO' as const, rotulo: 'Aguardando', total: c?.aguardando },
-    { valor: 'MEUS' as const, rotulo: 'Meus atendimentos', total: c?.meus },
-    { valor: 'ENCERRADOS' as const, rotulo: 'Encerrados', total: undefined },
   ]
 })
 
 // Estado vazio por visão (AT-01); com busca, a mensagem fala da busca.
-const VAZIO: Record<Visao, [string, string]> = {
+const VAZIO: Record<VisaoFila, [string, string]> = {
   AGUARDANDO: ['Nenhum atendimento aguardando', 'Novas conversas do WhatsApp aparecem aqui.'],
   EM_ANDAMENTO: ['Nenhum atendimento em andamento', 'Assuma uma conversa da fila para começar.'],
-  MEUS: ['Você não tem atendimentos', 'Assuma uma conversa da fila para começar.'],
-  ENCERRADOS: ['Nenhum atendimento encerrado', 'Atendimentos encerrados aparecem aqui.'],
 }
 const vazio = computed<[string, string]>(() =>
   busca.value
@@ -78,7 +91,7 @@ const vazio = computed<[string, string]>(() =>
     : VAZIO[visao.value],
 )
 
-function trocar(nova: Visao) {
+function trocar(nova: VisaoFila) {
   visao.value = nova
   pagina.value = 0
 }
@@ -149,9 +162,7 @@ defineExpose({ mostrarVisao: trocar })
               <span class="avatar" aria-hidden="true">{{ iniciais(nomeContato(a)) }}</span>
               <span class="nome">
                 {{ a.associado?.nome ?? nomeContato(a) }}
-                <span v-if="a.responsavel && visao !== 'MEUS'" class="responsavel">{{
-                  a.responsavel.nome
-                }}</span>
+                <span v-if="a.responsavel" class="responsavel">{{ a.responsavel.nome }}</span>
               </span>
               <span class="data">Desde {{ formatarData(a.iniciadoEm) }}</span>
             </button>
@@ -209,7 +220,8 @@ defineExpose({ mostrarVisao: trocar })
 </template>
 
 <style scoped>
-/* AT-01/AT-03: cartão de 340 px; topo de 50 px, busca de 38 px, chips de 36 px, itens de 57 px. */
+/* AT-01/AT-03: cartão de 340 px; topo de 50 px, busca de 38 px, chips de 36 px, itens de 57 px.
+   As duas visões cabem numa linha; em larguras menores os chips quebram. */
 .fila {
   display: flex;
   flex-direction: column;
@@ -274,12 +286,15 @@ defineExpose({ mostrarVisao: trocar })
   margin-top: 10px;
 }
 
+/* As duas visões dividem a linha; só quebram se a fila ficar mais estreita que os rótulos. */
 .chip {
+  flex: 1 1 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   height: 36px;
-  padding: 0 12px;
+  padding: 0 8px;
   border: 1px solid var(--cor-borda);
   border-radius: 999px;
   background: var(--cor-superficie);
@@ -373,7 +388,8 @@ defineExpose({ mostrarVisao: trocar })
   font-size: 16px;
   font-weight: 500;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .responsavel {
@@ -484,5 +500,24 @@ button.ver-opcoes:hover {
 
 .menu-opcoes a:hover {
   background: var(--cor-superficie-2);
+}
+
+/* Fila de 320 px (até 80rem): a data passa para duas linhas e sobra espaço para o nome. */
+@media (max-width: 80rem) and (min-width: 60.01rem) {
+  .item {
+    gap: 10px;
+  }
+
+  .chip {
+    gap: 6px;
+    padding: 0 6px;
+    font-size: 13px;
+  }
+
+  .data {
+    width: 5.5rem;
+    white-space: normal;
+    text-align: right;
+  }
 }
 </style>
