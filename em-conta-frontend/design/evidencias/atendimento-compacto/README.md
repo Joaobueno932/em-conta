@@ -34,3 +34,16 @@ API de trabalho com o WhatsApp desligado.
 - Até 1280 px: a fila tem 320 px, a data do item fica em duas linhas e as ações da conversa descem
   para uma linha própria quando o cartão fica estreito (antes saíam do cartão). Fila e conversa
   ocupam a altura que sobra (descontado o aviso do canal) e o painel desce para baixo delas.
+
+## Revisão: cabeçalho da conversa numa linha
+
+- `revisao/`: mesmos estados e tamanhos, capturados no build de produção (`vite preview`), sem a
+  pílula do Vue DevTools que aparece nas capturas de `depois/` (servidor de dev).
+- `comparacao/`: `depois/` e `revisao/` lado a lado.
+- `revisao/medidas.json`: medidas de cada captura (página sem rolagem própria no desktop,
+  compositor dentro da janela, linha do tempo rolando por dentro, altura do cabeçalho da conversa).
+
+Em 1672 px com o painel aberto (cartão de ~695 px) as ações voltam para a linha do nome, como no
+protótipo, e o nome fica numa linha (reticências; completo no `title` e no painel). O cabeçalho da
+conversa passa de ~160 para 119 px e a linha do tempo ganha ~41 px. Abaixo de 690 px de cartão
+(1440 px com painel, 1280 px, celular) as ações seguem descendo para uma linha própria.
