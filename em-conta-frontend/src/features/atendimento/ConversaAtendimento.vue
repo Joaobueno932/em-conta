@@ -428,10 +428,14 @@ async function carregarAnteriores() {
             <IconeTraco nome="pessoa" :tamanho="18" />
             <RouterLink
               v-if="resumo.associado"
+              class="nome-conversa"
               :to="{ name: 'associado', params: { id: resumo.associado.id } }"
+              :title="resumo.associado.nome"
               >{{ resumo.associado.nome }}</RouterLink
             >
-            <span v-else>{{ nomeContato(resumo) }}</span>
+            <span v-else class="nome-conversa" :title="nomeContato(resumo)">{{
+              nomeContato(resumo)
+            }}</span>
           </h2>
           <p class="telefone com-icone">
             <IconeTraco nome="telefone" :tamanho="17" />
@@ -761,7 +765,7 @@ async function carregarAnteriores() {
 /* Cabeçalho (112 px): avatar de 64 px, nome em link, telefone; ações à direita; meta embaixo. */
 .topo {
   display: grid;
-  grid-template-columns: 64px minmax(11rem, 1fr) auto;
+  grid-template-columns: 64px minmax(10rem, 1fr) auto;
   align-items: center;
   column-gap: 14px;
   flex-shrink: 0;
@@ -791,7 +795,14 @@ async function carregarAnteriores() {
   font-size: 20px;
   font-weight: 500;
   line-height: 1.3;
-  overflow-wrap: anywhere;
+}
+
+/* Nome numa linha só (completo no title e no painel): o cabeçalho não cresce com nomes longos. */
+.nome-conversa {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topo h2,
@@ -1050,8 +1061,9 @@ button.botao-icone.enviar:hover:not(:disabled) {
   margin: 0 0 0.5rem;
 }
 
-/* Cartão estreito (painel aberto em 1280–1440 px): as ações descem para uma linha própria. */
-@container (max-width: 760px) {
+/* Cartão estreito (painel aberto em 1280–1440 px): as ações descem para uma linha própria. Em
+   1672 px com o painel aberto (cartão de ~695 px) avatar, nome e ações ainda cabem numa linha. */
+@container (max-width: 690px) {
   .topo {
     grid-template-columns: 64px minmax(0, 1fr);
   }

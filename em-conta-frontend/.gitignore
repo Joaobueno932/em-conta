@@ -45,3 +45,6 @@ playwright-report/
 .env
 .env.*
 !.env.example
+
+# Exportação completa do protótipo (~900 MB): referência local, fora do Git
+/design/referencias/*.pdf
