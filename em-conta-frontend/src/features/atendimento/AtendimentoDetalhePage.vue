@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
 import { computed, nextTick, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
 import { describeApiError } from '@/shared/api/errors'
@@ -27,6 +27,15 @@ import { useLinhaDoTempo } from './use-linha-do-tempo'
  */
 const props = defineProps<{ id: string }>()
 const http = useHttpClient()
+const route = useRoute()
+
+// Vindo do histórico geral, voltar devolve à mesma consulta (filtros e página), que chega em
+// `volta`. Só vale um endereço do próprio histórico; qualquer outro valor leva ao histórico inicial.
+const volta = route.query.volta
+const voltar =
+  typeof volta === 'string' && /^\/atendimento\/historico(\?[^#]*)?$/.test(volta)
+    ? volta
+    : { name: 'atendimento-historico' }
 const id = computed(() => Number(props.id))
 
 const detalhe = useQuery({
@@ -80,7 +89,7 @@ async function irPara(mensagemId: number, cursor: string) {
     <template v-else-if="resumo">
       <header class="cabecalho">
         <RouterLink
-          :to="{ name: 'atendimento-historico' }"
+          :to="voltar"
           class="botao-icone sem-borda"
           aria-label="Voltar ao histórico geral"
           title="Voltar ao histórico geral"
@@ -90,7 +99,7 @@ async function irPara(mensagemId: number, cursor: string) {
         <div>
           <h1>{{ titulo }}</h1>
           <nav aria-label="Trilha" class="trilha">
-            <RouterLink :to="{ name: 'atendimento-historico' }">Histórico geral</RouterLink>
+            <RouterLink :to="voltar">Histórico geral</RouterLink>
             <span aria-hidden="true">/</span>
             <span aria-current="page">Detalhes do atendimento {{ resumo.codigo }}</span>
           </nav>

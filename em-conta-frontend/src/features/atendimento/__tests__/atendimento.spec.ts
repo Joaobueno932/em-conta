@@ -354,6 +354,61 @@ describe('Atendimento', () => {
     expect(screen.queryByLabelText('Mensagem')).toBeNull()
   })
 
+  it('histórico guarda filtros e página na URL e o detalhe volta para a mesma consulta', async () => {
+    const encerrado = resumo({ situacao: 'ENCERRADO', encerradoEm: '2026-10-29T13:00:00Z' })
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas(detalhe({ situacao: 'ENCERRADO' }), TODAS, {
+        [`GET ${BASE}/historico`]: () =>
+          jsonResponse({
+            itens: [encerrado],
+            pagina: 1,
+            tamanho: 20,
+            totalItens: 21,
+            totalPaginas: 2,
+          }),
+      }),
+    )
+    const { router } = await montarApp(fetchFn, '/atendimento/historico')
+    await fireEvent.update(await screen.findByLabelText('Buscar contato'), 'Contato')
+    await fireEvent.update(screen.getByLabelText('De'), '2026-10-01')
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtrar' }))
+    await fireEvent.click(await screen.findByRole('button', { name: 'Página 2' }))
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe(
+        '/atendimento/historico?busca=Contato&de=2026-10-01&pagina=2',
+      ),
+    )
+    await waitFor(() => expect(chamadas.some((c) => c.includes('pagina=1'))).toBe(true))
+
+    await fireEvent.click(screen.getByRole('link', { name: 'Contato Teste' }))
+    await waitFor(() => expect(router.currentRoute.value.name).toBe('atendimento-detalhe'))
+    await fireEvent.click(await screen.findByRole('link', { name: 'Voltar ao histórico geral' }))
+    await waitFor(() => expect(router.currentRoute.value.name).toBe('atendimento-historico'))
+    expect(router.currentRoute.value.query).toEqual({
+      busca: 'Contato',
+      de: '2026-10-01',
+      pagina: '2',
+    })
+    expect((screen.getByLabelText('Buscar contato') as HTMLInputElement).value).toBe('Contato')
+    expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('2026-10-01')
+    expect(screen.getByRole('button', { name: 'Página 2' }).getAttribute('aria-current')).toBe(
+      'page',
+    )
+  })
+
+  it('o detalhe só volta para endereços do próprio histórico', async () => {
+    for (const volta of ['https://exemplo.com/atendimento/historico', '/usuarios', '//x.com']) {
+      const { fetchFn } = apiFalsa(rotas(detalhe({ situacao: 'ENCERRADO' })))
+      const { unmount } = await montarApp(
+        fetchFn,
+        `/atendimento/historico/1?volta=${encodeURIComponent(volta)}`,
+      )
+      const link = await screen.findByRole('link', { name: 'Voltar ao histórico geral' })
+      expect(link.getAttribute('href')).toBe('/atendimento/historico')
+      unmount()
+    }
+  })
+
   it('"Ver opções" só oferece o Histórico geral', async () => {
     const { fetchFn } = apiFalsa(rotas(detalhe()))
     await montarApp(fetchFn, '/atendimento?id=1')

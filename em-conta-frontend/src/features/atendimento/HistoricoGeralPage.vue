@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
-import { computed, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
 import { describeApiError } from '@/shared/api/errors'
@@ -22,14 +22,28 @@ import {
  */
 const http = useHttpClient()
 const route = useRoute()
+const router = useRouter()
 
 const TAMANHO = 20
-const inicial = typeof route.query.busca === 'string' ? route.query.busca : ''
-const termo = ref(inicial)
-const filtros = ref({ busca: inicial, de: '', ate: '' })
-const de = ref('')
-const ate = ref('')
-const pagina = ref(0)
+const daUrl = (chave: string) => (typeof route.query[chave] === 'string' ? route.query[chave] : '')
+const data = (valor: string) => (/^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : '')
+const inicial = { busca: daUrl('busca'), de: data(daUrl('de')), ate: data(daUrl('ate')) }
+const termo = ref(inicial.busca)
+const filtros = ref(inicial)
+const de = ref(inicial.de)
+const ate = ref(inicial.ate)
+const paginaDaUrl = Number(daUrl('pagina'))
+const pagina = ref(Number.isInteger(paginaDaUrl) && paginaDaUrl > 1 ? paginaDaUrl - 1 : 0)
+
+// Filtros aplicados e página ficam na URL: recarregar ou voltar do detalhe mantém a consulta.
+watch([filtros, pagina], () => {
+  const query: Record<string, string> = {}
+  if (filtros.value.busca) query.busca = filtros.value.busca
+  if (filtros.value.de) query.de = filtros.value.de
+  if (filtros.value.ate) query.ate = filtros.value.ate
+  if (pagina.value > 0) query.pagina = String(pagina.value + 1)
+  void router.replace({ query })
+})
 
 const lista = useQuery({
   queryKey: computed(() =>
@@ -141,9 +155,14 @@ const paginas = computed(() => {
                   <span class="contato">
                     <span class="avatar" aria-hidden="true">{{ iniciais(nomeContato(a)) }}</span>
                     <span>
-                      <RouterLink :to="{ name: 'atendimento-detalhe', params: { id: a.id } }">{{
-                        nomeContato(a)
-                      }}</RouterLink>
+                      <RouterLink
+                        :to="{
+                          name: 'atendimento-detalhe',
+                          params: { id: a.id },
+                          query: { volta: route.fullPath },
+                        }"
+                        >{{ nomeContato(a) }}</RouterLink
+                      >
                       <span class="ajuda codigo">{{ a.codigo }}</span>
                     </span>
                   </span>
