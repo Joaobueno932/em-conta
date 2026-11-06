@@ -1,5 +1,8 @@
 # Evidências visuais — estrutura global e Atendimento
 
+> Auditoria completa do Atendimento (checklist, inventário do protótipo, capturas e comparações):
+> [auditoria-atendimento/](auditoria-atendimento/README.md).
+
 > Atualizado depois: título no cabeçalho global, presença única e só duas visões na fila. Ver
 > [atendimento-compacto/](atendimento-compacto/README.md).
 

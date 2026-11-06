@@ -125,7 +125,7 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `POST atendimentos/{id}/encerramento` | `versao` |
 | `PUT atendimentos/{id}/associado`, `GET …/associados-sugeridos`, `GET associados?busca=` | vínculo |
 | `GET responsaveis` | destinos de transferência |
-| `GET historico?busca=&de=&ate=` | histórico geral |
+| `GET historico?busca=&de=&ate=` | histórico geral (na tela, busca, período e página ficam na URL; o detalhe recebe a origem em `volta` e só aceita o próprio histórico) |
 | `GET webhook-falhas`, `POST webhook-eventos/{id}/reprocessamento` | eventos com falha |
 | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` | webhook da Meta (fora do contrato OpenAPI) |
 
@@ -339,7 +339,10 @@ busca no servidor, filtro por situação, paginação, formulário com prévia e
 campos, ativar/desativar; ações sem permissão não aparecem. No compositor, o botão **Respostas
 rápidas** (ou digitar `/` no início do campo ou depois de espaço) abre a busca nas ativas por título
 e atalho (até 8 resultados) com prévia; ↑/↓ escolhem, Enter insere, Esc fecha e devolve o foco ao
-campo. Links e barras no meio de palavras não abrem nada. Com rascunho, a tela pergunta se substitui
+campo. Enquanto a busca do termo atual não respondeu, a lista anterior fica esmaecida (`aria-busy`) e
+não pode ser escolhida; um Enter dado nesse intervalo escolhe o primeiro resultado da busca atual
+quando ela chegar, e digitar de novo cancela essa escolha. O seletor abre sobre a linha do tempo,
+acima da área de resposta, sem encolher a conversa. Links e barras no meio de palavras não abrem nada. Com rascunho, a tela pergunta se substitui
 ou insere no cursor (cancelar mantém o rascunho); se o resultado passar de 4096 caracteres, nada é
 inserido e o motivo aparece. O botão segue os bloqueios do compositor e fica indisponível com anexo
 selecionado.
