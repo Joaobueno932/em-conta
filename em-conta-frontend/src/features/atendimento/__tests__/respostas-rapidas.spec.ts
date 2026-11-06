@@ -123,6 +123,62 @@ describe('Respostas rápidas na conversa', () => {
     expect(chamadas.some((c) => c.startsWith(`POST ${BASE}/atendimentos/1/mensagens`))).toBe(false)
   })
 
+  it('resultado de uma busca anterior não é inserido; Enter espera o resultado da busca atual', async () => {
+    const pendentes: (() => void)[] = []
+    const liberar = () => pendentes.splice(0).forEach((ok) => ok())
+    const bomDia = resposta({ id: 6, titulo: 'Bom dia', atalho: 'bom-dia', conteudo: 'Bom dia!' })
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas([...ATENDIMENTO, 'respostas-rapidas:consultar'], {
+        [`GET ${RR}`]: (_init, url) =>
+          url?.includes('busca=bom')
+            ? new Promise((ok) => pendentes.push(() => ok(pagina([bomDia]))))
+            : pagina([resposta()]),
+      }),
+    )
+    const campo = await abrirConversa(fetchFn)
+    await fireEvent.click(screen.getByRole('button', { name: 'Respostas rápidas' }))
+    const busca = await screen.findByRole('combobox', { name: 'Buscar resposta rápida' })
+    await screen.findByRole('option', { name: /Segunda via/ })
+
+    // Com a requisição da busca atual em andamento, a lista ainda é a da busca vazia: clicar ou dar
+    // Enter não insere a "Segunda via".
+    await fireEvent.update(busca, 'bom')
+    await waitFor(() => expect(chamadas.some((c) => c.includes('busca=bom'))).toBe(true))
+    expect(screen.getByRole('listbox').getAttribute('aria-busy')).toBe('true')
+    await fireEvent.click(screen.getByRole('option', { name: /Segunda via/ }))
+    await fireEvent.keyDown(busca, { key: 'Enter' })
+    expect(campo.value).toBe('')
+
+    // O Enter vale para a busca atual: quando ela responde, o primeiro resultado dela é inserido.
+    liberar()
+    await waitFor(() => expect(campo.value).toBe('Bom dia!'))
+  })
+
+  it('digitar depois do Enter cancela a escolha pendente', async () => {
+    const pendentes: (() => void)[] = []
+    const liberar = () => pendentes.splice(0).forEach((ok) => ok())
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas([...ATENDIMENTO, 'respostas-rapidas:consultar'], {
+        [`GET ${RR}`]: (_init, url) =>
+          url?.includes('busca=b')
+            ? new Promise((ok) => pendentes.push(() => ok(pagina([resposta({ id: 6 })]))))
+            : pagina([resposta()]),
+      }),
+    )
+    const campo = await abrirConversa(fetchFn)
+    await fireEvent.click(screen.getByRole('button', { name: 'Respostas rápidas' }))
+    const busca = await screen.findByRole('combobox', { name: 'Buscar resposta rápida' })
+    await screen.findByRole('option', { name: /Segunda via/ })
+
+    await fireEvent.update(busca, 'b')
+    await fireEvent.keyDown(busca, { key: 'Enter' })
+    await fireEvent.update(busca, 'bo')
+    await waitFor(() => expect(chamadas.some((c) => c.includes('busca=bo'))).toBe(true))
+    liberar()
+    await waitFor(() => expect(screen.getByRole('listbox').getAttribute('aria-busy')).toBe('false'))
+    expect(campo.value).toBe('')
+  })
+
   it('Esc fecha e devolve o foco ao campo, sem mexer no rascunho', async () => {
     const { fetchFn } = apiFalsa(rotas([...ATENDIMENTO, 'respostas-rapidas:consultar']))
     const campo = await abrirConversa(fetchFn)

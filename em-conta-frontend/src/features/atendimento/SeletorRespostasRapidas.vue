@@ -28,14 +28,16 @@ const http = useHttpClient()
 const proprio = computed(() => props.termo === undefined)
 const digitado = ref('')
 const busca = ref((props.termo ?? '').trim())
+const termoAtual = computed(() => (proprio.value ? digitado.value : (props.termo ?? '')).trim())
 let espera: number | undefined
-watch(
-  () => (proprio.value ? digitado.value : (props.termo ?? '')).trim(),
-  (valor) => {
-    window.clearTimeout(espera)
-    espera = window.setTimeout(() => (busca.value = valor), 200)
-  },
-)
+// Enter dado antes de a busca atual responder: escolhe o primeiro resultado dela quando chegar.
+// Digitar de novo cancela, porque aquele Enter era para outro termo.
+const escolherAoAtualizar = ref(false)
+watch(termoAtual, (valor) => {
+  escolherAoAtualizar.value = false
+  window.clearTimeout(espera)
+  espera = window.setTimeout(() => (busca.value = valor), 200)
+})
 onBeforeUnmount(() => window.clearTimeout(espera))
 
 const consulta = useQuery({
@@ -50,10 +52,22 @@ const consulta = useQuery({
   placeholderData: keepPreviousData,
 })
 const itens = computed(() => consulta.data.value?.itens ?? [])
+// A lista na tela pode ser da busca anterior (debounce pendente ou resposta ainda mantida como
+// placeholder): continua visível, mas não pode ser escolhida como se fosse da busca atual.
+const emDia = computed(() => busca.value === termoAtual.value && !consulta.isPlaceholderData.value)
 const ativo = ref(0)
 watch(itens, () => (ativo.value = 0))
 const atual = computed(() => itens.value[ativo.value])
 const opcaoId = (i: number) => `${props.id}-opcao-${i}`
+
+function escolher(resposta: RespostaRapida | undefined) {
+  if (resposta && emDia.value) emit('escolher', resposta)
+}
+watch(emDia, (agora) => {
+  if (!agora || !escolherAoAtualizar.value) return
+  escolherAoAtualizar.value = false
+  escolher(itens.value[0])
+})
 
 /** Trata a tecla; devolve true quando ela foi usada pelo seletor. */
 function teclar(evento: KeyboardEvent): boolean {
@@ -64,8 +78,14 @@ function teclar(evento: KeyboardEvent): boolean {
     return true
   }
   if (evento.key === 'Enter' || (evento.key === 'Tab' && !proprio.value)) {
+    // Enter fica sempre com o seletor (não envia). Lista ainda de outra busca: a escolha espera o
+    // resultado da busca atual; sem resultado, nada é inserido.
+    if (!emDia.value) {
+      if (evento.key === 'Enter') escolherAoAtualizar.value = true
+      return evento.key === 'Enter'
+    }
     if (!atual.value) return evento.key === 'Enter'
-    emit('escolher', atual.value)
+    escolher(atual.value)
     return true
   }
   if (evento.key === 'Escape') {
@@ -114,17 +134,24 @@ onMounted(() => campo.value?.focus())
     <p v-else-if="itens.length === 0" class="ajuda" role="status">
       Nenhuma resposta ativa encontrada.
     </p>
-    <div v-else class="corpo">
-      <ul :id="`${id}-lista`" role="listbox" aria-label="Respostas encontradas" class="opcoes">
+    <div v-else class="corpo" :class="{ desatualizado: !emDia }">
+      <ul
+        :id="`${id}-lista`"
+        role="listbox"
+        aria-label="Respostas encontradas"
+        class="opcoes"
+        :aria-busy="!emDia"
+      >
         <li
           v-for="(r, i) in itens"
           :id="opcaoId(i)"
           :key="r.id"
           role="option"
           :aria-selected="i === ativo"
+          :aria-disabled="!emDia"
           @mousedown.prevent
           @mouseenter="ativo = i"
-          @click="emit('escolher', r)"
+          @click="escolher(r)"
         >
           <strong>{{ r.titulo }}</strong>
           <code>/{{ r.atalho }}</code>
@@ -135,6 +162,7 @@ onMounted(() => campo.value?.focus())
         <p class="balao">{{ atual.conteudo }}</p>
       </div>
     </div>
+    <p v-if="itens.length && !emDia" class="ajuda" role="status">Atualizando resultados…</p>
     <p class="ajuda dica">↑ ↓ para escolher · Enter insere (não envia) · Esc fecha</p>
   </div>
 </template>
@@ -183,6 +211,14 @@ onMounted(() => campo.value?.focus())
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.desatualizado {
+  opacity: 0.55;
+}
+
+.desatualizado .opcoes li {
+  cursor: progress;
 }
 
 .opcoes li[aria-selected='true'] {
