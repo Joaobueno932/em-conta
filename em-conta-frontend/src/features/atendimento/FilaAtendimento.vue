@@ -122,7 +122,7 @@ defineExpose({ mostrarVisao: trocar })
           v-model="termo"
           type="search"
           maxlength="100"
-          placeholder="Buscar contato por nome ou telefone"
+          placeholder="Buscar por nome ou telefone"
         />
       </form>
       <div class="visoes" role="group" aria-label="Visões da fila">
@@ -159,9 +159,13 @@ defineExpose({ mostrarVisao: trocar })
               :aria-current="props.selecionado === a.id ? 'true' : undefined"
               @click="emit('selecionar', a.id)"
             >
-              <span class="avatar" aria-hidden="true">{{ iniciais(nomeContato(a)) }}</span>
+              <span class="avatar" aria-hidden="true">{{
+                iniciais(a.associado?.nome ?? nomeContato(a))
+              }}</span>
               <span class="nome">
-                {{ a.associado?.nome ?? nomeContato(a) }}
+                <span class="nome-texto" :title="a.associado?.nome ?? nomeContato(a)">{{
+                  a.associado?.nome ?? nomeContato(a)
+                }}</span>
                 <span v-if="a.responsavel" class="responsavel">{{ a.responsavel.nome }}</span>
               </span>
               <span class="data">Desde {{ formatarData(a.iniciadoEm) }}</span>
@@ -392,6 +396,15 @@ defineExpose({ mostrarVisao: trocar })
   min-width: 0;
 }
 
+/* Até duas linhas (como "Prefeitura de Maracaju" no AT-01); o nome completo fica no title e na conversa. */
+.nome-texto {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
 .responsavel {
   display: block;
   color: var(--cor-texto-2);
@@ -502,8 +515,8 @@ button.ver-opcoes:hover {
   background: var(--cor-superficie-2);
 }
 
-/* Fila de 320 px (até 80rem): a data passa para duas linhas e sobra espaço para o nome. */
-@media (max-width: 80rem) and (min-width: 60.01rem) {
+/* Fila de 320 px (até 87.5rem): a data passa para duas linhas e sobra espaço para o nome. */
+@media (max-width: 87.5rem) and (min-width: 60.01rem) {
   .item {
     gap: 10px;
   }

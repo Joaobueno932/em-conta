@@ -258,7 +258,7 @@ button.contorno:hover {
 /* Fila e conversa ocupam a altura que sobra na janela (descontado o aviso do canal, se houver) e
    rolam por dentro, preservando a leitura; o painel desce para a linha de baixo e a página rola
    até ele. */
-@media (max-width: 80rem) {
+@media (max-width: 87.5rem) {
   .colunas,
   .colunas.sem-painel {
     grid-template-columns: 320px minmax(0, 1fr);

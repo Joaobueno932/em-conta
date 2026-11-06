@@ -221,6 +221,16 @@ const enviando = computed(() => responderMut.isPending.value || anexoMut.isPendi
 // pergunta se substitui ou insere no cursor; nunca passa do limite do campo sem avisar.
 const TAMANHO_MAXIMO_MENSAGEM = 4096
 const campoTexto = ref<HTMLTextAreaElement | null>(null)
+
+// Sem alça de redimensionar (como no AT-04): o campo cresce com o texto até o máximo do CSS e volta a
+// uma linha quando o texto é enviado ou substituído por código (respostas rápidas, limpeza).
+function ajustarAltura() {
+  const el = campoTexto.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
+}
+watch(texto, ajustarAltura, { flush: 'post' })
 const seletorRespostas = ref<InstanceType<typeof SeletorRespostasRapidas> | null>(null)
 const podeRespostas = computed(() => pode('respostas-rapidas:consultar'))
 const respostasIndisponiveis = computed(
@@ -411,6 +421,15 @@ async function carregarAnteriores() {
 
 <template>
   <section class="conversa cartao" aria-labelledby="titulo-conversa">
+    <DialogoConfirmacao
+      :aberto="confirmandoEncerramento"
+      titulo="Encerrar atendimento?"
+      confirmar="Encerrar atendimento"
+      @confirmar="encerrarConfirmado"
+      @cancelar="confirmandoEncerramento = false"
+    >
+      <p>A conversa fica somente leitura. Uma nova mensagem do contato abre outro atendimento.</p>
+    </DialogoConfirmacao>
     <div v-if="detalhe.isPending.value" class="estado-conversa" role="status">
       Carregando conversa…
     </div>
@@ -421,15 +440,6 @@ async function carregarAnteriores() {
     <template v-else-if="resumo">
       <header class="topo">
         <span class="avatar" aria-hidden="true">{{
-    <DialogoConfirmacao
-      :aberto="confirmandoEncerramento"
-      titulo="Encerrar atendimento?"
-      confirmar="Encerrar atendimento"
-      @confirmar="encerrarConfirmado"
-      @cancelar="confirmandoEncerramento = false"
-    >
-      <p>A conversa fica somente leitura. Uma nova mensagem do contato abre outro atendimento.</p>
-    </DialogoConfirmacao>
           iniciais(resumo.associado?.nome ?? nomeContato(resumo))
         }}</span>
         <div class="identificacao">
@@ -806,12 +816,16 @@ async function carregarAnteriores() {
   line-height: 1.3;
 }
 
-/* Nome numa linha só (completo no title e no painel): o cabeçalho não cresce com nomes longos. */
+/* Até duas linhas (completo no title): nomes curtos mantêm o cabeçalho numa linha, e um nome longo
+   ainda se lê sem ocupar a conversa. */
 .nome-conversa {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .topo h2,
@@ -942,9 +956,23 @@ async function carregarAnteriores() {
 
 /* Área de resposta (AT-04): aba "Mensagem", campo de 48 px e ferramentas abaixo. */
 .area-resposta {
+  position: relative;
   flex-shrink: 0;
   border-top: 1px solid var(--cor-borda);
   padding: 0 16px 11px;
+}
+
+/* Respostas rápidas sobre a linha do tempo, ancoradas logo acima da área de resposta (no protótipo
+   elas têm superfície própria): a conversa não encolhe e o campo continua visível em telas baixas. */
+.area-resposta .seletor {
+  position: absolute;
+  right: 16px;
+  bottom: calc(100% + 8px);
+  left: 16px;
+  z-index: 5;
+  max-height: min(24rem, 45vh);
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .aba {
@@ -1011,7 +1039,8 @@ async function carregarAnteriores() {
   border-radius: var(--raio-controle);
   font-size: 17px;
   line-height: 1.35;
-  resize: vertical;
+  resize: none;
+  overflow-y: auto;
 }
 
 .ferramentas {
@@ -1113,6 +1142,15 @@ button.botao-icone.enviar:hover:not(:disabled) {
 
   .linha {
     min-height: 24rem;
+  }
+}
+
+/* Celular: as ações com texto dividem a primeira linha e os ícones ficam juntos na seguinte, em vez de
+   sobrar um ícone sozinho. */
+@media (max-width: 40rem) {
+  .topo .acoes button:not(.botao-icone) {
+    flex: 1 1 8rem;
+    justify-content: center;
   }
 }
 </style>

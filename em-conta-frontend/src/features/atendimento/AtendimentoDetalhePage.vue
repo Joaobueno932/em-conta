@@ -81,7 +81,7 @@ async function irPara(mensagemId: number, cursor: string) {
 </script>
 
 <template>
-  <main class="pagina pagina--larga detalhe">
+  <main class="pagina pagina--area-util detalhe">
     <p v-if="detalhe.isPending.value" role="status">Carregando atendimento…</p>
     <AlertaMensagem v-else-if="detalhe.isError.value" tipo="erro">
       {{ describeApiError(detalhe.error.value) }}
@@ -235,10 +235,6 @@ async function irPara(mensagemId: number, cursor: string) {
 </template>
 
 <style scoped>
-.detalhe {
-  max-width: 90rem;
-}
-
 .cabecalho {
   display: flex;
   align-items: flex-start;
@@ -271,6 +267,39 @@ async function irPara(mensagemId: number, cursor: string) {
 @media (max-width: 64rem) {
   .colunas {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Telas largas (como no frame de detalhe): os cartões vão até o fim da janela, só a linha do tempo e
+   os dados rolam por dentro e a faixa "somente leitura" fica sempre visível no rodapé da conversa. */
+@media (min-width: 64.01rem) {
+  .detalhe {
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - 1.5rem - 15px);
+    min-height: 32rem;
+    box-sizing: border-box;
+  }
+
+  .colunas {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .colunas > * {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .conversa {
+    overflow: hidden;
+  }
+
+  .linha {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
   }
 }
 

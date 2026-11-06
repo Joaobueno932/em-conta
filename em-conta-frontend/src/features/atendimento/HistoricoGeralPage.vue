@@ -87,7 +87,7 @@ const paginas = computed(() => {
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
+  <main class="pagina pagina--area-util">
     <header class="cabecalho">
       <RouterLink
         :to="{ name: 'atendimento' }"

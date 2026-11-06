@@ -69,6 +69,14 @@ a {
   max-width: 76rem;
 }
 
+/* Páginas do Atendimento com frame (histórico geral e detalhe): toda a área abaixo do cabeçalho,
+   a 15 px das bordas, como a tela principal do Atendimento. */
+.pagina--area-util {
+  max-width: none;
+  margin: 1.5rem 15px 15px;
+  padding: 0;
+}
+
 .subtitulo {
   margin: 0 0 1.5rem;
   color: var(--cor-texto-2);
