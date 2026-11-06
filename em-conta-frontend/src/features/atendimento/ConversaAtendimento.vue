@@ -7,6 +7,7 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { codigoDoErro, describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import DialogoConfirmacao from '@/shared/components/DialogoConfirmacao.vue'
 import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import {
@@ -91,14 +92,13 @@ const encerrarMut = useMutation({
   onSettled: atualizar,
 })
 
+const confirmandoEncerramento = ref(false)
 function confirmarEncerramento() {
-  if (
-    window.confirm(
-      'Encerrar este atendimento? Uma nova mensagem do contato abre outro atendimento.',
-    )
-  ) {
-    encerrarMut.mutate()
-  }
+  confirmandoEncerramento.value = true
+}
+function encerrarConfirmado() {
+  confirmandoEncerramento.value = false
+  encerrarMut.mutate()
 }
 
 // Transferência direta, com motivo opcional; sem destino devolve à fila.
@@ -421,6 +421,15 @@ async function carregarAnteriores() {
     <template v-else-if="resumo">
       <header class="topo">
         <span class="avatar" aria-hidden="true">{{
+    <DialogoConfirmacao
+      :aberto="confirmandoEncerramento"
+      titulo="Encerrar atendimento?"
+      confirmar="Encerrar atendimento"
+      @confirmar="encerrarConfirmado"
+      @cancelar="confirmandoEncerramento = false"
+    >
+      <p>A conversa fica somente leitura. Uma nova mensagem do contato abre outro atendimento.</p>
+    </DialogoConfirmacao>
           iniciais(resumo.associado?.nome ?? nomeContato(resumo))
         }}</span>
         <div class="identificacao">

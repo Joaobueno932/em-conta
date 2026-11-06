@@ -142,8 +142,11 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
 
   await page.getByRole('button', { name: 'Assumir' }).click()
   await expect(page.getByText(/Em atendimento com/)).toBeVisible()
-  page.once('dialog', (d) => d.accept())
-  await page.getByRole('button', { name: 'Encerrar' }).click()
+  await page.getByRole('button', { name: 'Encerrar', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: 'Encerrar atendimento?' })
+    .getByRole('button', { name: 'Encerrar atendimento' })
+    .click()
   await expect(page.getByText('Encerrado', { exact: true })).toBeVisible()
   // Encerrado: o compositor dá lugar à faixa com o motivo (AT-03).
   await expect(page.getByLabel('Mensagem')).toHaveCount(0)
@@ -239,7 +242,10 @@ test('transferência entre dois atendentes: só o novo responsável responde e e
   await atendente.getByRole('button', { name: 'Enviar' }).click()
   await expect.poll(() => graph.envios.some((e) => e.para === waId), { timeout: 15_000 }).toBe(true)
   await expect(atendente.getByText(/Aceita pelo WhatsApp/)).toBeVisible({ timeout: 15_000 })
-  atendente.once('dialog', (d) => d.accept())
-  await atendente.getByRole('button', { name: 'Encerrar' }).click()
+  await atendente.getByRole('button', { name: 'Encerrar', exact: true }).click()
+  await atendente
+    .getByRole('dialog', { name: 'Encerrar atendimento?' })
+    .getByRole('button', { name: 'Encerrar atendimento' })
+    .click()
   await expect(atendente.getByText('Encerrado', { exact: true })).toBeVisible()
 })

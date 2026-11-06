@@ -130,8 +130,11 @@ test('recebe anexo, abre e baixa, envia anexo, acompanha a situação, consulta 
   await expect(midia.getByText('fatura-outubro.pdf')).toBeVisible()
 
   // 5. Encerrar e conferir o histórico do ciclo, somente leitura.
-  page.once('dialog', (d) => d.accept())
-  await page.getByRole('button', { name: 'Encerrar' }).click()
+  await page.getByRole('button', { name: 'Encerrar', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: 'Encerrar atendimento?' })
+    .getByRole('button', { name: 'Encerrar atendimento' })
+    .click()
   await expect(page.getByText('Encerrado', { exact: true })).toBeVisible()
   const id = new URL(page.url()).searchParams.get('id')
   await page.goto(`/atendimento/historico/${id}`)

@@ -100,6 +100,33 @@ describe('Atendimento', () => {
     await waitFor(() => expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/assuncao`))
   })
 
+  it('encerrar pede confirmação no diálogo do sistema; cancelar não chama o servidor', async () => {
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas(detalhe({ situacao: 'EM_ATENDIMENTO', responsavel: EU }), TODAS, {
+        [`POST ${BASE}/atendimentos/1/encerramento`]: () => new Response(null, { status: 204 }),
+      }),
+    )
+    const confirmar = vi.spyOn(window, 'confirm')
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const encerrar = await screen.findByRole('button', { name: 'Encerrar' })
+
+    encerrar.focus()
+    await fireEvent.click(encerrar)
+    const dialogo = await screen.findByRole('dialog', { name: 'Encerrar atendimento?' })
+    expect(dialogo.textContent).toContain('Uma nova mensagem do contato abre outro atendimento.')
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(encerrar)
+    expect(chamadas.some((c) => c.startsWith(`POST ${BASE}/atendimentos/1/encerramento`))).toBe(
+      false,
+    )
+
+    await fireEvent.click(encerrar)
+    await fireEvent.click(await screen.findByRole('button', { name: 'Encerrar atendimento' }))
+    await waitFor(() => expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/encerramento`))
+    expect(confirmar).not.toHaveBeenCalled()
+  })
+
   it('mostra só as visões Em andamento e Aguardando, com o título no cabeçalho', async () => {
     const { fetchFn } = apiFalsa(rotas(detalhe()))
     await montarApp(fetchFn, '/atendimento')
