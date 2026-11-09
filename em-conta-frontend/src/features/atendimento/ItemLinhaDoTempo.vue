@@ -2,7 +2,7 @@
 import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import AnexoMensagem from './AnexoMensagem.vue'
-import { formatarHora, ROTULO_EVENTO, type Item } from './atendimento-api'
+import { formatarHora, ROTULO_EVENTO, ROTULO_TIPO_EXTERNO, type Item } from './atendimento-api'
 import IndicadorSituacao from './IndicadorSituacao.vue'
 
 /**
@@ -42,7 +42,8 @@ defineProps<{
     tabindex="-1"
   >
     <p v-if="item.tipoMensagem === 'NAO_SUPORTADO'" class="ajuda">
-      Mensagem do tipo “{{ item.tipoExterno }}” não suportada nesta versão.
+      Mensagem do tipo “{{ ROTULO_TIPO_EXTERNO[item.tipoExterno ?? ''] ?? item.tipoExterno }}” não
+      suportada nesta versão.
     </p>
     <template v-else-if="item.anexo">
       <AnexoMensagem

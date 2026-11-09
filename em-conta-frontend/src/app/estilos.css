@@ -26,6 +26,8 @@
   --raio-cartao: 12px;
   --cor-avatar: #2f7d4c;
   --cor-pdf: #e0312f;
+  /* Selo de planilha XLSX (texto branco a 6,2:1). */
+  --cor-planilha: #1d6f42;
   --sombra-menu: 0 12px 32px rgb(30 36 32 / 12%);
   --largura-lateral: 294px;
   --largura-lateral-recolhida: 84px;

@@ -568,7 +568,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Registra um anexo (imagem, PDF ou áudio) para envio assíncrono (atendimento:responder) */
+        /** Registra um anexo (imagem, PDF, XLSX, vídeo ou áudio) para envio assíncrono (atendimento:responder) */
         post: operations["enviarAnexoAtendimento"];
         delete?: never;
         options?: never;
@@ -1727,7 +1727,7 @@ export interface components {
             /** @enum {string} */
             direcao: "ENTRADA" | "SAIDA";
             /** @enum {string} */
-            categoria: "IMAGEM" | "DOCUMENTO" | "AUDIO";
+            categoria: "IMAGEM" | "DOCUMENTO" | "AUDIO" | "VIDEO";
             mimeType?: string;
             nome?: string;
             /** Format: int64 */
@@ -1754,7 +1754,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            categoria: "IMAGEM" | "DOCUMENTO" | "AUDIO";
+            categoria: "IMAGEM" | "DOCUMENTO" | "AUDIO" | "VIDEO";
             mimeType?: string;
             /** @description Nome original higienizado (só exibição) */
             nome?: string;
@@ -1779,7 +1779,7 @@ export interface components {
             /** @enum {string} */
             direcao?: "ENTRADA" | "SAIDA";
             /** @enum {string} */
-            tipoMensagem?: "TEXTO" | "IMAGEM" | "DOCUMENTO" | "AUDIO" | "NAO_SUPORTADO";
+            tipoMensagem?: "TEXTO" | "IMAGEM" | "DOCUMENTO" | "AUDIO" | "VIDEO" | "NAO_SUPORTADO";
             /** @description Tipo informado pelo canal (ex.: image, audio) */
             tipoExterno?: string;
             texto?: string;
@@ -3767,7 +3767,7 @@ export interface operations {
         parameters: {
             query?: {
                 somenteEste?: boolean;
-                categoria?: "IMAGEM" | "DOCUMENTO" | "AUDIO";
+                categoria?: "IMAGEM" | "DOCUMENTO" | "AUDIO" | "VIDEO";
                 antes?: number;
                 tamanho?: number;
             };

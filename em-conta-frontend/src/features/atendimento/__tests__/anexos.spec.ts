@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ROTULO_SITUACAO_MENSAGEM } from '@/features/atendimento/atendimento-api'
+import { MIME_XLSX, ROTULO_SITUACAO_MENSAGEM } from '@/features/atendimento/atendimento-api'
 import { apiFalsa, csrf, montarApp, problema, usuarioAtual, type Rotas } from '@/test/api-falsa'
 import { jsonResponse } from '@/test/render-with-providers'
 
@@ -165,6 +165,8 @@ describe('Anexos no atendimento', () => {
     expect(await screen.findByText(/Processando o arquivo/)).toBeTruthy()
     expect(screen.getByText(/Hash do arquivo não confere/)).toBeTruthy()
     expect(screen.getByText(/application\/msword\) não suportado/)).toBeTruthy()
+    // Identificado pelo formato real (o MIME), nunca pelo genérico "PDF" nem pela extensão do nome.
+    expect(screen.getByText(/Documento DOC “fatura.pdf”:/)).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }))
     await waitFor(() =>
       expect(chamadas).toContain(`POST ${BASE}/atendimentos/1/anexos/12/nova-tentativa`),
@@ -189,12 +191,110 @@ describe('Anexos no atendimento', () => {
 
     await selecionar(entrada, arquivo('voz.ogg', 'audio/ogg', 2048))
     expect(await screen.findByText('voz.ogg')).toBeTruthy()
-    expect(screen.getByText(/Áudio · 2 KB/)).toBeTruthy()
+    expect(screen.getByText(/Áudio OGG · 2 KB/)).toBeTruthy()
     // Áudio não aceita legenda.
     expect((screen.getByLabelText('Legenda (opcional)') as HTMLTextAreaElement).disabled).toBe(true)
     await fireEvent.click(screen.getByRole('button', { name: /Remover o arquivo voz.ogg/ }))
     expect(screen.queryByText('voz.ogg')).toBeNull()
     expect(chamadas.some((c) => c.includes('/anexos'))).toBe(false)
+  })
+
+  it('vídeo reproduz quando o navegador suporta e 3GP fica com download', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((tipo) =>
+      tipo === 'video/mp4' ? 'maybe' : '',
+    )
+    const { fetchFn } = apiFalsa(
+      rotas([
+        mensagem(1, {
+          tipoMensagem: 'VIDEO',
+          texto: 'Vídeo do inversor',
+          anexo: anexo(11, 'VIDEO', { mimeType: 'video/mp4', tamanho: 3 * 1024 * 1024 }),
+        }),
+        mensagem(2, {
+          tipoMensagem: 'VIDEO',
+          anexo: anexo(12, 'VIDEO', { mimeType: 'video/3gpp', nome: 'antigo.3gp' }),
+        }),
+      ]),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const video = (await waitFor(() => {
+      const el = document.querySelector('video')
+      expect(el).toBeTruthy()
+      return el
+    })) as HTMLVideoElement
+    expect(video.getAttribute('src')).toBe(`${BASE}/atendimentos/1/anexos/11/conteudo`)
+    expect(video.getAttribute('preload')).toBe('metadata')
+    expect(video.hasAttribute('autoplay')).toBe(false)
+    expect(video.hasAttribute('controls')).toBe(true)
+    expect(document.querySelectorAll('video')).toHaveLength(1)
+    expect(screen.getByText(/Este navegador não reproduz Vídeo 3GP/)).toBeTruthy()
+    expect(
+      screen.getByRole('link', { name: 'Baixar vídeo 3gp antigo.3gp' }).getAttribute('href'),
+    ).toBe(`${BASE}/atendimentos/1/anexos/12/conteudo?download=true`)
+    expect(screen.getByText(/Baixar vídeo · 3,0 MB/)).toBeTruthy()
+  })
+
+  it('planilha XLSX aparece como planilha, com nome, tipo e download (sem visualizar)', async () => {
+    const { fetchFn } = apiFalsa(
+      rotas([
+        mensagem(1, {
+          tipoMensagem: 'DOCUMENTO',
+          texto: undefined,
+          anexo: anexo(11, 'DOCUMENTO', { mimeType: MIME_XLSX, nome: 'leituras.xlsx' }),
+        }),
+        mensagem(2, {
+          tipoMensagem: 'DOCUMENTO',
+          anexo: anexo(12, 'DOCUMENTO', {
+            mimeType: 'application/vnd.ms-excel',
+            nome: 'antiga.xls',
+            situacao: 'NAO_SUPORTADO',
+            erro: 'Formato de documento não suportado; o Em Conta aceita PDF e planilha XLSX.',
+          }),
+        }),
+      ]),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const nome = await screen.findByRole('link', { name: 'Baixar planilha xlsx leituras.xlsx' })
+    expect(nome.getAttribute('href')).toBe(
+      `${BASE}/atendimentos/1/anexos/11/conteudo?download=true`,
+    )
+    expect(screen.getByText('XLSX', { selector: '.selo' })).toBeTruthy()
+    expect(screen.getByText(/Planilha XLSX · 2 KB/)).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /Visualizar/ })).toBeNull()
+    expect(screen.queryByText('PDF', { selector: '.selo' })).toBeNull()
+    expect(
+      screen.getByText(
+        /Planilha XLS “antiga.xls”: Formato de documento não suportado; o Em Conta aceita PDF e planilha XLSX./,
+      ),
+    ).toBeTruthy()
+  })
+
+  it('arquivo sem tipo informado pelo sistema usa o da extensão no envio', async () => {
+    const enviados: File[] = []
+    const { fetchFn } = apiFalsa(
+      rotas([mensagem(1)], {
+        [`POST ${BASE}/atendimentos/1/anexos`]: (init) => {
+          const dados = init?.body as FormData
+          enviados.push(dados.get('arquivo') as File)
+          return jsonResponse({ mensagemId: 99 }, 202)
+        },
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const entrada = (await waitFor(() => {
+      const el = document.querySelector('input[type=file]')
+      expect(el).toBeTruthy()
+      return el
+    })) as HTMLInputElement
+    await selecionar(entrada, arquivo('consumo.xlsx', '', 4096))
+    expect(await screen.findByText(/Planilha XLSX · 4 KB/)).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    await waitFor(() => expect(enviados).toHaveLength(1))
+    expect(enviados[0]!.name).toBe('consumo.xlsx')
+    expect(enviados[0]!.type).toBe(MIME_XLSX)
+
+    await selecionar(entrada, arquivo('visita.mp4', 'video/mp4', 17 * 1024 * 1024))
+    expect(await screen.findByText(/acima do limite de 16,0 MB para vídeo/)).toBeTruthy()
   })
 
   it('envia o anexo com legenda; repetir após falha reutiliza a chave e outra legenda usa outra', async () => {
@@ -292,6 +392,7 @@ describe('Anexos no atendimento', () => {
     expect(await screen.findByText('boleto.pdf')).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Carregar mais' }))
     expect(await screen.findByText('Imagem sem nome')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Vídeos' })).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Áudios' }))
     expect(await screen.findByText('Nenhum anexo nesta conversa.')).toBeTruthy()
     expect(chamadas).toContain(

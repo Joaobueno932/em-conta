@@ -9,16 +9,18 @@ import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
 import {
   chavesAtendimento,
   conteudoAnexo,
+  exibivelNoNavegador,
   formatarDataHora,
   formatarTamanho,
+  formatoDoAnexo,
   midia,
-  ROTULO_CATEGORIA,
   type CategoriaAnexo,
 } from './atendimento-api'
 
 /**
- * Área Mídia: anexos da conversa (ou só do ciclo, no histórico), do mais recente, 20 por vez. Só a lista
- * é carregada; nenhum arquivo é baixado ou reproduzido até a pessoa pedir.
+ * Área Mídia: anexos da conversa (ou só do ciclo, no histórico), do mais recente, 20 por vez, cada um
+ * identificado pelo formato real. Só a lista é carregada; nenhum arquivo é baixado ou reproduzido até a
+ * pessoa pedir (planilha abre como download, porque o navegador não a exibe).
  */
 const props = defineProps<{ atendimento: number; somenteEste?: boolean }>()
 const emit = defineEmits<{ abrirMensagem: [mensagemId: number, cursor: string] }>()
@@ -28,9 +30,12 @@ const categoria = ref<CategoriaAnexo | ''>('')
 const filtros: { valor: CategoriaAnexo | ''; rotulo: string }[] = [
   { valor: '', rotulo: 'Todos' },
   { valor: 'IMAGEM', rotulo: 'Imagens' },
+  { valor: 'VIDEO', rotulo: 'Vídeos' },
   { valor: 'DOCUMENTO', rotulo: 'Documentos' },
   { valor: 'AUDIO', rotulo: 'Áudios' },
 ]
+const formato = (item: { mimeType?: string; categoria: string; nome?: string }) =>
+  formatoDoAnexo(item.mimeType, item.categoria, item.nome)
 
 const lista = useInfiniteQuery({
   queryKey: computed(() =>
@@ -72,14 +77,22 @@ const itens = computed(() => lista.data.value?.pages.flatMap((p) => p.itens) ?? 
     <p v-else-if="itens.length === 0" class="ajuda">Nenhum anexo nesta conversa.</p>
     <ul v-else class="itens">
       <li v-for="item in itens" :key="item.id">
-        <span class="tipo">{{ ROTULO_CATEGORIA[item.categoria as CategoriaAnexo] }}</span>
+        <span class="tipo">{{ formato(item).rotulo }}</span>
         <a
-          v-if="item.situacao === 'DISPONIVEL'"
+          v-if="item.situacao === 'DISPONIVEL' && exibivelNoNavegador(item.mimeType)"
           :href="conteudoAnexo(atendimento, item.id, { somenteEste })"
           target="_blank"
           rel="noopener"
           class="nome"
-          >{{ item.nome ?? `${ROTULO_CATEGORIA[item.categoria as CategoriaAnexo]} sem nome` }}</a
+          >{{ item.nome ?? `${formato(item).rotulo} sem nome` }}</a
+        >
+        <a
+          v-else-if="item.situacao === 'DISPONIVEL'"
+          :href="conteudoAnexo(atendimento, item.id, { somenteEste, download: true })"
+          :download="item.nome ?? ''"
+          class="nome"
+          :aria-label="`Baixar ${formato(item).rotulo.toLowerCase()} ${item.nome ?? 'sem nome'}`"
+          >{{ item.nome ?? `${formato(item).rotulo} sem nome` }}</a
         >
         <span v-else class="nome">{{ item.nome ?? 'Sem nome' }} (indisponível)</span>
         <span class="ajuda">

@@ -65,6 +65,18 @@ export const ROTULO_EVENTO: Record<string, string> = {
   ASSOCIADO_DESVINCULADO: 'removeu o vínculo com o associado',
 }
 
+/** Tipos de mensagem do WhatsApp sem suporte nesta versão, pelo nome em português. */
+export const ROTULO_TIPO_EXTERNO: Record<string, string> = {
+  sticker: 'figurinha',
+  location: 'localização',
+  contacts: 'contato',
+  reaction: 'reação',
+  interactive: 'resposta interativa',
+  button: 'botão',
+  order: 'pedido',
+  unsupported: 'não reconhecido pelo WhatsApp',
+}
+
 export function listarFila(http: HttpClient, visao: Visao, busca: string, pagina: number) {
   const params = new URLSearchParams({ visao, pagina: String(pagina), tamanho: '20' })
   if (busca.trim()) params.set('busca', busca.trim())
@@ -111,7 +123,7 @@ export type Anexo = components['schemas']['AnexoAtendimento']
 export type ItemMidia = components['schemas']['ItemMidia']
 export type PaginaMidia = components['schemas']['PaginaMidia']
 export type SituacaoMensagem = components['schemas']['SituacaoMensagem']
-export type CategoriaAnexo = 'IMAGEM' | 'DOCUMENTO' | 'AUDIO'
+export type CategoriaAnexo = 'IMAGEM' | 'DOCUMENTO' | 'AUDIO' | 'VIDEO'
 
 /** Máximo de mensagens por consulta de situações (igual ao servidor). */
 export const MAXIMO_SITUACOES = 100
@@ -163,9 +175,14 @@ export function enviarAnexo(
   arquivo: File,
   legenda: string,
   chaveIdempotencia: string,
+  mime: string = arquivo.type,
 ) {
   const dados = new FormData()
-  dados.append('arquivo', arquivo)
+  // Tipo deduzido pela extensão quando o sistema não informa nenhum (ver validarArquivo).
+  dados.append(
+    'arquivo',
+    arquivo.type === mime ? arquivo : new File([arquivo], arquivo.name, { type: mime }),
+  )
   if (legenda) dados.append('legenda', legenda)
   dados.append('chaveIdempotencia', chaveIdempotencia)
   return http.request<components['schemas']['RespostaRegistrada']>(
@@ -182,22 +199,85 @@ export function novaTentativaAnexo(http: HttpClient, id: number, anexo: number) 
   )
 }
 
-/** Formatos aceitos (a mesma lista do servidor) e limites padrão da aplicação. */
-export const FORMATOS_ANEXO: { mime: string; categoria: CategoriaAnexo; extensoes: string[] }[] = [
-  { mime: 'image/jpeg', categoria: 'IMAGEM', extensoes: ['jpg', 'jpeg'] },
-  { mime: 'image/png', categoria: 'IMAGEM', extensoes: ['png'] },
-  { mime: 'application/pdf', categoria: 'DOCUMENTO', extensoes: ['pdf'] },
-  { mime: 'audio/ogg', categoria: 'AUDIO', extensoes: ['ogg', 'opus'] },
-  { mime: 'audio/mpeg', categoria: 'AUDIO', extensoes: ['mp3'] },
-  { mime: 'audio/mp4', categoria: 'AUDIO', extensoes: ['m4a'] },
-  { mime: 'audio/aac', categoria: 'AUDIO', extensoes: ['aac'] },
-  { mime: 'audio/amr', categoria: 'AUDIO', extensoes: ['amr'] },
+export const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+/**
+ * Formatos aceitos (a mesma lista do servidor), com o nome mostrado e a sigla do cartão. O servidor
+ * confere de novo MIME, extensão, conteúdo e tamanho; a planilha também pelo pacote e o vídeo enviado
+ * pelos codecs (H.264 e AAC, as regras da Meta).
+ */
+export const FORMATOS_ANEXO: {
+  mime: string
+  categoria: CategoriaAnexo
+  extensoes: string[]
+  rotulo: string
+  sigla: string
+}[] = [
+  {
+    mime: 'image/jpeg',
+    categoria: 'IMAGEM',
+    extensoes: ['jpg', 'jpeg'],
+    rotulo: 'Imagem JPEG',
+    sigla: 'JPG',
+  },
+  {
+    mime: 'image/png',
+    categoria: 'IMAGEM',
+    extensoes: ['png'],
+    rotulo: 'Imagem PNG',
+    sigla: 'PNG',
+  },
+  {
+    mime: 'application/pdf',
+    categoria: 'DOCUMENTO',
+    extensoes: ['pdf'],
+    rotulo: 'PDF',
+    sigla: 'PDF',
+  },
+  {
+    mime: MIME_XLSX,
+    categoria: 'DOCUMENTO',
+    extensoes: ['xlsx'],
+    rotulo: 'Planilha XLSX',
+    sigla: 'XLSX',
+  },
+  { mime: 'video/mp4', categoria: 'VIDEO', extensoes: ['mp4'], rotulo: 'Vídeo MP4', sigla: 'MP4' },
+  { mime: 'video/3gpp', categoria: 'VIDEO', extensoes: ['3gp'], rotulo: 'Vídeo 3GP', sigla: '3GP' },
+  {
+    mime: 'audio/ogg',
+    categoria: 'AUDIO',
+    extensoes: ['ogg', 'opus'],
+    rotulo: 'Áudio OGG',
+    sigla: 'OGG',
+  },
+  { mime: 'audio/mpeg', categoria: 'AUDIO', extensoes: ['mp3'], rotulo: 'Áudio MP3', sigla: 'MP3' },
+  { mime: 'audio/mp4', categoria: 'AUDIO', extensoes: ['m4a'], rotulo: 'Áudio M4A', sigla: 'M4A' },
+  { mime: 'audio/aac', categoria: 'AUDIO', extensoes: ['aac'], rotulo: 'Áudio AAC', sigla: 'AAC' },
+  { mime: 'audio/amr', categoria: 'AUDIO', extensoes: ['amr'], rotulo: 'Áudio AMR', sigla: 'AMR' },
 ]
+
+/** Formatos que chegam do WhatsApp mas não são aceitos: identificados pelo nome real, não por "PDF". */
+const FORMATOS_NAO_ACEITOS: Record<string, { rotulo: string; sigla: string }> = {
+  'application/vnd.ms-excel': { rotulo: 'Planilha XLS', sigla: 'XLS' },
+  'application/msword': { rotulo: 'Documento DOC', sigla: 'DOC' },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+    rotulo: 'Documento DOCX',
+    sigla: 'DOCX',
+  },
+  'application/vnd.ms-powerpoint': { rotulo: 'Apresentação PPT', sigla: 'PPT' },
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': {
+    rotulo: 'Apresentação PPTX',
+    sigla: 'PPTX',
+  },
+  'text/plain': { rotulo: 'Texto TXT', sigla: 'TXT' },
+  'image/webp': { rotulo: 'Imagem WebP', sigla: 'WEBP' },
+}
 
 export const LIMITE_ANEXO: Record<CategoriaAnexo, number> = {
   IMAGEM: 5 * 1024 * 1024,
   DOCUMENTO: 16 * 1024 * 1024,
   AUDIO: 16 * 1024 * 1024,
+  VIDEO: 16 * 1024 * 1024,
 }
 
 export const TAMANHO_MAXIMO_LEGENDA = 1024
@@ -209,18 +289,55 @@ export const ACEITOS = FORMATOS_ANEXO.flatMap((f) => [
 
 export const ROTULO_CATEGORIA: Record<CategoriaAnexo, string> = {
   IMAGEM: 'Imagem',
-  DOCUMENTO: 'PDF',
+  DOCUMENTO: 'Documento',
   AUDIO: 'Áudio',
+  VIDEO: 'Vídeo',
 }
 
-/** Validação antecipada (o servidor confere de novo, inclusive o conteúdo). */
+const extensaoDe = (nome?: string) =>
+  nome && nome.includes('.') ? nome.split('.').pop()!.toLowerCase() : ''
+
+/**
+ * Identificação do arquivo pelo formato real (MIME; a extensão do nome só quando o MIME falta): "PDF",
+ * "Planilha XLSX", "Vídeo MP4", "Documento DOCX"… Sem nenhum dos dois, o nome genérico da categoria.
+ */
+export function formatoDoAnexo(
+  mime: string | undefined,
+  categoria: string,
+  nome?: string,
+): { rotulo: string; sigla: string } {
+  const base = mime?.split(';')[0]?.trim().toLowerCase()
+  const conhecido =
+    FORMATOS_ANEXO.find((f) => f.mime === base) ??
+    (base ? undefined : FORMATOS_ANEXO.find((f) => f.extensoes.includes(extensaoDe(nome))))
+  if (conhecido) return conhecido
+  if (base && FORMATOS_NAO_ACEITOS[base]) return FORMATOS_NAO_ACEITOS[base]
+  const rotulo = ROTULO_CATEGORIA[categoria as CategoriaAnexo] ?? 'Arquivo'
+  return {
+    rotulo,
+    sigla: extensaoDe(nome).toUpperCase().slice(0, 4) || rotulo.slice(0, 3).toUpperCase(),
+  }
+}
+
+/**
+ * Validação antecipada (o servidor confere de novo, inclusive o conteúdo). Sem tipo informado pelo
+ * sistema (comum em .3gp e .xlsx no Windows), o formato vem da extensão e o envio leva esse tipo; o
+ * servidor confere o conteúdo do mesmo jeito.
+ */
 export function validarArquivo(
   arquivo: File,
-): { categoria: CategoriaAnexo; erro?: undefined } | { erro: string; categoria?: undefined } {
-  const extensao = arquivo.name.includes('.') ? arquivo.name.split('.').pop()!.toLowerCase() : ''
-  const formato = FORMATOS_ANEXO.find((f) => f.mime === arquivo.type)
+):
+  | { categoria: CategoriaAnexo; mime: string; erro?: undefined }
+  | { erro: string; categoria?: undefined; mime?: undefined } {
+  const extensao = extensaoDe(arquivo.name)
+  const semTipo = !arquivo.type || arquivo.type === 'application/octet-stream'
+  const formato = semTipo
+    ? FORMATOS_ANEXO.find((f) => f.extensoes.includes(extensao))
+    : FORMATOS_ANEXO.find((f) => f.mime === arquivo.type)
   if (!formato)
-    return { erro: 'Tipo não suportado. Envie JPEG, PNG, PDF ou áudio (AAC, AMR, MP3, M4A, OGG).' }
+    return {
+      erro: 'Tipo não suportado. Envie JPEG, PNG, PDF, planilha XLSX, vídeo MP4 ou 3GP, ou áudio (AAC, AMR, MP3, M4A, OGG).',
+    }
   if (!formato.extensoes.includes(extensao))
     return { erro: `A extensão “.${extensao}” não corresponde ao tipo do arquivo.` }
   if (arquivo.size === 0) return { erro: 'O arquivo está vazio.' }
@@ -228,8 +345,12 @@ export function validarArquivo(
     return {
       erro: `Arquivo acima do limite de ${formatarTamanho(LIMITE_ANEXO[formato.categoria])} para ${ROTULO_CATEGORIA[formato.categoria].toLowerCase()}.`,
     }
-  return { categoria: formato.categoria }
+  return { categoria: formato.categoria, mime: formato.mime }
 }
+
+/** O navegador abre o conteúdo (imagem, PDF, áudio e vídeo); planilhas só por download. */
+export const exibivelNoNavegador = (mime?: string) =>
+  !!mime && (/^(image|audio|video)\//.test(mime) || mime === 'application/pdf')
 
 export function formatarTamanho(bytes: number | undefined) {
   if (bytes === undefined) return ''

@@ -1884,7 +1884,7 @@
         "tags": [
           "Atendimento"
         ],
-        "summary": "Registra um anexo (imagem, PDF ou áudio) para envio assíncrono (atendimento:responder)",
+        "summary": "Registra um anexo (imagem, PDF, XLSX, vídeo ou áudio) para envio assíncrono (atendimento:responder)",
         "operationId": "enviarAnexoAtendimento",
         "parameters": [
           {
@@ -2936,9 +2936,10 @@
               "enum": [
                 "IMAGEM",
                 "DOCUMENTO",
-                "AUDIO"
+                "AUDIO",
+                "VIDEO"
               ],
-              "pattern": "IMAGEM|DOCUMENTO|AUDIO"
+              "pattern": "IMAGEM|DOCUMENTO|AUDIO|VIDEO"
             }
           },
           {
@@ -5436,7 +5437,8 @@
             "enum": [
               "IMAGEM",
               "DOCUMENTO",
-              "AUDIO"
+              "AUDIO",
+              "VIDEO"
             ]
           },
           "mimeType": {
@@ -5509,7 +5511,8 @@
             "enum": [
               "IMAGEM",
               "DOCUMENTO",
-              "AUDIO"
+              "AUDIO",
+              "VIDEO"
             ]
           },
           "mimeType": {
@@ -5586,6 +5589,7 @@
               "IMAGEM",
               "DOCUMENTO",
               "AUDIO",
+              "VIDEO",
               "NAO_SUPORTADO"
             ]
           },

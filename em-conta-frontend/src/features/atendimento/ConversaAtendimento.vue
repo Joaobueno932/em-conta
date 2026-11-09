@@ -18,7 +18,7 @@ import {
   chavesAtendimento,
   enviarAnexo,
   formatarTamanho,
-  ROTULO_CATEGORIA,
+  formatoDoAnexo,
   TAMANHO_MAXIMO_LEGENDA,
   validarArquivo,
   encerrar,
@@ -160,7 +160,7 @@ watch(texto, () => {
 // Anexo: validação antecipada (tipo, extensão, tamanho); o servidor confere tudo de novo, inclusive o
 // conteúdo. A chave identifica a operação (atendimento + arquivo + legenda): repetir após falha de rede
 // reutiliza a chave; trocar o arquivo ou a legenda é outra operação.
-const arquivo = ref<{ arquivo: File; categoria: CategoriaAnexo } | null>(null)
+const arquivo = ref<{ arquivo: File; categoria: CategoriaAnexo; mime: string } | null>(null)
 const erroArquivo = ref('')
 const seletor = ref<HTMLInputElement | null>(null)
 function selecionarArquivo(evento: Event) {
@@ -175,7 +175,7 @@ function selecionarArquivo(evento: Event) {
     return
   }
   erroArquivo.value = ''
-  arquivo.value = { arquivo: escolhido, categoria: resultado.categoria }
+  arquivo.value = { arquivo: escolhido, categoria: resultado.categoria, mime: resultado.mime }
   anexoMut.reset()
 }
 function removerArquivo() {
@@ -185,13 +185,14 @@ function removerArquivo() {
 }
 const aceitaLegenda = computed(() => arquivo.value?.categoria !== 'AUDIO')
 const anexoMut = useMutation({
-  mutationFn: (dados: { arquivo: File; legenda: string }) =>
+  mutationFn: (dados: { arquivo: File; mime: string; legenda: string }) =>
     enviarAnexo(
       http,
       props.id,
       dados.arquivo,
       dados.legenda,
       chaveDa(props.id, operacaoArquivo(dados.arquivo, dados.legenda)),
+      dados.mime,
     ),
   onSuccess: (_, dados) => {
     tentativas.delete(operacao(props.id, operacaoArquivo(dados.arquivo, dados.legenda)))
@@ -207,7 +208,7 @@ function enviar() {
   if (arquivo.value) {
     const legenda = aceitaLegenda.value ? texto.value.trim() : ''
     if (anexoMut.isPending.value || legenda.length > TAMANHO_MAXIMO_LEGENDA) return
-    anexoMut.mutate({ arquivo: arquivo.value.arquivo, legenda })
+    anexoMut.mutate({ arquivo: arquivo.value.arquivo, mime: arquivo.value.mime, legenda })
     return
   }
   const conteudo = texto.value.trim()
@@ -637,7 +638,7 @@ async function carregarAnteriores() {
         <div v-if="arquivo" class="selecionado" role="group" aria-label="Arquivo selecionado">
           <span class="nome">{{ arquivo.arquivo.name }}</span>
           <span class="ajuda"
-            >{{ ROTULO_CATEGORIA[arquivo.categoria] }} ·
+            >{{ formatoDoAnexo(arquivo.mime, arquivo.categoria).rotulo }} ·
             {{ formatarTamanho(arquivo.arquivo.size) }}</span
           >
           <button
@@ -714,7 +715,7 @@ async function carregarAnteriores() {
               type="button"
               class="botao-icone sem-borda"
               aria-label="Anexar arquivo"
-              title="Anexar arquivo (imagem, PDF ou áudio)"
+              title="Anexar arquivo (imagem, PDF, planilha XLSX, vídeo ou áudio)"
               :disabled="!!motivoComposer || enviando"
               @click="seletor?.click()"
             >

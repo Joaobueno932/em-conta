@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { useHttpClient } from '@/app/injection'
 import { describeApiError } from '@/shared/api/errors'
@@ -9,16 +9,19 @@ import IconeTraco from '@/shared/components/IconeTraco.vue'
 import {
   chavesAtendimento,
   conteudoAnexo,
+  exibivelNoNavegador,
   formatarTamanho,
+  formatoDoAnexo,
   novaTentativaAnexo,
-  ROTULO_CATEGORIA,
   type Anexo,
   type CategoriaAnexo,
 } from './atendimento-api'
 
 /**
- * Anexo dentro de uma mensagem: miniatura de imagem, PDF com visualizar/baixar e áudio com controles
- * nativos (sem reprodução automática; nada é carregado antes de pedir). O conteúdo vem só da rota
+ * Anexo dentro de uma mensagem: miniatura de imagem; documento identificado pelo formato real (PDF com
+ * visualizar e baixar, planilha só com baixar); vídeo e áudio com controles nativos, sem reprodução
+ * automática (do vídeo só os metadados são carregados, para mostrar duração e quadro). Vídeo que o
+ * navegador não reproduz (3GP, por exemplo) fica com o download. O conteúdo vem só da rota
  * autenticada. "Tentar de novo" só para download recebido que falhou, por quem pode agir.
  */
 const props = defineProps<{
@@ -33,10 +36,22 @@ const http = useHttpClient()
 const queryClient = useQueryClient()
 
 const categoria = computed(() => props.anexo.categoria as CategoriaAnexo)
+const formato = computed(() =>
+  formatoDoAnexo(props.anexo.mimeType, props.anexo.categoria, props.anexo.nome),
+)
 const disponivel = computed(() => props.anexo.situacao === 'DISPONIVEL')
-const nome = computed(() => props.anexo.nome ?? `${ROTULO_CATEGORIA[categoria.value]} sem nome`)
+const nome = computed(() => props.anexo.nome ?? `${formato.value.rotulo} sem nome`)
+const visualizavel = computed(() => exibivelNoNavegador(props.anexo.mimeType))
 const url = (download = false) =>
   conteudoAnexo(props.atendimento, props.anexo.id, { somenteEste: props.somenteEste, download })
+
+// Vídeo: reprodução só se o navegador declara suporte ao tipo; erro ao carregar também cai no download.
+const falhaVideo = ref(false)
+const reproduzVideo = computed(() => {
+  if (falhaVideo.value || typeof document === 'undefined') return false
+  const tipo = props.anexo.mimeType ?? ''
+  return document.createElement('video').canPlayType(tipo) !== ''
+})
 
 const novaTentativa = useMutation({
   mutationFn: () => novaTentativaAnexo(http, props.atendimento, props.anexo.id),
@@ -54,7 +69,11 @@ const estado = computed(() => {
     case 'FALHA':
       return `Não foi possível obter o arquivo${props.anexo.erro ? `: ${props.anexo.erro}` : '.'}`
     case 'NAO_SUPORTADO':
-      return `Arquivo ${props.anexo.mimeType ? `(${props.anexo.mimeType}) ` : ''}não suportado nesta versão.`
+      // O servidor grava o motivo com o que é aceito; sem ele, o tipo informado.
+      return (
+        props.anexo.erro ??
+        `Formato ${props.anexo.mimeType ? `(${props.anexo.mimeType}) ` : ''}não suportado nesta versão.`
+      )
     default:
       return ''
   }
@@ -74,10 +93,36 @@ const estado = computed(() => {
       >
         <img :src="url()" :alt="legenda || nome" loading="lazy" />
       </a>
+      <div v-else-if="categoria === 'VIDEO'" class="video">
+        <video
+          v-if="reproduzVideo"
+          controls
+          playsinline
+          preload="metadata"
+          :src="url()"
+          :aria-label="`Vídeo ${nome}`"
+          @error="falhaVideo = true"
+        ></video>
+        <p v-else class="ajuda" role="note">
+          Este navegador não reproduz {{ formato.rotulo }}; baixe o arquivo para assistir.
+        </p>
+        <a
+          :href="url(true)"
+          :download="nome"
+          class="ajuda com-icone"
+          :aria-label="`Baixar ${formato.rotulo.toLowerCase()} ${nome}`"
+        >
+          <IconeTraco nome="baixar" :tamanho="14" />
+          Baixar vídeo · {{ formatarTamanho(anexo.tamanho) }}
+        </a>
+      </div>
       <div v-else-if="categoria === 'DOCUMENTO'" class="documento">
-        <span class="selo" aria-hidden="true">PDF</span>
+        <span class="selo" :class="`selo--${formato.sigla.toLowerCase()}`" aria-hidden="true">{{
+          formato.sigla
+        }}</span>
         <span class="descricao">
           <a
+            v-if="visualizavel"
             :href="url()"
             target="_blank"
             rel="noopener"
@@ -86,7 +131,16 @@ const estado = computed(() => {
             title="Visualizar"
             >{{ nome }}</a
           >
-          <span class="ajuda">{{ formatarTamanho(anexo.tamanho) }}</span>
+          <a
+            v-else
+            :href="url(true)"
+            :download="nome"
+            class="nome"
+            :aria-label="`Baixar ${formato.rotulo.toLowerCase()} ${nome}`"
+            title="Baixar"
+            >{{ nome }}</a
+          >
+          <span class="ajuda">{{ formato.rotulo }} · {{ formatarTamanho(anexo.tamanho) }}</span>
         </span>
         <a
           :href="url(true)"
@@ -117,7 +171,7 @@ const estado = computed(() => {
       :class="{ falha: ['FALHA', 'NAO_SUPORTADO'].includes(anexo.situacao) }"
       role="status"
     >
-      {{ ROTULO_CATEGORIA[categoria] }}<template v-if="anexo.nome"> “{{ anexo.nome }}”</template>:
+      {{ formato.rotulo }}<template v-if="anexo.nome"> “{{ anexo.nome }}”</template>:
       {{ estado }}
       <button
         v-if="anexo.situacao === 'FALHA' && podeTentarDeNovo"
@@ -150,7 +204,7 @@ const estado = computed(() => {
   background: var(--cor-superficie-2);
 }
 
-/* Cartão de PDF (AT-04/HG-03): selo, nome e tamanho, ação de baixar. */
+/* Cartão de documento (AT-04/HG-03): selo com a sigla do formato, nome e tipo, ação de baixar. */
 .documento {
   display: flex;
   align-items: center;
@@ -166,13 +220,22 @@ const estado = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
+  min-width: 2rem;
   height: 2.25rem;
+  padding: 0 0.15rem;
   border-radius: 4px;
-  background: var(--cor-pdf);
+  background: var(--cor-texto);
   color: #fff;
   font-size: 0.6rem;
   font-weight: 700;
+}
+
+.selo--pdf {
+  background: var(--cor-pdf);
+}
+
+.selo--xlsx {
+  background: var(--cor-planilha);
 }
 
 .descricao {
@@ -194,7 +257,8 @@ const estado = computed(() => {
   text-decoration: underline;
 }
 
-.audio {
+.audio,
+.video {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -202,6 +266,18 @@ const estado = computed(() => {
 
 .audio audio {
   max-width: 100%;
+}
+
+.video video {
+  display: block;
+  width: min(20rem, 100%);
+  max-height: 16rem;
+  border-radius: 6px;
+  background: #000;
+}
+
+.video .ajuda {
+  margin: 0;
 }
 
 .estado {
