@@ -105,6 +105,14 @@ defineProps<{
   transition: box-shadow 0.3s;
 }
 
+/* Entrada (cliente): o tom neutro mais claro da paleta e uma borda um pouco mais marcada, derivada das
+   cores da paleta, para o balão não se confundir com o fundo branco da conversa nem com as pílulas de
+   evento (sem borda). A paleta não tem creme, por isso o fundo da conversa continua branco. */
+.mensagem.entrada {
+  background: var(--cor-fundo);
+  border-color: color-mix(in srgb, var(--cor-borda) 65%, var(--cor-texto-3));
+}
+
 .mensagem.saida {
   align-self: flex-end;
   background: var(--cor-destaque-suave);

@@ -3,6 +3,8 @@
 > Auditoria completa do Atendimento (checklist, inventário do protótipo, capturas e comparações):
 > [auditoria-atendimento/](auditoria-atendimento/README.md).
 
+> Balão do cliente destacado do fundo branco da conversa: [balao-cliente/](balao-cliente/README.md).
+
 > Atualizado depois: título no cabeçalho global, presença única e só duas visões na fila. Ver
 > [atendimento-compacto/](atendimento-compacto/README.md).
 
