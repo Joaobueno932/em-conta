@@ -210,6 +210,7 @@ public class ConsultaAtendimento {
             String motivo,
             String etapaFalha,
             Instant atualizadoEm,
+            String chaveIdempotencia,
             AnexoResumo anexo) {
 
         ItemLinhaDoTempo comAnexo(AnexoResumo novo) {
@@ -233,6 +234,7 @@ public class ConsultaAtendimento {
                     motivo,
                     etapaFalha,
                     atualizadoEm,
+                    chaveIdempotencia,
                     novo);
         }
     }
@@ -297,12 +299,12 @@ public class ConsultaAtendimento {
         String sql = "(select 'MENSAGEM' as tipo, id, criado_em as registro, coalesce(horario_externo, criado_em)"
                 + " as ocorrido, atendimento_id, direcao, tipo as tipo_mensagem, tipo_externo, texto, situacao,"
                 + " erro_codigo, erro_titulo, autor_usuario_id, null as evento, null as usuario_alvo_id,"
-                + " null as associado_id, null as motivo, etapa_falha, atualizado_em from atd_mensagem"
+                + " null as associado_id, null as motivo, etapa_falha, atualizado_em, chave_idempotencia from atd_mensagem"
                 + " where conversa_id = :c" + filtroAtendimento
                 + antes("criado_em", ORDEM_MENSAGEM, antes) + " order by criado_em desc, id desc limit :limite)"
                 + " union all"
                 + " (select 'EVENTO', id, ocorrido_em, ocorrido_em, atendimento_id, null, null, null, null, null,"
-                + " null, null, autor_usuario_id, tipo, usuario_alvo_id, associado_id, motivo, null, null from atd_evento"
+                + " null, null, autor_usuario_id, tipo, usuario_alvo_id, associado_id, motivo, null, null, null from atd_evento"
                 + " where conversa_id = :c" + filtroAtendimento + antes("ocorrido_em", ORDEM_EVENTO, antes)
                 + " order by ocorrido_em desc, id desc limit :limite)"
                 + " order by registro desc, tipo desc, id desc limit :limite";
@@ -340,6 +342,7 @@ public class ConsultaAtendimento {
                             rs.getString("motivo"),
                             rs.getString("etapa_falha"),
                             instante(rs, "atualizado_em"),
+                            rs.getString("chave_idempotencia"),
                             null);
                 })
                 .list());
@@ -436,6 +439,7 @@ public class ConsultaAtendimento {
                         null,
                         rs.getString("etapa_falha"),
                         instante(rs, "atualizado_em"),
+                        null,
                         null))
                 .list());
         comAnexos(itens);

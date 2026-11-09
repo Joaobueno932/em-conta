@@ -47,13 +47,21 @@ public class Atendimentos {
     private final CatalogoAssociados associados;
     private final WhatsAppCloud canal;
     private final Clock clock;
+    private final AvisosAtendimento avisos;
 
-    Atendimentos(JdbcClient jdbc, Autoria autoria, CatalogoAssociados associados, WhatsAppCloud canal, Clock clock) {
+    Atendimentos(
+            JdbcClient jdbc,
+            Autoria autoria,
+            CatalogoAssociados associados,
+            WhatsAppCloud canal,
+            Clock clock,
+            AvisosAtendimento avisos) {
         this.jdbc = jdbc;
         this.autoria = autoria;
         this.associados = associados;
         this.canal = canal;
         this.clock = clock;
+        this.avisos = avisos;
     }
 
     record Estado(long id, long conversaId, String situacao, Long responsavel, long versao) {}
@@ -198,6 +206,8 @@ public class Atendimentos {
                 .param("agora", Timestamp.from(agora))
                 .param("id", estado.conversaId())
                 .update();
+        avisos.conversa(estado.conversaId());
+        avisos.trabalho(); // envio
         return jdbc.sql("select id from atd_mensagem where chave_idempotencia = :chave")
                 .param("chave", chaveIdempotencia)
                 .query(Long.class)
@@ -398,6 +408,7 @@ public class Atendimentos {
                 .param("motivo", motivo)
                 .param("agora", Timestamp.from(agora))
                 .update();
+        avisos.conversa(conversa);
     }
 
     // ------------------------------------------------------------------ presença

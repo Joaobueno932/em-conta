@@ -143,6 +143,11 @@ final class AtendimentoApi {
             @Schema(description = "Última mudança da mensagem (situação ou anexo)")
             Instant atualizadoEm,
 
+            @Schema(
+                    description = "Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a"
+                            + " operação para a tela trocar o balão local pelo registro, sem duplicar")
+            String chaveIdempotencia,
+
             AnexoResponse anexo) {}
 
     @Schema(name = "AnexoAtendimento", description = "Anexo de uma mensagem; o conteúdo só por rota autenticada")

@@ -195,6 +195,7 @@ class AtendimentoController {
         });
         Map<Long, String> nomes = autoria.nomes(usuarios);
         Map<Long, ResumoAssociado> porId = indexar(associados.porIds(ids));
+        long ator = autoria.usuarioAtual();
         return new PaginaLinhaDoTempoResponse(
                 itens.stream()
                         .map(i -> new ItemResponse(
@@ -217,6 +218,8 @@ class AtendimentoController {
                                 i.motivo(),
                                 i.etapaFalha(),
                                 i.atualizadoEm(),
+                                // Só para quem enviou: concilia o balão local do envio com este registro.
+                                i.autorId() != null && i.autorId() == ator ? i.chaveIdempotencia() : null,
                                 AnexoResponse.de(i.anexo())))
                         .toList(),
                 pagina.anterior());

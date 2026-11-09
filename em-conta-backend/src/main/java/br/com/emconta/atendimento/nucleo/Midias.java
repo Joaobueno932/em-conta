@@ -62,6 +62,7 @@ public class Midias {
     private final AnexosProperties propriedades;
     private final Clock clock;
     private final TransactionTemplate transacao;
+    private final AvisosAtendimento avisos;
 
     Midias(
             JdbcClient jdbc,
@@ -69,7 +70,9 @@ public class Midias {
             ArmazenamentoObjetos armazenamento,
             AnexosProperties propriedades,
             Clock clock,
-            PlatformTransactionManager transacoes) {
+            PlatformTransactionManager transacoes,
+            AvisosAtendimento avisos) {
+        this.avisos = avisos;
         this.jdbc = jdbc;
         this.canal = canal;
         this.armazenamento = armazenamento;
@@ -85,7 +88,8 @@ public class Midias {
     }
 
     /** Uma aquisição do anexo: {@code token} distingue esta execução de qualquer outra, anterior ou futura. */
-    private record Reserva(long id, String token, String idMidia, String mime, String shaProvedor, int tentativas) {}
+    private record Reserva(
+            long id, long conversaId, String token, String idMidia, String mime, String shaProvedor, int tentativas) {}
 
     /** A reserva expirou e outra execução assumiu (ou foi recuperada): esta execução para sem gravar. */
     private static final class ReservaPerdida extends RuntimeException {
@@ -119,10 +123,11 @@ public class Midias {
         String token = UUID.randomUUID().toString();
         return Optional.ofNullable(transacao.execute(status -> {
             Optional<Map<String, Object>> linha = jdbc
-                    .sql("select id, id_midia_externo, mime_type, sha256_provedor, tentativas from atd_anexo"
-                            + " where situacao in ('PENDENTE', 'FALHA_TEMPORARIA') and direcao = 'ENTRADA'"
-                            + " and (proxima_tentativa_em is null or proxima_tentativa_em <= :agora)"
-                            + " order by id limit 1 for update skip locked")
+                    .sql(
+                            "select id, conversa_id, id_midia_externo, mime_type, sha256_provedor, tentativas from atd_anexo"
+                                    + " where situacao in ('PENDENTE', 'FALHA_TEMPORARIA') and direcao = 'ENTRADA'"
+                                    + " and (proxima_tentativa_em is null or proxima_tentativa_em <= :agora)"
+                                    + " order by id limit 1 for update skip locked")
                     .param("agora", Timestamp.from(agora))
                     .query()
                     .listOfRows()
@@ -140,8 +145,11 @@ public class Midias {
                     .param("t", tentativas)
                     .param("id", id)
                     .update();
+            long conversa = ((Number) linha.get().get("conversa_id")).longValue();
+            avisos.conversa(conversa); // PROCESSANDO
             return new Reserva(
                     id,
+                    conversa,
                     token,
                     (String) linha.get().get("id_midia_externo"),
                     (String) linha.get().get("mime_type"),
@@ -293,6 +301,7 @@ public class Midias {
                 jdbc.sql("delete from atd_objeto_pendente where chave_objeto = :chave")
                         .param("chave", chave)
                         .update();
+                avisos.conversa(reserva.conversaId());
             } else {
                 marcarRemover(reserva, chave, agora);
             }
@@ -304,18 +313,25 @@ public class Midias {
     private void falhar(Reserva reserva, boolean temporaria, String motivo) {
         Instant agora = clock.instant();
         boolean definitiva = !temporaria || reserva.tentativas() >= propriedades.maximoTentativas();
-        transacao.executeWithoutResult(status -> jdbc.sql("update atd_anexo set situacao = :s, erro = :erro,"
-                        + " proxima_tentativa_em = :proxima, reserva = null, reservado_em = null, atualizado_em = :agora"
-                        + " where id = :id and reserva = :token and situacao = 'PROCESSANDO'")
-                .param("s", definitiva ? "FALHA" : "FALHA_TEMPORARIA")
-                .param("erro", motivo.length() > 300 ? motivo.substring(0, 300) : motivo)
-                .param(
-                        "proxima",
-                        definitiva ? null : Timestamp.from(agora.plus(Duration.ofSeconds(30L << reserva.tentativas()))))
-                .param("agora", Timestamp.from(agora))
-                .param("id", reserva.id())
-                .param("token", reserva.token())
-                .update());
+        transacao.executeWithoutResult(status -> {
+            int alterados = jdbc.sql("update atd_anexo set situacao = :s, erro = :erro,"
+                            + " proxima_tentativa_em = :proxima, reserva = null, reservado_em = null, atualizado_em = :agora"
+                            + " where id = :id and reserva = :token and situacao = 'PROCESSANDO'")
+                    .param("s", definitiva ? "FALHA" : "FALHA_TEMPORARIA")
+                    .param("erro", motivo.length() > 300 ? motivo.substring(0, 300) : motivo)
+                    .param(
+                            "proxima",
+                            definitiva
+                                    ? null
+                                    : Timestamp.from(agora.plus(Duration.ofSeconds(30L << reserva.tentativas()))))
+                    .param("agora", Timestamp.from(agora))
+                    .param("id", reserva.id())
+                    .param("token", reserva.token())
+                    .update();
+            if (alterados > 0) {
+                avisos.conversa(reserva.conversaId());
+            }
+        });
     }
 
     /**
@@ -325,13 +341,23 @@ public class Midias {
      */
     private void recuperarReservasExpiradas() {
         Instant agora = clock.instant();
+        Timestamp limite = Timestamp.from(agora.minus(RESERVA_EXPIRADA));
+        List<Long> conversas = jdbc.sql("select distinct conversa_id from atd_anexo"
+                        + " where situacao = 'PROCESSANDO' and reservado_em < :limite")
+                .param("limite", limite)
+                .query(Long.class)
+                .list();
+        if (conversas.isEmpty()) {
+            return;
+        }
         // proxima_tentativa_em nula = elegível já (sem depender do arredondamento de DATETIME(6)).
         jdbc.sql("update atd_anexo set situacao = 'FALHA_TEMPORARIA', reserva = null, reservado_em = null,"
                         + " proxima_tentativa_em = null, erro = 'Processamento interrompido', atualizado_em = :agora"
                         + " where situacao = 'PROCESSANDO' and reservado_em < :limite")
                 .param("agora", Timestamp.from(agora))
-                .param("limite", Timestamp.from(agora.minus(RESERVA_EXPIRADA)))
+                .param("limite", limite)
                 .update();
+        conversas.forEach(avisos::conversa);
     }
 
     // ------------------------------------------------------------------ objetos sem dono

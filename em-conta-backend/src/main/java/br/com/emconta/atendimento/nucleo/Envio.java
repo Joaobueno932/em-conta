@@ -17,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -58,13 +59,16 @@ public class Envio {
     private final ArmazenamentoObjetos armazenamento;
     private final Clock clock;
     private final TransactionTemplate transacao;
+    private final AvisosAtendimento avisos;
 
     Envio(
             JdbcClient jdbc,
             WhatsAppCloud canal,
             ArmazenamentoObjetos armazenamento,
             Clock clock,
-            PlatformTransactionManager transacoes) {
+            PlatformTransactionManager transacoes,
+            AvisosAtendimento avisos) {
+        this.avisos = avisos;
         this.jdbc = jdbc;
         this.canal = canal;
         this.armazenamento = armazenamento;
@@ -75,6 +79,7 @@ public class Envio {
 
     private record Reserva(
             long id,
+            long conversaId,
             String correlacao,
             String para,
             String texto,
@@ -151,7 +156,9 @@ public class Envio {
                 return null;
             }
             long id = ((Number) linha.get().get("id")).longValue();
+            long conversa = ((Number) linha.get().get("conversa_id")).longValue();
             int tentativas = ((Number) linha.get().get("tentativas")).intValue() + 1;
+            avisos.conversa(conversa); // ENVIANDO ou JANELA_EXPIRADA
             // A janela é conferida de novo a cada tentativa, com a última entrada atual do contato (uma
             // mensagem nova dele renova a janela das respostas ainda pendentes).
             Instant entrada = jdbc.sql("select ultima_entrada_em from atd_conversa where id = :id")
@@ -169,7 +176,7 @@ public class Envio {
                         .param("id", id)
                         .update();
                 historico(id, "JANELA_EXPIRADA", null, JANELA_EXPIRADA, agora);
-                return new Reserva(id, null, null, null, tentativas - 1, true, null);
+                return new Reserva(id, conversa, null, null, null, tentativas - 1, true, null);
             }
             jdbc.sql(
                             "update atd_mensagem set situacao = 'ENVIANDO', tentativas = :t, atualizado_em = :agora where id = :id")
@@ -179,6 +186,7 @@ public class Envio {
                     .update();
             return new Reserva(
                     id,
+                    conversa,
                     (String) linha.get().get("correlacao"),
                     (String) linha.get().get("wa_id"),
                     (String) linha.get().get("texto"),
@@ -276,6 +284,7 @@ public class Envio {
                     .update();
             if (alteradas > 0) {
                 historico(reserva.id(), "JANELA_EXPIRADA", null, JANELA_EXPIRADA_APOS_UPLOAD, agora);
+                avisos.conversa(reserva.conversaId());
             }
         });
     }
@@ -302,12 +311,14 @@ public class Envio {
             if (!novaTentativa) {
                 historico(reserva.id(), "FALHA", falha.codigo(), titulo, agora);
             }
+            avisos.conversa(reserva.conversaId());
         });
     }
 
     private void registrar(Reserva reserva, ResultadoEnvio resultado) {
         Instant agora = clock.instant();
         transacao.executeWithoutResult(status -> {
+            avisos.conversa(reserva.conversaId());
             switch (resultado) {
                 case Aceita aceita -> {
                     // Um evento de situação pode ter chegado antes desta gravação (correlação): não regride.
@@ -360,12 +371,22 @@ public class Envio {
     /** Reservas antigas (processo caiu durante o envio): resultado desconhecido, sem reenvio. */
     private void recuperarReservasExpiradas() {
         Instant agora = clock.instant();
+        Timestamp limite = Timestamp.from(agora.minus(RESERVA_EXPIRADA));
+        List<Long> conversas = jdbc.sql(
+                        "select distinct conversa_id from atd_mensagem where situacao = 'ENVIANDO' and atualizado_em < :limite")
+                .param("limite", limite)
+                .query(Long.class)
+                .list();
+        if (conversas.isEmpty()) {
+            return;
+        }
         jdbc.sql("update atd_mensagem set situacao = 'DESCONHECIDA', erro_titulo = :motivo, atualizado_em = :agora"
                         + " where situacao = 'ENVIANDO' and atualizado_em < :limite")
                 .param("motivo", "Envio interrompido; resultado desconhecido")
                 .param("agora", Timestamp.from(agora))
-                .param("limite", Timestamp.from(agora.minus(RESERVA_EXPIRADA)))
+                .param("limite", limite)
                 .update();
+        conversas.forEach(avisos::conversa);
     }
 
     private void historico(long mensagem, String situacao, Integer codigo, String titulo, Instant agora) {

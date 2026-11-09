@@ -43,7 +43,7 @@ fictício.
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
-## Modelo (V6 a V11)
+## Modelo (V6 a V12)
 
 | Tabela | Conteúdo |
 |---|---|
@@ -57,12 +57,16 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
 | `atd_anexo` | V8: anexo da mensagem (categoria — V11 acrescenta `VIDEO` —, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
 | `atd_objeto_pendente` | V9: diário durável de objetos do armazenamento que podem ter ficado sem dono no recebimento (`GRAVANDO` antes de gravar, `REMOVER` quando excedente), com tentativas, próxima tentativa e erro; `atd_anexo.reserva` guarda o token da reserva vigente |
 | `atd_presenca` | presença manual do atendente (Disponível/Ausente; não afeta distribuição) |
+| `atd_sinal` | V12: contador de mudanças por conversa, incrementado depois de cada commit que altera a linha do tempo; só sinal, sem conteúdo (ver [Atualização em tempo real](#atualização-em-tempo-real)) |
 
 ## Consistência, eventos e repetição
 
 - **Entrada**: o webhook só valida a assinatura e grava o corpo em `atd_webhook_evento`
   (deduplicado pelo hash) e responde 200. Um processador (`@Scheduled`, 2 s, com
-  `FOR UPDATE SKIP LOCKED`, seguro com várias réplicas) interpreta cada evento numa transação.
+  `FOR UPDATE SKIP LOCKED`, seguro com várias réplicas) interpreta cada evento numa transação; além
+  do ciclo, ele roda na hora depois que algo entra na fila na mesma instância (evento gravado,
+  resposta ou anexo registrado, nova tentativa de download), numa thread própria que agrupa pedidos
+  simultâneos.
   Mensagem repetida (mesmo `wamid`) não duplica. Falha → nova tentativa com espera crescente
   (30 s × 2ⁿ); após 5 tentativas fica `FALHA` e pode ser reprocessada
   (`POST …/webhook-eventos/{id}/reprocessamento`). A Meta também reenvia por até 7 dias.
@@ -93,8 +97,9 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
 - **Concorrência**: assumir é um `UPDATE` condicional (dois atendentes ao mesmo tempo → um recebe 409
   `ATENDIMENTO_JA_ASSUMIDO`); transferir, encerrar e vincular usam `versao` (409
   `CONFLITO_CONCORRENTE`).
-- **Atualização da tela**: consulta periódica a cada 5 s (TanStack Query). Escolhido em vez de SSE por
-  funcionar igual com várias réplicas e com a sessão revogada (o 401 leva ao login).
+- **Atualização da tela**: a conversa aberta recebe avisos de mudança por SSE e relê na hora (ver
+  [Atualização em tempo real](#atualização-em-tempo-real)); a consulta periódica fica como rede de
+  segurança (30 s com avisos, 5 s sem eles e nas demais telas).
 - **Indicador no balão enviado** (`IndicadorSituacao.vue`, ao lado do horário, com rótulo acessível e
   tooltip; o mesmo na conversa e no detalhe do histórico): relógio para `PENDENTE`, `ENVIANDO` e
   `ACEITA` (aceite é só da requisição, ainda sem confirmação de envio), um tique cinza para `ENVIADA`,
@@ -149,6 +154,7 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `POST atendimentos/{id}/anexos/{anexo}/nova-tentativa` | baixar de novo um anexo recebido em FALHA (responsável) |
 | `GET atendimentos/{id}/midia?somenteEste=&categoria=&antes=&tamanho=` | área Mídia, por cursor (1–50) |
 | `GET atendimentos/{id}/linha-do-tempo/situacoes?ids=&somenteEste=` | situação atual de até 100 mensagens já carregadas |
+| `GET atendimentos/{id}/eventos` | avisos de mudança da conversa (SSE, `text/event-stream`; atendimento:consultar) |
 
 ### Linha do tempo paginada
 
@@ -163,7 +169,7 @@ maior, mensagens que chegam durante a navegação não deslocam as páginas ante
 continua sendo `ocorridoEm` (o do WhatsApp, para mensagens recebidas). `somenteEste=true` restringe ao
 atendimento selecionado (detalhe do histórico); sem ele, todos os ciclos da conversa.
 
-A interface consulta a página recente a cada 5 s e carrega as anteriores sob demanda ("Carregar
+A interface relê a página recente a cada aviso de mudança (e a cada 30 s, ou 5 s sem avisos) e carrega as anteriores sob demanda ("Carregar
 mensagens anteriores", com estados de carregamento, erro com nova tentativa e "Início do histórico").
 Páginas já carregadas e itens que saem da página recente continuam na tela; se chegarem mais itens do
 que cabem numa página entre duas consultas, a lacuna é buscada por cursor. Ao carregar conteúdo
@@ -307,12 +313,50 @@ de trabalho (`emconta-local`) e o de testes e2e (`emconta-e2e`) são separados. 
   503 `UPLOAD_EXPIRADO`); depois remove o objeto e apaga a linha. Falha na remoção: a linha `FALHA` sem
   mensagem volta no ciclo seguinte. Anexos com mensagem nunca entram nessa limpeza.
 
-### Atualização de situações na tela
+### Atualização em tempo real
 
-A página recente da linha do tempo é consultada a cada 5 s; as mensagens já carregadas fora dela e
+Antes, a tela dependia só da consulta a cada 5 s. Medido na homologação com a Meta (09/11/2026, 17
+eventos reais): a Meta levou de 1,3 a 4,2 s do evento até o webhook (parte dela); do webhook ao
+processamento foram de 0,1 a 2,0 s (ciclo de 2 s do processador); do processamento até a tela, de 0 a
+5 s (consulta periódica). Como `sent` e `delivered` costumam chegar no mesmo segundo, a tela pulava os
+estados intermediários.
+
+- **Processamento imediato**: gravar um evento do webhook (ou registrar resposta, anexo ou nova
+  tentativa) acorda o processador da mesma instância depois do commit; o ciclo de 2 s continua para o
+  que outras instâncias gravaram.
+- **Sinal por conversa** (`AvisosAtendimento`): cada commit que muda algo visível na linha do tempo
+  (mensagem recebida, situação de envio, ENVIANDO/ACEITA/FALHA/DESCONHECIDA/JANELA_EXPIRADA, anexo
+  em processamento/disponível/falha, assumir, transferir, devolver, encerrar, vínculo) incrementa
+  `atd_sinal` numa transação própria, **depois** da confirmação. Rollback não sinaliza. Falha ao
+  sinalizar só atrasa a tela até a consulta de segurança.
+- **Entrega** (`GET …/eventos`, `NotificadorConversas`): cada instância da API guarda as conexões SSE
+  das conversas abertas nela e, a cada 300 ms (e na hora, quando a mudança foi nesta instância), lê
+  só os contadores dessas conversas pela chave primária. Contador diferente → evento `mudanca` (só o
+  contador, nenhum conteúdo) para quem assina aquela conversa. Ao conectar chega `pronto`. Funciona com
+  várias réplicas e com o processamento no worker, porque o sinal está no banco. Cada conexão dura até
+  5 min (o navegador reconecta sozinho); um comentário a cada 20 s mantém proxies sem cortar a conexão;
+  `X-Accel-Buffering: no` impede o Nginx de acumular o fluxo.
+- **Permissão**: a rota exige `atendimento:consultar` e um atendimento existente (404). O aviso não traz
+  dados: a tela relê pela linha do tempo e pelo detalhe, com as permissões de sempre. Sessão expirada
+  ou revogada: a reconexão é recusada e a consulta periódica recebe 401, que leva ao login.
+- **Tela** (`use-eventos-conversa.ts`): a cada `pronto` ou `mudanca` relê a página recente e o
+  detalhe; avisos durante uma leitura em andamento viram uma releitura depois dela. Trocar de conversa
+  fecha a assinatura anterior (aviso atrasado dela é ignorado). Recusa da conexão: nova tentativa em
+  2, 5, 15 e 30 s, e a consulta volta a 5 s até os avisos voltarem.
+- **Balão na hora do envio**: o compositor mostra a resposta (texto ou anexo) com relógio assim que a
+  pessoa envia. A identidade da operação é a chave de idempotência, que a linha do tempo devolve só nas
+  mensagens de quem consulta (`chaveIdempotencia`): quando o registro do servidor chega (pelo aviso ou
+  pela resposta do envio, o que vier primeiro), ele substitui o balão local, sem aparecerem os dois.
+  Falha sem registro tira o balão e devolve o texto ao campo (mesma chave ao tentar de novo).
+- **Ícones**: a mesma regra de antes (relógio para PENDENTE/ENVIANDO/ACEITA, um tique cinza para
+  ENVIADA, dois cinza para ENTREGUE, dois azuis para LIDA, exclamação para FALHA, "Envio não
+  confirmado" para DESCONHECIDA). Confirmação atrasada não regride: o servidor só avança a situação e a
+  tela mantém a versão com `atualizadoEm` mais novo.
+
+As mensagens já carregadas fora da página recente e
 ainda sujeitas a mudança (PENDENTE, ENVIANDO, ACEITA, ENVIADA, ENTREGUE, DESCONHECIDA ou anexo em
 processamento) são conferidas em lote por `…/linha-do-tempo/situacoes` (até 100 por consulta, uma
-consulta por ciclo, sem sobreposição), em **rodízio**: cada lote começa onde o anterior parou e volta
+consulta por leitura da página recente, sem sobreposição), em **rodízio**: cada lote começa onde o anterior parou e volta
 ao início no fim, então toda mensagem elegível é conferida em no máximo ⌈n / 100⌉ ciclos, mesmo que as
 mais novas continuem elegíveis (ENTREGUE ainda vira LIDA; DESCONHECIDA pode ser reconciliada). A tela
 mantém a versão com `atualizadoEm` mais novo, sem recarregar páginas nem mudar a posição de leitura; o
@@ -410,6 +454,12 @@ A homologação com o canal real **ainda não foi feita**: depende do acesso à 
   inválidos, destino e redirecionamento não autorizados, permissões e relação anexo↔atendimento,
   envio pelo responsável, idempotência, janela, resultado desconhecido, falha do armazenamento,
   limpeza de uploads abandonados, Mídia por ciclo, busca por associado e situações em lote.
-- Frontend: `src/features/atendimento/__tests__` (Vitest) e `e2e/atendimento.spec.ts` (Playwright),
+- `EventosConversaIntegrationTests`: aviso SSE só depois do commit e só para a conversa alterada, sem
+  conteúdo; ação recusada não sinaliza; sessão, permissão e atendimento existente; chave da operação só
+  para o autor. `ProcessamentoAtendimentoTests`: pedidos de processamento imediato agrupados, sem perder
+  o que chega durante uma execução.
+- Frontend: `src/features/atendimento/__tests__` (Vitest; `tempo-real.spec.ts` cobre aviso → releitura,
+  ícones fora de ordem, balão local sem duplicar, falha, troca de conversa e reconexão) e
+  `e2e/atendimento.spec.ts` (Playwright),
   este contra a API de testes do banco isolado, também com Graph controlada local
   (`e2e/whatsapp-controlado.ts`). Nada disso é envio ou recebimento real.

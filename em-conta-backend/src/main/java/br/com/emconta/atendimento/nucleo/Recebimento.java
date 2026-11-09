@@ -52,11 +52,18 @@ public class Recebimento {
     private final WhatsAppCloud canal;
     private final Clock clock;
     private final TransactionTemplate transacao;
+    private final AvisosAtendimento avisos;
 
-    Recebimento(JdbcClient jdbc, WhatsAppCloud canal, Clock clock, PlatformTransactionManager transacoes) {
+    Recebimento(
+            JdbcClient jdbc,
+            WhatsAppCloud canal,
+            Clock clock,
+            PlatformTransactionManager transacoes,
+            AvisosAtendimento avisos) {
         this.jdbc = jdbc;
         this.canal = canal;
         this.clock = clock;
+        this.avisos = avisos;
         this.transacao = new TransactionTemplate(transacoes);
         this.transacao.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -71,6 +78,7 @@ public class Recebimento {
                     .param("corpo", new String(corpo, StandardCharsets.UTF_8))
                     .param("agora", Timestamp.from(agora))
                     .update();
+            avisos.trabalho();
             return true;
         } catch (DuplicateKeyException e) {
             return false;
@@ -214,7 +222,9 @@ public class Recebimento {
         }
         if (categoria != null) {
             registrarAnexo(m, categoria, conversa, atendimento, agora);
+            avisos.trabalho(); // download do anexo
         }
+        avisos.conversa(conversa);
         Instant horario = m.horario() != null ? m.horario() : agora;
         jdbc.sql("update atd_conversa set ultima_entrada_em = greatest(coalesce(ultima_entrada_em, :h), :h),"
                         + " ultima_mensagem_em = greatest(coalesce(ultima_mensagem_em, :agora), :agora) where id = :id")
@@ -359,7 +369,7 @@ public class Recebimento {
             return;
         }
         Optional<Map<String, Object>> mensagem = jdbc
-                .sql("select id, situacao, id_externo from atd_mensagem"
+                .sql("select id, conversa_id, situacao, id_externo from atd_mensagem"
                         + " where direcao = 'SAIDA' and (id_externo = :externo or correlacao = :correlacao) for update")
                 .param("externo", s.idExterno())
                 .param("correlacao", s.correlacao() == null ? "" : s.correlacao())
@@ -396,6 +406,7 @@ public class Recebimento {
                 .param("agora", Timestamp.from(agora))
                 .param("id", id)
                 .update();
+        avisos.conversa(((Number) mensagem.get().get("conversa_id")).longValue());
     }
 
     private void preencherIdExterno(long id, Map<String, Object> mensagem, String externo, Instant agora) {

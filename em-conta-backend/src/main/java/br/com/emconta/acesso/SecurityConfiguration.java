@@ -149,6 +149,7 @@ class SecurityConfiguration {
                             "/api/v1/atendimento/atendimentos/*",
                             "/api/v1/atendimento/atendimentos/*/linha-do-tempo",
                             "/api/v1/atendimento/atendimentos/*/linha-do-tempo/situacoes",
+                            "/api/v1/atendimento/atendimentos/*/eventos",
                             "/api/v1/atendimento/atendimentos/*/midia",
                             "/api/v1/atendimento/atendimentos/*/anexos/*/conteudo",
                             "/api/v1/atendimento/historico")

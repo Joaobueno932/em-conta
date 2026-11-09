@@ -56,6 +56,7 @@ public class Anexos {
     private final AnexosProperties propriedades;
     private final Clock clock;
     private final TransactionTemplate transacao;
+    private final AvisosAtendimento avisos;
 
     Anexos(
             JdbcClient jdbc,
@@ -65,7 +66,9 @@ public class Anexos {
             ArmazenamentoObjetos armazenamento,
             AnexosProperties propriedades,
             Clock clock,
-            PlatformTransactionManager transacoes) {
+            PlatformTransactionManager transacoes,
+            AvisosAtendimento avisos) {
+        this.avisos = avisos;
         this.jdbc = jdbc;
         this.atendimentos = atendimentos;
         this.midias = midias;
@@ -246,6 +249,8 @@ public class Anexos {
                 .param("agora", Timestamp.from(agora))
                 .param("id", estado.conversaId())
                 .update();
+        avisos.conversa(estado.conversaId());
+        avisos.trabalho(); // upload e envio
         return mensagem;
     }
 
@@ -374,5 +379,7 @@ public class Anexos {
             throw FalhaAtendimento.conflito(
                     "NOVA_TENTATIVA_INDISPONIVEL", "Este anexo não está em falha ou não pode ser baixado de novo.");
         }
+        avisos.conversa(estado.conversaId());
+        avisos.trabalho();
     }
 }
