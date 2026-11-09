@@ -24,6 +24,8 @@ import {
   encerrar,
   iniciais,
   INTERVALO_MS,
+  INTERVALO_SEGURANCA_MS,
+  type Item,
   comecaDia,
   nomeContato,
   rotuloDia,
@@ -48,13 +50,17 @@ const http = useHttpClient()
 const queryClient = useQueryClient()
 const { data: usuario } = useSessao()
 
+// Cada aviso de mudança da conversa relê a linha do tempo e também o detalhe (responsável, situação,
+// janela); a consulta periódica do detalhe acompanha o intervalo da linha.
+const linha = useLinhaDoTempo(toRef(props, 'id'), false, true, () => void detalhe.refetch())
+const recente = linha.recente
 const detalhe = useQuery({
   queryKey: computed(() => chavesAtendimento.detalhe(props.id)),
   queryFn: () => obterDetalhe(http, props.id),
-  refetchInterval: INTERVALO_MS,
+  refetchInterval: computed(() =>
+    linha.eventosConectados.value ? INTERVALO_SEGURANCA_MS : INTERVALO_MS,
+  ),
 })
-const linha = useLinhaDoTempo(toRef(props, 'id'), false, true)
-const recente = linha.recente
 
 const resumo = computed(() => detalhe.data.value?.resumo)
 const souResponsavel = computed(
@@ -130,6 +136,82 @@ const transferirMut = useMutation({
   onSettled: atualizar,
 })
 
+// Envio local (balão com relógio na hora do envio): a chave de idempotência é a identidade da operação.
+// O balão some quando a linha do tempo traz o registro do servidor com a mesma chave (só o autor a
+// recebe) ou com o id devolvido pelo envio; os dois nunca aparecem juntos. Falha sem registro remove o
+// balão (o texto ou o arquivo continuam no compositor para tentar de novo, com a mesma chave).
+interface EnvioLocal {
+  chave: string
+  atendimento: number
+  mensagemId?: number
+  item: Item
+}
+const locais = ref<EnvioLocal[]>([])
+let sequenciaLocal = 0
+function adicionarLocal(
+  chave: string,
+  dados: { texto?: string; arquivo?: { arquivo: File; mime: string } },
+) {
+  if (locais.value.some((l) => l.chave === chave)) return
+  const agora = new Date().toISOString()
+  const id = -++sequenciaLocal
+  const anexo = dados.arquivo && validarArquivo(dados.arquivo.arquivo)
+  locais.value = [
+    ...locais.value,
+    {
+      chave,
+      atendimento: props.id,
+      item: {
+        tipo: 'MENSAGEM',
+        id,
+        cursor: '',
+        ocorridoEm: agora,
+        atendimentoId: props.id,
+        direcao: 'SAIDA',
+        tipoMensagem: anexo?.categoria ?? 'TEXTO',
+        texto: dados.texto,
+        situacao: 'PENDENTE',
+        autor: usuario.value ? { id: usuario.value.id, nome: usuario.value.nome } : undefined,
+        atualizadoEm: agora,
+        anexo: dados.arquivo
+          ? {
+              id,
+              categoria: anexo?.categoria ?? 'DOCUMENTO',
+              mimeType: dados.arquivo.mime,
+              nome: dados.arquivo.arquivo.name,
+              tamanho: dados.arquivo.arquivo.size,
+              situacao: 'RECEBENDO',
+            }
+          : undefined,
+      },
+    },
+  ]
+}
+function confirmarLocal(chave: string, mensagemId: number) {
+  locais.value = locais.value.map((l) => (l.chave === chave ? { ...l, mensagemId } : l))
+}
+function removerLocal(chave: string) {
+  locais.value = locais.value.filter((l) => l.chave !== chave)
+}
+const conciliado = (l: EnvioLocal) =>
+  linha.itens.value.some(
+    (i) =>
+      i.tipo === 'MENSAGEM' &&
+      ((l.mensagemId !== undefined && i.id === l.mensagemId) || i.chaveIdempotencia === l.chave),
+  )
+// O registro chegou: o balão local sai da lista (não volta se a página recente mudar depois).
+watch(
+  () => linha.itens.value,
+  () => {
+    if (locais.value.some(conciliado)) locais.value = locais.value.filter((l) => !conciliado(l))
+  },
+)
+const itensExibidos = computed(() => [
+  ...linha.itens.value,
+  ...locais.value.filter((l) => l.atendimento === props.id && !conciliado(l)).map((l) => l.item),
+])
+const chaveItem = (item: Item) => (item.id < 0 ? `local-${item.id}` : `${item.tipo}-${item.id}`)
+
 // Resposta: a chave de idempotência identifica a operação (este atendimento + este texto, já sem
 // espaços nas pontas, que é o que o servidor compara). Repetir um texto cujo envio não teve resposta
 // reutiliza a chave daquela tentativa e não duplica a mensagem; texto editado é outra operação, com
@@ -148,14 +230,29 @@ function chaveDa(id: number, conteudo: string) {
 const responderMut = useMutation({
   mutationFn: (conteudo: string) =>
     responder(http, props.id, conteudo, chaveDa(props.id, conteudo)),
-  onSuccess: (_, conteudo) => {
+  onMutate: (conteudo) => {
+    adicionarLocal(chaveDa(props.id, conteudo), { texto: conteudo })
     texto.value = ''
+  },
+  onSuccess: (resposta, conteudo) => {
+    confirmarLocal(chaveDa(props.id, conteudo), resposta.mensagemId)
     tentativas.delete(operacao(props.id, conteudo))
+  },
+  onError: (_, conteudo) => {
+    // Nada foi registrado: o balão sai e o texto volta ao campo para tentar de novo (mesma chave).
+    removerLocal(chaveDa(props.id, conteudo))
+    if (!texto.value) texto.value = conteudo
   },
   onSettled: atualizar,
 })
-watch(texto, () => {
-  if (!responderMut.isPending.value && responderMut.isError.value) responderMut.reset()
+// Editar o texto que falhou tira o aviso de erro (o texto devolvido ao campo pela falha, não).
+watch(texto, (atual) => {
+  if (
+    !responderMut.isPending.value &&
+    responderMut.isError.value &&
+    atual !== responderMut.variables.value
+  )
+    responderMut.reset()
 })
 // Anexo: validação antecipada (tipo, extensão, tamanho); o servidor confere tudo de novo, inclusive o
 // conteúdo. A chave identifica a operação (atendimento + arquivo + legenda): repetir após falha de rede
@@ -194,11 +291,20 @@ const anexoMut = useMutation({
       chaveDa(props.id, operacaoArquivo(dados.arquivo, dados.legenda)),
       dados.mime,
     ),
-  onSuccess: (_, dados) => {
+  onMutate: (dados) =>
+    adicionarLocal(chaveDa(props.id, operacaoArquivo(dados.arquivo, dados.legenda)), {
+      texto: dados.legenda || undefined,
+      arquivo: dados,
+    }),
+  onSuccess: (resposta, dados) => {
+    const chave = chaveDa(props.id, operacaoArquivo(dados.arquivo, dados.legenda))
+    confirmarLocal(chave, resposta.mensagemId)
     tentativas.delete(operacao(props.id, operacaoArquivo(dados.arquivo, dados.legenda)))
     arquivo.value = null
     texto.value = ''
   },
+  onError: (_, dados) =>
+    removerLocal(chaveDa(props.id, operacaoArquivo(dados.arquivo, dados.legenda))),
   onSettled: atualizar,
 })
 const operacaoArquivo = (f: File, legenda: string) =>
@@ -394,13 +500,16 @@ const motivoComposer = computed(() => {
 const botaoPainel = ref<HTMLButtonElement | null>(null)
 
 // Separador de dia (AT-04: "Hoje, 13 de outubro") antes do primeiro item de cada dia.
-const novoDia = (indice: number) => comecaDia(linha.itens.value, indice)
+const novoDia = (indice: number) => comecaDia(itensExibidos.value, indice)
 const rolagem = ref<HTMLElement | null>(null)
 const perto = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 80
 
 // Item novo no fim: desce só se a pessoa já estava no fim (não tira quem está lendo mensagens antigas).
 watch(
-  () => linha.itens.value[linha.itens.value.length - 1]?.cursor,
+  () => {
+    const ultimo = itensExibidos.value[itensExibidos.value.length - 1]
+    return ultimo && (ultimo.cursor || chaveItem(ultimo))
+  },
   async (novo, antigo) => {
     const el = rolagem.value
     const descer = !antigo || !el || perto(el)
@@ -592,7 +701,7 @@ async function carregarAnteriores() {
             </button>
             <p v-else class="ajuda">Início do histórico</p>
           </div>
-          <template v-for="(item, indice) in linha.itens.value" :key="`${item.tipo}-${item.id}`">
+          <template v-for="(item, indice) in itensExibidos" :key="chaveItem(item)">
             <p v-if="novoDia(indice)" class="dia">{{ rotuloDia(item.ocorridoEm) }}</p>
             <ItemLinhaDoTempo
               :item="item"

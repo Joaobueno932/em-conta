@@ -953,6 +953,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/atendimentos/{id}/eventos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Avisos de mudança na conversa (SSE): "pronto" ao conectar e "mudanca" a cada alteração confirmada; sem conteúdo, a tela relê a linha do tempo (atendimento:consultar) */
+        get: operations["eventosAtendimento"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/atendimentos/{id}/associados-sugeridos": {
         parameters: {
             query?: never;
@@ -1803,6 +1820,8 @@ export interface components {
              * @description Última mudança da mensagem (situação ou anexo)
              */
             atualizadoEm?: string;
+            /** @description Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a operação para a tela trocar o balão local pelo registro, sem duplicar */
+            chaveIdempotencia?: string;
             anexo?: components["schemas"]["AnexoAtendimento"];
         };
         /** @description Página da linha do tempo, em ordem cronológica */
@@ -1823,6 +1842,10 @@ export interface components {
             /** Format: date-time */
             atualizadoEm?: string;
             anexo?: components["schemas"]["AnexoAtendimento"];
+        };
+        SseEmitter: {
+            /** Format: int64 */
+            timeout?: number;
         };
         /** @description Linha da listagem; documento parcialmente mascarado */
         AssociadoResumo: {
@@ -3838,6 +3861,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SituacaoMensagem"][];
+                };
+            };
+        };
+    };
+    eventosAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Atendimento não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SseEmitter"];
                 };
             };
         };

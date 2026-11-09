@@ -3101,6 +3101,48 @@
         }
       }
     },
+    "/api/v1/atendimento/atendimentos/{id}/eventos": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Avisos de mudança na conversa (SSE): \"pronto\" ao conectar e \"mudanca\" a cada alteração confirmada; sem conteúdo, a tela relê a linha do tempo (atendimento:consultar)",
+        "operationId": "eventosAtendimento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Atendimento não encontrado",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/SseEmitter"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/atendimentos/{id}/associados-sugeridos": {
       "get": {
         "tags": [
@@ -5650,6 +5692,10 @@
             "format": "date-time",
             "description": "Última mudança da mensagem (situação ou anexo)"
           },
+          "chaveIdempotencia": {
+            "type": "string",
+            "description": "Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a operação para a tela trocar o balão local pelo registro, sem duplicar"
+          },
           "anexo": {
             "$ref": "#/components/schemas/AnexoAtendimento"
           }
@@ -5713,6 +5759,15 @@
           "id",
           "situacao"
         ]
+      },
+      "SseEmitter": {
+        "type": "object",
+        "properties": {
+          "timeout": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "AssociadoResumo": {
         "type": "object",

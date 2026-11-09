@@ -10,11 +10,18 @@ export type UsuarioAtendimento = components['schemas']['UsuarioAtendimento']
 export type Visao = 'AGUARDANDO' | 'EM_ANDAMENTO' | 'MEUS' | 'ENCERRADOS'
 
 /**
- * Atualização sem recarregar a página: consulta periódica (polling) a cada {@link INTERVALO_MS}
- * enquanto a aba está visível. Funciona com várias réplicas e com sessão revogada (o 401 leva ao
- * login); não é SSE.
+ * Atualização sem recarregar a página. A conversa aberta recebe avisos de mudança por SSE
+ * (`use-eventos-conversa.ts`) e relê na hora; com os avisos chegando, a consulta periódica fica em
+ * {@link INTERVALO_SEGURANCA_MS}, só como rede de segurança. Sem avisos (conexão fora) e nas demais
+ * telas (fila), a consulta é a cada {@link INTERVALO_MS} enquanto a aba está visível; o 401 leva ao
+ * login.
  */
 export const INTERVALO_MS = 5000
+export const INTERVALO_SEGURANCA_MS = 30_000
+
+/** Endereço dos avisos de mudança da conversa (SSE, mesma origem e sessão). */
+export const eventosConversa = (atendimento: number) =>
+  `/api/v1/atendimento/atendimentos/${atendimento}/eventos`
 
 export const chavesAtendimento = {
   todos: ['atendimento'] as const,

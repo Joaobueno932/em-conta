@@ -7,6 +7,7 @@ import {
   chavesAtendimento,
   compararCursor,
   INTERVALO_MS,
+  INTERVALO_SEGURANCA_MS,
   linhaDoTempo,
   MAXIMO_SITUACOES,
   situacoes,
@@ -19,6 +20,7 @@ import {
   sujeitaAMudanca,
   type Lacuna,
 } from './linha-do-tempo-estado'
+import { useEventosConversa } from './use-eventos-conversa'
 
 /** Páginas recuperadas por ciclo ao fechar lacunas; o restante continua no próximo ciclo. */
 export const MAXIMO_PAGINAS_LACUNA = 20
@@ -26,15 +28,22 @@ export const MAXIMO_PAGINAS_LACUNA = 20
 const identidade = (i: Item) => `${i.tipo}-${i.id}`
 
 /**
- * Linha do tempo paginada por cursor. A página mais recente é consultada periodicamente (quando
- * `atualizar`) e traz mensagens novas e situações atualizadas; páginas anteriores são carregadas sob
- * demanda e ficam guardadas. Um item que sai da página recente continua na tela.
+ * Linha do tempo paginada por cursor. Com `atualizar`, a página mais recente é relida a cada aviso de
+ * mudança da conversa (SSE, {@link useEventosConversa}) e periodicamente como rede de segurança (curto
+ * sem avisos); ela traz mensagens novas e situações atualizadas. `aoMudar` é chamado a cada aviso (para
+ * quem usa a linha reler outras consultas da conversa). Páginas anteriores são carregadas sob demanda e
+ * ficam guardadas. Um item que sai da página recente continua na tela.
  *
  * Se chegarem mais itens do que cabem numa página entre duas consultas, o intervalo que faltou vira uma
  * lacuna explícita (com cursor de continuação) e é recuperado em até {@link MAXIMO_PAGINAS_LACUNA}
  * páginas por ciclo; falha de rede mantém a lacuna e o progresso, mostra o erro e tenta de novo.
  */
-export function useLinhaDoTempo(id: Ref<number>, somenteEste: boolean, atualizar: boolean) {
+export function useLinhaDoTempo(
+  id: Ref<number>,
+  somenteEste: boolean,
+  atualizar: boolean,
+  aoMudar?: () => void,
+) {
   const http = useHttpClient()
   const guardados = shallowRef(new Map<string, Item>())
   const carregouAnteriores = ref(false)
@@ -44,6 +53,12 @@ export function useLinhaDoTempo(id: Ref<number>, somenteEste: boolean, atualizar
   const lacunas = ref<Lacuna[]>([])
   const erroLacuna = ref<unknown>(null)
   const recuperandoLacunas = ref(false)
+  const eventos = atualizar
+    ? useEventosConversa(id, () => {
+        reler()
+        aoMudar?.()
+      })
+    : null
 
   const recente = useQuery({
     queryKey: computed(() => chavesAtendimento.linha(id.value, somenteEste)),
@@ -53,7 +68,26 @@ export function useLinhaDoTempo(id: Ref<number>, somenteEste: boolean, atualizar
       const de = id.value
       return { de, pagina: await linhaDoTempo(http, de, { somenteEste }) }
     },
-    refetchInterval: atualizar ? INTERVALO_MS : false,
+    refetchInterval: computed(() =>
+      atualizar ? (eventos?.conectado.value ? INTERVALO_SEGURANCA_MS : INTERVALO_MS) : false,
+    ),
+  })
+
+  // Aviso durante uma leitura em andamento: ela pode ter começado antes da mudança, então lê de novo
+  // quando terminar (vários avisos nesse intervalo viram uma leitura só).
+  let releituraPendente = false
+  function reler() {
+    if (recente.isFetching.value) {
+      releituraPendente = true
+      return
+    }
+    void recente.refetch()
+  }
+  watch(recente.isFetching, (buscando) => {
+    if (!buscando && releituraPendente) {
+      releituraPendente = false
+      void recente.refetch()
+    }
   })
 
   function guardar(itens: Item[]) {
@@ -269,5 +303,7 @@ export function useLinhaDoTempo(id: Ref<number>, somenteEste: boolean, atualizar
     recuperandoLacunas,
     erroLacuna,
     recuperarLacunas,
+    /** Os avisos de mudança estão chegando (a consulta periódica está no intervalo de segurança). */
+    eventosConectados: computed(() => !!eventos?.conectado.value),
   }
 }
