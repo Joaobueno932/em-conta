@@ -69,7 +69,8 @@ class AnexosController {
     @PostMapping(path = "/anexos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
             operationId = "enviarAnexoAtendimento",
-            summary = "Registra um anexo (imagem, PDF ou áudio) para envio assíncrono (atendimento:responder)")
+            summary = "Registra um anexo (imagem, PDF, XLSX, vídeo ou áudio) para envio assíncrono"
+                    + " (atendimento:responder)")
     @ApiResponse(responseCode = "202", description = "Registrado como PENDENTE; upload à Meta e envio vêm depois")
     @ApiResponse(responseCode = "400", description = "DADOS_INVALIDOS (tipo, extensão, conteúdo, legenda ou chave)")
     @ApiResponse(
@@ -97,7 +98,7 @@ class AnexosController {
 
     /**
      * Conteúdo do anexo, em streaming do armazenamento privado. Aceita uma faixa ({@code Range:
-     * bytes=inicio-fim}) para reprodução de áudio. Cabeçalhos impedem interpretação do conteúdo como outra
+     * bytes=inicio-fim}) para reprodução de áudio e vídeo. Cabeçalhos impedem interpretação do conteúdo como outra
      * coisa: tipo validado, {@code nosniff}, CSP restritiva e nome higienizado.
      */
     @GetMapping(path = "/anexos/{anexo}/conteudo", produces = MediaType.ALL_VALUE)
@@ -144,9 +145,11 @@ class AnexosController {
                             ? "default-src 'none'; object-src 'self'; frame-ancestors 'self'"
                             : "default-src 'none'; img-src 'self'; media-src 'self'; sandbox; frame-ancestors 'self'");
             String nome = leitura.nome() != null ? leitura.nome() : "anexo-" + leitura.id();
+            // Planilha não tem visualização no navegador: sempre como download.
+            boolean anexar = download || !exibivelNoNavegador(leitura.mime());
             resposta.setHeader(
                     HttpHeaders.CONTENT_DISPOSITION,
-                    (download ? ContentDisposition.attachment() : ContentDisposition.inline())
+                    (anexar ? ContentDisposition.attachment() : ContentDisposition.inline())
                             .filename(nome, StandardCharsets.UTF_8)
                             .build()
                             .toString());
@@ -165,9 +168,9 @@ class AnexosController {
     PaginaMidiaResponse midia(
             @PathVariable long id,
             @RequestParam(defaultValue = "false") boolean somenteEste,
-            @Parameter(schema = @Schema(allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO"}))
+            @Parameter(schema = @Schema(allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO"}))
                     @RequestParam(required = false)
-                    @Pattern(regexp = "IMAGEM|DOCUMENTO|AUDIO")
+                    @Pattern(regexp = "IMAGEM|DOCUMENTO|AUDIO|VIDEO")
                     String categoria,
             @RequestParam(required = false) @Min(1) Long antes,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int tamanho) {
@@ -222,6 +225,13 @@ class AnexosController {
     ResponseEntity<Void> novaTentativa(@PathVariable long id, @PathVariable long anexo) {
         anexos.novaTentativaDownload(autoria.usuarioAtual(), id, anexo);
         return ResponseEntity.noContent().build();
+    }
+
+    private static boolean exibivelNoNavegador(String mime) {
+        return mime.startsWith("image/")
+                || mime.startsWith("audio/")
+                || mime.startsWith("video/")
+                || "application/pdf".equals(mime);
     }
 
     private static FalhaAtendimento naoEncontrado() {

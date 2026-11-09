@@ -104,7 +104,7 @@ final class AtendimentoApi {
             Long atendimentoId,
             @Schema(allowableValues = {"ENTRADA", "SAIDA"}) String direcao,
 
-            @Schema(allowableValues = {"TEXTO", "IMAGEM", "DOCUMENTO", "AUDIO", "NAO_SUPORTADO"})
+            @Schema(allowableValues = {"TEXTO", "IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO", "NAO_SUPORTADO"})
             String tipoMensagem,
 
             @Schema(description = "Tipo informado pelo canal (ex.: image, audio)")
@@ -151,7 +151,7 @@ final class AtendimentoApi {
 
             @Schema(
                     requiredMode = REQUIRED,
-                    allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO"})
+                    allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO"})
             String categoria,
 
             String mimeType,
@@ -213,7 +213,7 @@ final class AtendimentoApi {
 
             @Schema(
                     requiredMode = REQUIRED,
-                    allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO"})
+                    allowableValues = {"IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO"})
             String categoria,
 
             String mimeType,

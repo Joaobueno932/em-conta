@@ -232,6 +232,7 @@ public class Recebimento {
             case "image" -> FormatosAnexo.Categoria.IMAGEM;
             case "document" -> FormatosAnexo.Categoria.DOCUMENTO;
             case "audio" -> FormatosAnexo.Categoria.AUDIO;
+            case "video" -> FormatosAnexo.Categoria.VIDEO;
             default -> null;
         };
     }
@@ -257,11 +258,11 @@ public class Recebimento {
                 .query(Long.class)
                 .single();
         var midia = m.midia();
-        boolean suportado = FormatosAnexo.porMime(midia.mimeType())
-                        .filter(f -> f.categoria() == categoria)
-                        .isPresent()
-                && midia.id() != null
-                && midia.id().matches("[A-Za-z0-9_.-]{1,128}");
+        boolean formatoAceito = FormatosAnexo.porMime(midia.mimeType())
+                .filter(f -> f.categoria() == categoria)
+                .isPresent();
+        boolean idValido = midia.id() != null && midia.id().matches("[A-Za-z0-9_.-]{1,128}");
+        boolean suportado = formatoAceito && idValido;
         String mime = FormatosAnexo.mimeBase(midia.mimeType());
         jdbc.sql("insert into atd_anexo (mensagem_id, conversa_id, atendimento_id, direcao, categoria, mime_type, nome,"
                         + " sha256_provedor, id_midia_externo, situacao, erro, proxima_tentativa_em, criado_em, atualizado_em)"
@@ -276,7 +277,13 @@ public class Recebimento {
                 .param("sha", midia.sha256() == null || midia.sha256().length() > 100 ? null : midia.sha256())
                 .param("midia", suportado ? midia.id() : null)
                 .param("situacao", suportado ? "PENDENTE" : "NAO_SUPORTADO")
-                .param("erro", suportado ? null : "Formato não suportado nesta versão")
+                .param(
+                        "erro",
+                        suportado
+                                ? null
+                                : formatoAceito
+                                        ? "Identificador da mídia inválido"
+                                        : FormatosAnexo.motivoNaoSuportado(categoria))
                 .param("agora", Timestamp.from(agora))
                 .update();
     }

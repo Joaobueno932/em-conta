@@ -159,7 +159,7 @@ public class WhatsAppCloud {
 
     /**
      * Mensagem recebida. {@code texto} só existe para {@code type=text}; {@code midia} só para
-     * {@code image}, {@code document} e {@code audio} (os tipos de anexo tratados).
+     * {@code image}, {@code document}, {@code audio} e {@code video} (os tipos de anexo tratados).
      */
     public record MensagemRecebida(
             String waId,
@@ -172,12 +172,13 @@ public class WhatsAppCloud {
 
     /**
      * Metadados de mídia do webhook: {@code id} (para consultar a URL temporária), {@code mime_type},
-     * {@code sha256} do arquivo, {@code filename} (documentos) e {@code caption} (imagem e documento).
+     * {@code sha256} do arquivo, {@code filename} (documentos) e {@code caption} (imagem, documento e
+     * vídeo).
      */
     public record MidiaRecebida(String id, String mimeType, String sha256, String nomeArquivo, String legenda) {}
 
     /** Tipos de mensagem do webhook cujo arquivo é tratado como anexo. */
-    public static final Set<String> TIPOS_MIDIA = Set.of("image", "document", "audio");
+    public static final Set<String> TIPOS_MIDIA = Set.of("image", "document", "audio", "video");
 
     /** Situação de mensagem enviada. {@code correlacao} é o {@code biz_opaque_callback_data} do envio. */
     public record SituacaoRecebida(
@@ -291,8 +292,8 @@ public class WhatsAppCloud {
 
     /**
      * Envia um anexo já enviado à Meta ({@link #enviarArquivo}), pelo id da mídia. {@code tipo} é
-     * {@code image}, {@code document} ou {@code audio}. Legenda só em imagem e documento (até 1024
-     * caracteres); {@code nomeArquivo} só em documento.
+     * {@code image}, {@code document}, {@code audio} ou {@code video}. Legenda em imagem, documento e
+     * vídeo (até 1024 caracteres); {@code nomeArquivo} só em documento.
      */
     public ResultadoEnvio enviarMidia(
             String para, String tipo, String idMidia, String legenda, String nomeArquivo, String correlacao) {

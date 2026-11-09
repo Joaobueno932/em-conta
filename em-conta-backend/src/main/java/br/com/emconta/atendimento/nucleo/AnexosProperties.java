@@ -10,8 +10,9 @@ import org.springframework.util.unit.DataSize;
  * configurado acima dele.
  *
  * @param limiteImagem tamanho máximo de imagem (Cloud API: 5 MB)
- * @param limiteDocumento tamanho máximo de PDF (Cloud API: 100 MB)
+ * @param limiteDocumento tamanho máximo de PDF e XLSX (Cloud API: 100 MB)
  * @param limiteAudio tamanho máximo de áudio (Cloud API: 16 MB)
+ * @param limiteVideo tamanho máximo de vídeo (Cloud API: 16 MB)
  * @param maximoTentativas tentativas de download de um anexo recebido antes da falha definitiva
  * @param uploadAbandonado idade a partir da qual um upload sem mensagem é removido
  */
@@ -20,6 +21,7 @@ public record AnexosProperties(
         @DefaultValue("5MB") DataSize limiteImagem,
         @DefaultValue("16MB") DataSize limiteDocumento,
         @DefaultValue("16MB") DataSize limiteAudio,
+        @DefaultValue("16MB") DataSize limiteVideo,
         @DefaultValue("5") int maximoTentativas,
         @DefaultValue("1h") Duration uploadAbandonado) {
 
@@ -28,6 +30,7 @@ public record AnexosProperties(
             case IMAGEM -> limiteImagem.toBytes();
             case DOCUMENTO -> limiteDocumento.toBytes();
             case AUDIO -> limiteAudio.toBytes();
+            case VIDEO -> limiteVideo.toBytes();
         };
         return Math.min(configurado, categoria.limiteProvedor);
     }

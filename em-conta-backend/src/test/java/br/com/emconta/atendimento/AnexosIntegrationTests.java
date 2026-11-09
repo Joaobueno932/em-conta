@@ -11,6 +11,7 @@ import br.com.emconta.atendimento.GraphApiControlada.Modo;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -23,14 +24,17 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockMultipartFile;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Anexos (imagem, PDF e áudio) de ponta a ponta, com MySQL e MinIO reais e a Graph API substituída pelo
- * servidor CONTROLADO de teste. Arquivos pequenos e sintéticos, só com as assinaturas dos formatos.
+ * Anexos (imagem, PDF, XLSX, vídeo e áudio) de ponta a ponta, com MySQL e MinIO reais e a Graph API
+ * substituída pelo servidor CONTROLADO de teste. Arquivos pequenos e sintéticos, só com as assinaturas e
+ * a estrutura mínima dos formatos.
  */
 class AnexosIntegrationTests extends AtendimentoIntegracao {
 
@@ -195,7 +199,7 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
         GRAPH.midia(alterado, new Midia(PNG, "image/png", false, Download.NORMAL, null));
         String corpo = webhookMidia(numero, wamid(), "image", alterado, "image/png", "0".repeat(64), null);
         enviarWebhook(corpo, assinar(corpo));
-        // Tipo fora da lista (DOCX) e tipo de mensagem não tratado (vídeo).
+        // Tipo fora da lista (DOCX) e tipo de mensagem não tratado (figurinha).
         receber(
                 numero,
                 "document",
@@ -203,8 +207,8 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 "a.docx",
                 null);
-        String video = webhookMidia(numero, wamid(), "video", midiaUnica(), "video/mp4", null, null);
-        enviarWebhook(video, assinar(video));
+        String figurinha = webhookMidia(numero, wamid(), "sticker", midiaUnica(), "image/webp", null, null);
+        enviarWebhook(figurinha, assinar(figurinha));
         recebimento.processarPendentes(50);
         midias.processarPendentes(10);
 
@@ -216,8 +220,14 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
         assertThat(erroAnexo(alterado)).contains("Hash");
         assertThat(contar("atd_anexo where atendimento_id = :c and situacao = 'NAO_SUPORTADO'", atendimento))
                 .isEqualTo(1);
+        assertThat(jdbc.sql("select erro from atd_anexo where atendimento_id = :c and situacao = 'NAO_SUPORTADO'")
+                        .param("c", atendimento)
+                        .query(String.class)
+                        .single())
+                .as("o motivo diz o que é aceito")
+                .contains("PDF e planilha XLSX");
         assertThat(contar("atd_mensagem where atendimento_id = :c and tipo = 'NAO_SUPORTADO'", atendimento))
-                .as("vídeo continua visível como não suportado")
+                .as("figurinha continua visível como não suportada")
                 .isEqualTo(1);
         assertThat(contar("atd_anexo where atendimento_id = :c and chave_objeto is not null", atendimento))
                 .as("nada inválido foi armazenado")
@@ -404,6 +414,151 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
                 .singleRow();
         assertThat((String) anexo.get("nome")).isEqualTo("_relatorio_b_.pdf");
         assertThat((String) anexo.get("chave_objeto")).doesNotContain("relatorio");
+    }
+
+    // ------------------------------------------------------------------ vídeo e planilha
+
+    static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    static final byte[] MP4 = mp4("avc1", "mp4a");
+    static final byte[] XLSX = planilha(true, false);
+
+    @Test
+    void recebeVideoEPlanilhaComTipoRealReproducaoEDownload() throws Exception {
+        String numero = numeroUnico();
+        long atendimento = novoAtendimento(numero);
+        Navegador admin = administrador();
+        String video = midiaUnica(), planilha = midiaUnica();
+        GRAPH.midia(video, new Midia(MP4, "video/mp4", false, Download.NORMAL, null));
+        GRAPH.midia(planilha, new Midia(XLSX, XLSX_MIME, true, Download.NORMAL, null));
+        receber(numero, "video", video, "video/mp4", null, "Video do inversor");
+        receber(numero, "document", planilha, XLSX_MIME, "leituras.xlsx", null);
+        midias.processarPendentes(10);
+
+        assertThat(situacaoAnexo(video)).isEqualTo("DISPONIVEL");
+        assertThat(situacaoAnexo(planilha)).isEqualTo("DISPONIVEL");
+        JsonNode linha = corpo(admin.get(url(atendimento, "linha-do-tempo")));
+        assertThat(linha.toString())
+                .contains(
+                        "\"tipoMensagem\":\"VIDEO\"",
+                        "\"categoria\":\"VIDEO\"",
+                        "Video do inversor",
+                        "\"mimeType\":\"" + XLSX_MIME + "\"",
+                        "leituras.xlsx");
+
+        // Vídeo: exibido no navegador, isolado e com faixa (reprodução e avanço).
+        MockHttpServletResponse faixa =
+                admin.get(url(atendimento, "anexos/" + idPorMidia(video) + "/conteudo"), Map.of("Range", "bytes=4-7"));
+        assertThat(faixa.getStatus()).isEqualTo(206);
+        assertThat(faixa.getContentAsString()).isEqualTo("ftyp");
+        assertThat(faixa.getContentType()).isEqualTo("video/mp4");
+        assertThat(faixa.getHeader("Content-Disposition")).startsWith("inline");
+        assertThat(faixa.getHeader("Content-Security-Policy")).contains("sandbox", "media-src 'self'");
+        // Planilha: sempre como download (o navegador não a exibe), mesmo sem pedir.
+        MockHttpServletResponse xlsx = admin.get(url(atendimento, "anexos/" + idPorMidia(planilha) + "/conteudo"));
+        assertThat(xlsx.getStatus()).isEqualTo(200);
+        assertThat(xlsx.getContentAsByteArray()).isEqualTo(XLSX);
+        assertThat(xlsx.getContentType()).isEqualTo(XLSX_MIME);
+        assertThat(xlsx.getHeader("Content-Disposition"))
+                .startsWith("attachment")
+                .contains("leituras.xlsx");
+        assertThat(xlsx.getHeader("X-Content-Type-Options")).isEqualTo("nosniff");
+
+        assertThat(corpo(admin.get(url(atendimento, "midia?categoria=VIDEO"))).get("itens"))
+                .hasSize(1);
+        assertThat(corpo(admin.get(url(atendimento, "midia?categoria=DOCUMENTO")))
+                        .get("itens")
+                        .get(0)
+                        .get("mimeType")
+                        .asString())
+                .isEqualTo(XLSX_MIME);
+    }
+
+    @Test
+    void planilhaRecebidaSemPastaDeTrabalhoOuComMacrosNaoEDisponibilizada() throws Exception {
+        String numero = numeroUnico();
+        long atendimento = novoAtendimento(numero);
+        String semPasta = midiaUnica(), comMacros = midiaUnica();
+        GRAPH.midia(semPasta, new Midia(planilha(false, false), XLSX_MIME, false, Download.NORMAL, null));
+        GRAPH.midia(comMacros, new Midia(planilha(true, true), XLSX_MIME, false, Download.NORMAL, null));
+        receber(numero, "document", semPasta, XLSX_MIME, "a.xlsx", null);
+        receber(numero, "document", comMacros, XLSX_MIME, "b.xlsx", null);
+        midias.processarPendentes(10);
+
+        assertThat(situacaoAnexo(semPasta)).isEqualTo("FALHA");
+        assertThat(erroAnexo(semPasta)).contains("planilha XLSX válida");
+        assertThat(situacaoAnexo(comMacros)).isEqualTo("FALHA");
+        assertThat(erroAnexo(comMacros)).contains("macros");
+        assertThat(contar("atd_anexo where atendimento_id = :c and chave_objeto is not null", atendimento))
+                .isZero();
+    }
+
+    @Test
+    void responsavelEnviaVideoComLegendaEPlanilhaComNome() throws Exception {
+        Navegador admin = administrador();
+        long atendimento = assumido(admin, numeroUnico());
+        long video = enviarAnexo(
+                admin,
+                atendimento,
+                arquivo("visita.mp4", "video/mp4", MP4),
+                "Video da visita",
+                UUID.randomUUID().toString());
+        long planilha = enviarAnexo(
+                admin,
+                atendimento,
+                arquivo("consumo.xlsx", XLSX_MIME, XLSX),
+                "Consumo do mes",
+                UUID.randomUUID().toString());
+        processar();
+
+        assertThat(situacao(video)).isEqualTo("ACEITA");
+        assertThat(situacao(planilha)).isEqualTo("ACEITA");
+        assertThat(GRAPH.uploads()).hasSize(2);
+        assertThat(String.join("\n", GRAPH.uploads()))
+                .contains("video/mp4", XLSX_MIME, "filename=\"anexo.mp4\"", "filename=\"anexo.xlsx\"");
+        List<String> envios = GRAPH.requisicoes().stream()
+                .filter(r -> r.contains("/messages"))
+                .toList();
+        assertThat(envios)
+                .anySatisfy(e -> assertThat(e).contains("\"type\":\"video\"", "\"caption\":\"Video da visita\""))
+                .anySatisfy(e -> assertThat(e)
+                        .contains(
+                                "\"type\":\"document\"",
+                                "\"filename\":\"consumo.xlsx\"",
+                                "\"caption\":\"Consumo do mes\""));
+    }
+
+    @Test
+    void videoForaDosCodecsDaMetaEPlanilhaInvalidaSaoRecusadosNoEnvio() throws Exception {
+        Navegador admin = administrador();
+        long atendimento = assumido(admin, numeroUnico());
+        byte[] caixaQuebrada = bytes(
+                new byte[] {0, 0, 0, 16}, "ftypisom", new byte[] {0, 0, 2, 0}, new byte[] {0x7F, 0, 0, 0}, "moov");
+        record Caso(MockMultipartFile arquivo, String motivo) {}
+        for (Caso caso : List.of(
+                new Caso(arquivo("hevc.mp4", "video/mp4", mp4("hvc1", "mp4a")), "H.264"),
+                new Caso(arquivo("dois-audios.mp4", "video/mp4", mp4("avc1", "mp4a", "mp4a")), "no máximo uma"),
+                new Caso(arquivo("opus.mp4", "video/mp4", mp4("avc1", "Opus")), "AAC"),
+                new Caso(arquivo("so-audio.mp4", "video/mp4", mp4(null, "mp4a")), "faixa de vídeo"),
+                new Caso(arquivo("quebrado.mp4", "video/mp4", caixaQuebrada), "Estrutura do vídeo"),
+                new Caso(arquivo("antigo.3gp", "video/3gpp", mp4("s263", "samr")), "H.263"),
+                new Caso(arquivo("video.mp4", "video/mp4", PNG), "não corresponde"),
+                new Caso(arquivo("video.mov", "video/mp4", MP4), "extensão"),
+                new Caso(arquivo("sem-pasta.xlsx", XLSX_MIME, planilha(false, false)), "planilha XLSX válida"),
+                new Caso(arquivo("macros.xlsx", XLSX_MIME, planilha(true, true)), "macros"),
+                new Caso(arquivo("falsa.xlsx", XLSX_MIME, bytes(new byte[] {'P', 'K', 3, 4}, "nao e zip")), "XLSX"),
+                new Caso(arquivo("antiga.xls", "application/vnd.ms-excel", XLSX), "não suportado"))) {
+            MockHttpServletResponse resposta = admin.multipart(
+                    url(atendimento, "anexos"),
+                    caso.arquivo(),
+                    campos(null, UUID.randomUUID().toString()));
+            String nome = caso.arquivo().getOriginalFilename();
+            assertThat(resposta.getStatus()).as(nome).isEqualTo(400);
+            assertThat(corpo(resposta).path("campos").path("arquivo").asString())
+                    .as(nome)
+                    .contains(caso.motivo());
+        }
+        assertThat(contar("atd_anexo where atendimento_id = :c", atendimento)).isZero();
+        assertThat(GRAPH.uploads()).as("nada recusado chega à Meta").isEmpty();
     }
 
     @Test
@@ -648,7 +803,9 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
                 .allMatch(i -> i.get("atendimentoId").asLong() == primeiro);
         assertThat(corpo(admin.get(url(segundo, "midia?somenteEste=true"))).get("itens"))
                 .hasSize(1);
-        assertThat(admin.get(url(segundo, "midia?categoria=VIDEO")).getStatus()).isEqualTo(400);
+        assertThat(corpo(admin.get(url(segundo, "midia?categoria=VIDEO"))).get("itens"))
+                .isEmpty();
+        assertThat(admin.get(url(segundo, "midia?categoria=OUTRA")).getStatus()).isEqualTo(400);
         assertThat(admin.get(url(segundo, "midia?tamanho=51")).getStatus()).isEqualTo(400);
     }
 
@@ -724,6 +881,64 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
         for (Object parte : partes) {
             byte[] b = parte instanceof byte[] bs ? bs : String.valueOf(parte).getBytes(StandardCharsets.ISO_8859_1);
             saida.writeBytes(b);
+        }
+        return saida.toByteArray();
+    }
+
+    /** Caixa ISO BMFF: tamanho (4 bytes), tipo e conteúdo. */
+    private static byte[] caixa(String tipo, byte[]... conteudo) {
+        byte[] corpo = bytes((Object[]) conteudo);
+        return ByteBuffer.allocate(8 + corpo.length)
+                .putInt(8 + corpo.length)
+                .put(tipo.getBytes(StandardCharsets.ISO_8859_1))
+                .put(corpo)
+                .array();
+    }
+
+    private static byte[] faixa(String tipo, String codec) {
+        byte[] hdlr = caixa("hdlr", new byte[8], tipo.getBytes(StandardCharsets.ISO_8859_1), new byte[13]);
+        byte[] stsd = caixa("stsd", new byte[] {0, 0, 0, 0, 0, 0, 0, 1}, caixa(codec, new byte[8]));
+        return caixa("trak", caixa("tkhd", new byte[12]), caixa("mdia", hdlr, caixa("minf", caixa("stbl", stsd))));
+    }
+
+    /**
+     * MP4 sintético mínimo: ftyp, dados e moov no fim (como um arquivo sem "faststart"), com uma faixa de
+     * vídeo no codec pedido (nenhuma se nulo) e uma faixa por áudio pedido.
+     */
+    static byte[] mp4(String video, String... audios) {
+        List<byte[]> faixas = new ArrayList<>();
+        if (video != null) {
+            faixas.add(faixa("vide", video));
+        }
+        for (String audio : audios) {
+            faixas.add(faixa("soun", audio));
+        }
+        return bytes(
+                caixa(
+                        "ftyp",
+                        "isom".getBytes(StandardCharsets.ISO_8859_1),
+                        new byte[] {0, 0, 2, 0},
+                        "isomavc1".getBytes(StandardCharsets.ISO_8859_1)),
+                caixa("mdat", "dados de video de teste".getBytes(StandardCharsets.ISO_8859_1)),
+                caixa("moov", faixas.toArray(byte[][]::new)));
+    }
+
+    /** Pacote XLSX sintético: tipos de conteúdo e, se pedido, pasta de trabalho e projeto de macros. */
+    static byte[] planilha(boolean comPasta, boolean comMacros) {
+        ByteArrayOutputStream saida = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(saida)) {
+            zip.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zip.write("<Types/>".getBytes(StandardCharsets.UTF_8));
+            if (comPasta) {
+                zip.putNextEntry(new ZipEntry("xl/workbook.xml"));
+                zip.write("<workbook/>".getBytes(StandardCharsets.UTF_8));
+            }
+            if (comMacros) {
+                zip.putNextEntry(new ZipEntry("xl/vbaProject.bin"));
+                zip.write(new byte[16]);
+            }
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
         }
         return saida.toByteArray();
     }

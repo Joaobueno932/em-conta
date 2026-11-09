@@ -31,7 +31,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <ol>
  *   <li>valida chave, legenda, tipo, extensão e as regras de resposta (conferência antecipada);
- *   <li>copia o arquivo para um temporário com limite de tamanho e valida assinatura e SHA-256;
+ *   <li>copia o arquivo para um temporário com limite de tamanho e valida assinatura, estrutura (planilha
+ *       e codecs do vídeo) e SHA-256;
  *   <li>repetição exata (mesma chave, autor, atendimento, arquivo e legenda) devolve a mensagem já
  *       registrada, sem gravar nada; mesma chave em outra operação é 409;
  *   <li>registra o anexo como RECEBENDO (sem mensagem) e grava o objeto no armazenamento privado;
@@ -92,8 +93,7 @@ public class Anexos {
         }
         FormatosAnexo.Formato formato = FormatosAnexo.porMime(arquivo.mimeDeclarado())
                 .orElseThrow(() -> FalhaAtendimento.campoInvalido(
-                        "arquivo",
-                        "Tipo de arquivo não suportado. Envie JPEG, PNG, PDF ou áudio AAC, AMR, MP3, M4A ou OGG."));
+                        "arquivo", "Tipo de arquivo não suportado. Envie " + FormatosAnexo.DESCRICAO_SUPORTADOS + "."));
         String nome = FormatosAnexo.nomeSeguro(arquivo.nomeOriginal());
         String extensao = FormatosAnexo.extensao(nome).orElse("");
         if (nome == null || !formato.extensoes().contains(extensao)) {
@@ -116,6 +116,9 @@ public class Anexos {
             ArquivoValidado validado;
             try {
                 validado = ArquivoValidado.de(temporario, formato, limite);
+                if (formato.categoria() == FormatosAnexo.Categoria.VIDEO) {
+                    EstruturaVideo.exigirCodecsAceitos(temporario);
+                }
             } catch (ArquivoValidado.Invalido e) {
                 throw FalhaAtendimento.campoInvalido("arquivo", e.getMessage());
             }

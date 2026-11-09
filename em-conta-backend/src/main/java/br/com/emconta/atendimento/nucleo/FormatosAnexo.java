@@ -12,11 +12,13 @@ import java.util.regex.Pattern;
 /**
  * Formatos de anexo aceitos, nos dois sentidos. É a interseção entre os tipos documentados pela Cloud
  * API (Media, "Supported media types") e o que a aplicação sabe validar e exibir com segurança: imagens
- * JPEG e PNG, documentos PDF e áudios AAC, AMR, MP3, M4A e OGG/Opus. Nenhum outro tipo é aceito (nem
- * convertido): documentos do Office, texto, vídeo e figurinhas recebidos aparecem como não suportados.
+ * JPEG e PNG, documentos PDF e planilhas XLSX, vídeos MP4 e 3GPP e áudios AAC, AMR, MP3, M4A e OGG/Opus.
+ * Nenhum outro tipo é aceito (nem convertido): Word, PowerPoint, XLS, texto e figurinhas recebidos
+ * aparecem como não suportados.
  *
  * <p>Cada arquivo é conferido pelo MIME declarado, pela extensão (quando há nome) e pela assinatura dos
- * primeiros bytes; nome e Content-Type sozinhos não bastam.
+ * primeiros bytes; nome e Content-Type sozinhos não bastam. Planilhas e vídeos têm ainda a estrutura
+ * conferida ({@link ArquivoValidado}, {@link EstruturaVideo}).
  */
 public final class FormatosAnexo {
 
@@ -25,7 +27,8 @@ public final class FormatosAnexo {
     public enum Categoria {
         IMAGEM("image", 5L * 1024 * 1024, true),
         DOCUMENTO("document", 100L * 1024 * 1024, true),
-        AUDIO("audio", 16L * 1024 * 1024, false);
+        AUDIO("audio", 16L * 1024 * 1024, false),
+        VIDEO("video", 16L * 1024 * 1024, true);
 
         /** Tipo da mensagem na Cloud API. */
         public final String tipoCloud;
@@ -41,8 +44,10 @@ public final class FormatosAnexo {
         }
     }
 
-    /** Legenda: até 1024 caracteres (Cloud API), só em imagem e documento. */
+    /** Legenda: até 1024 caracteres (Cloud API), só em imagem, documento e vídeo. */
     public static final int TAMANHO_MAXIMO_LEGENDA = 1024;
+
+    public static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     public record Formato(String mime, Categoria categoria, List<String> extensoes) {
         public String extensaoPadrao() {
@@ -54,11 +59,28 @@ public final class FormatosAnexo {
             new Formato("image/jpeg", Categoria.IMAGEM, List.of("jpg", "jpeg")),
             new Formato("image/png", Categoria.IMAGEM, List.of("png")),
             new Formato("application/pdf", Categoria.DOCUMENTO, List.of("pdf")),
+            new Formato(XLSX, Categoria.DOCUMENTO, List.of("xlsx")),
+            new Formato("video/mp4", Categoria.VIDEO, List.of("mp4")),
+            new Formato("video/3gpp", Categoria.VIDEO, List.of("3gp")),
             new Formato("audio/ogg", Categoria.AUDIO, List.of("ogg", "opus")),
             new Formato("audio/mpeg", Categoria.AUDIO, List.of("mp3")),
             new Formato("audio/mp4", Categoria.AUDIO, List.of("m4a")),
             new Formato("audio/aac", Categoria.AUDIO, List.of("aac")),
             new Formato("audio/amr", Categoria.AUDIO, List.of("amr")));
+
+    /** Lista dos formatos aceitos para mensagens de recusa. */
+    public static final String DESCRICAO_SUPORTADOS =
+            "JPEG, PNG, PDF, planilha XLSX, vídeo MP4 ou 3GP, ou áudio AAC, AMR, MP3, M4A ou OGG";
+
+    /** Motivo gravado no anexo recebido num formato fora da lista, com o que a categoria aceita. */
+    public static String motivoNaoSuportado(Categoria categoria) {
+        return switch (categoria) {
+            case IMAGEM -> "Formato de imagem não suportado; o Em Conta aceita JPEG e PNG.";
+            case DOCUMENTO -> "Formato de documento não suportado; o Em Conta aceita PDF e planilha XLSX.";
+            case AUDIO -> "Formato de áudio não suportado; o Em Conta aceita AAC, AMR, MP3, M4A e OGG (Opus).";
+            case VIDEO -> "Formato de vídeo não suportado; o Em Conta aceita MP4 e 3GP.";
+        };
+    }
 
     /** Tamanho para mensagens: "16 MB", "64 KB". */
     public static String tamanhoLegivel(long bytes) {
@@ -96,6 +118,12 @@ public final class FormatosAnexo {
             case "image/jpeg" -> comeca(inicio, 0xFF, 0xD8, 0xFF);
             case "image/png" -> comeca(inicio, 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A);
             case "application/pdf" -> comeca(inicio, "%PDF-".getBytes(StandardCharsets.US_ASCII));
+            // XLSX é um pacote ZIP (cabeçalho local); o conteúdo do pacote é conferido em ArquivoValidado.
+            case XLSX -> comeca(inicio, 0x50, 0x4B, 0x03, 0x04);
+            // MP4 e 3GPP são ISO BMFF: caixa ftyp no início; codecs conferidos em EstruturaVideo.
+            case "video/mp4", "video/3gpp" ->
+                inicio.length >= 12
+                        && Arrays.equals(Arrays.copyOfRange(inicio, 4, 8), "ftyp".getBytes(StandardCharsets.US_ASCII));
             // OGG com Opus (a Cloud API não aceita OGG com outros codecs): página OggS e cabeçalho OpusHead.
             case "audio/ogg" ->
                 comeca(inicio, "OggS".getBytes(StandardCharsets.US_ASCII))

@@ -6,8 +6,8 @@ mensagem depois do encerramento abre outro atendimento (`AGUARDANDO`) na mesma c
 
 Fora do escopo desta versão (sem botões na interface): envio em massa, respostas rápidas, chatbot/IA,
 CRM, tickets/SLA, automações, dashboards, templates, setor, protocolo, etiquetas, gravação pelo
-microfone, transcrição e OCR. Anexos: imagem, PDF e áudio (ver [Anexos](#anexos)); outros tipos
-aparecem como "não suportado".
+microfone, transcrição e OCR. Anexos: imagem, PDF, planilha XLSX, vídeo e áudio (ver [Anexos](#anexos));
+outros tipos aparecem como "não suportado", com o motivo e o que é aceito.
 
 ## Provedor
 
@@ -43,7 +43,7 @@ fictício.
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
-## Modelo (V6 a V9)
+## Modelo (V6 a V11)
 
 | Tabela | Conteúdo |
 |---|---|
@@ -54,7 +54,7 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
 | `atd_mensagem_situacao` | histórico de status de cada mensagem |
 | `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo) |
 | `atd_webhook_evento` | caixa de entrada do webhook (corpo autenticado e recortado ao escopo do canal, hash único, situação, tentativas) |
-| `atd_anexo` | V8: anexo da mensagem (categoria, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
+| `atd_anexo` | V8: anexo da mensagem (categoria — V11 acrescenta `VIDEO` —, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
 | `atd_objeto_pendente` | V9: diário durável de objetos do armazenamento que podem ter ficado sem dono no recebimento (`GRAVANDO` antes de gravar, `REMOVER` quando excedente), com tentativas, próxima tentativa e erro; `atd_anexo.reserva` guarda o token da reserva vigente |
 | `atd_presenca` | presença manual do atendente (Disponível/Ausente; não afeta distribuição) |
 
@@ -177,8 +177,9 @@ Referências oficiais (consultadas em 30/10/2026): [Media](https://developers.fa
 `file_size`; URL válida por 5 minutos; download com `Authorization: Bearer`; 404 → consultar de novo),
 [Image messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/image-messages)
 (legenda até 1024 caracteres), [Document messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/document-messages)
-(`filename` e legenda) e [Audio messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/audio-messages)
-(sem legenda). Os exemplos atuais da Meta usam a Graph API v26.0; a aplicação usa `WHATSAPP_GRAPH_VERSION`
+(`filename` e legenda), [Video messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/video-messages)
+(legenda) e [Audio messages](https://developers.facebook.com/docs/whatsapp/cloud-api/messages/audio-messages)
+(sem legenda). Formatos e limites conferidos de novo em 09/11/2026 na tabela "Supported media types". Os exemplos atuais da Meta usam a Graph API v26.0; a aplicação usa `WHATSAPP_GRAPH_VERSION`
 (padrão v23.0) em todas as chamadas, e a versão deve ser confirmada na homologação.
 
 ### Formatos e limites
@@ -186,12 +187,24 @@ Referências oficiais (consultadas em 30/10/2026): [Media](https://developers.fa
 | Categoria | Formatos (MIME / extensão) | Limite padrão | Limite da Meta |
 |---|---|---|---|
 | Imagem | `image/jpeg` (.jpg, .jpeg), `image/png` (.png) | 5 MB | 5 MB |
-| Documento | `application/pdf` (.pdf) | 16 MB | 100 MB |
+| Documento | `application/pdf` (.pdf), `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (.xlsx) | 16 MB | 100 MB |
+| Vídeo | `video/mp4` (.mp4), `video/3gpp` (.3gp); só vídeo H.264 e áudio AAC, no máximo uma faixa de áudio | 16 MB | 16 MB |
 | Áudio | `audio/ogg` com Opus (.ogg, .opus), `audio/mpeg` (.mp3), `audio/mp4` (.m4a), `audio/aac` (.aac), `audio/amr` (.amr) | 16 MB | 16 MB |
 
 Cada arquivo é conferido por MIME declarado, extensão (quando há nome), assinatura dos primeiros bytes e
 tamanho lido de fato (o limite vale durante a leitura, não só pelo cabeçalho). Nada é convertido.
-Documentos do Office, texto, vídeo e figurinhas recebidos ficam visíveis como "não suportado". Os
+
+- **Planilha** (nos dois sentidos): o pacote ZIP é conferido pelo diretório central, sem descompactar
+  nada: exige `[Content_Types].xml` e `xl/workbook.xml`, recusa projeto de macros (`xl/vbaProject.bin`,
+  um XLSM renomeado) e pacotes com mais de 10 000 itens.
+- **Vídeo enviado**: os cabeçalhos ISO BMFF (`moov → trak → mdia → hdlr/stsd`) são lidos pulando os
+  dados de mídia; a faixa de vídeo precisa ser H.264 (`avc1`/`avc3`) e o áudio, se houver, uma única
+  faixa AAC (`mp4a`) — a regra da Meta, que de outro modo recusaria o arquivo só depois do upload. O
+  motivo da recusa diz o codec encontrado ("este arquivo usa H.265 (HEVC)"). Vídeo recebido vem da
+  própria Meta: valem assinatura, MIME, tamanho e hash.
+
+Word, PowerPoint, XLS, texto e figurinhas recebidos ficam visíveis como "não suportado", com o motivo
+e o que a categoria aceita (ex.: "o Em Conta aceita PDF e planilha XLSX"). Os
 limites são configuráveis (`emconta.atendimento.anexos.*`) e nunca passam dos da Meta; o teto do
 multipart (`EMCONTA_ANEXO_MAXIMO`, padrão 17 MB) precisa acompanhar o maior limite.
 
@@ -201,7 +214,7 @@ se não conferir com o arquivo baixado, o anexo fica em FALHA (não é disponibi
 ### Recebimento
 
 1. O webhook só valida a assinatura e grava o evento (como antes).
-2. O processamento do evento grava a mensagem (`IMAGEM`/`DOCUMENTO`/`AUDIO`, legenda em `texto`) e o
+2. O processamento do evento grava a mensagem (`IMAGEM`/`DOCUMENTO`/`AUDIO`/`VIDEO`, legenda em `texto`) e o
    anexo `PENDENTE` com os metadados (id da mídia, MIME, hash, nome higienizado), na mesma transação.
    Mensagem repetida (mesmo `wamid`) não duplica mensagem nem anexo.
 3. `Midias` (mesmo agendador, `SKIP LOCKED`) reserva o anexo e, **fora de transação**, consulta uma
@@ -248,12 +261,15 @@ de trabalho (`emconta-local`) e o de testes e2e (`emconta-e2e`) são separados. 
   qualquer outra combinação é 404. Streaming do armazenamento (sem carregar o arquivo na memória),
   `Range` de uma faixa (206) para áudio, `Content-Type` validado, `X-Content-Type-Options: nosniff`,
   `Content-Disposition` com nome higienizado (RFC 6266), `Cache-Control: private, no-store` e CSP
-  restritiva (`sandbox` para imagem e áudio). Não há URL assinada nem endereço do MinIO no navegador.
+  restritiva (`sandbox` para imagem, áudio, vídeo e planilha). Planilha sai sempre como download
+  (`attachment`), mesmo sem `download=true`: o navegador não a exibe. Vídeo usa `Range` como o áudio.
+  Não há URL assinada nem endereço do MinIO no navegador.
 
 ### Envio
 
-1. `POST …/anexos` (multipart; CSRF como as demais rotas): valida chave, legenda (só imagem e PDF,
-   até 1024), tipo, extensão, tamanho durante a leitura e assinatura; confere responsável, situação e
+1. `POST …/anexos` (multipart; CSRF como as demais rotas): valida chave, legenda (imagem, documento e
+   vídeo, até 1024), tipo, extensão, tamanho durante a leitura, assinatura e estrutura (planilha e
+   codecs do vídeo); confere responsável, situação e
    janela antes de gravar qualquer coisa.
 2. Idempotência: a chave fica vinculada a autor, atendimento, categoria, SHA-256 do arquivo e legenda
    (sem espaços nas pontas). Repetição exata → a mesma mensagem (sem novo upload nem envio); mesma
@@ -388,7 +404,8 @@ A homologação com o canal real **ainda não foi feita**: depende do acesso à 
   teste** (`GraphApiControlada`) no lugar da Graph API, com webhooks assinados com segredo fictício. O
   relógio da aplicação é controlado pelo teste (`RelogioControlado`) para a janela de 24 h, sem esperas.
 - `AnexosIntegrationTests`: MinIO real (mesma imagem do Compose, via Testcontainers) e a Graph
-  controlada reproduzindo consulta, download e upload de mídia: recebimento de imagem/PDF/áudio,
+  controlada reproduzindo consulta, download e upload de mídia: recebimento de imagem/PDF/XLSX/vídeo/áudio,
+  planilha sem pasta de trabalho ou com macros, vídeo com codec, faixas ou estrutura fora da regra da Meta,
   deduplicação e concorrência, URL expirada, timeout, mídia inexistente, conteúdo/MIME/hash/limite
   inválidos, destino e redirecionamento não autorizados, permissões e relação anexo↔atendimento,
   envio pelo responsável, idempotência, janela, resultado desconhecido, falha do armazenamento,

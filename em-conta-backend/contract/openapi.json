@@ -1696,7 +1696,7 @@
     "/api/v1/atendimento/atendimentos/{id}/anexos" : {
       "post" : {
         "tags" : [ "Atendimento" ],
-        "summary" : "Registra um anexo (imagem, PDF ou áudio) para envio assíncrono (atendimento:responder)",
+        "summary" : "Registra um anexo (imagem, PDF, XLSX, vídeo ou áudio) para envio assíncrono (atendimento:responder)",
         "operationId" : "enviarAnexoAtendimento",
         "parameters" : [ {
           "name" : "id",
@@ -2633,8 +2633,8 @@
           "required" : false,
           "schema" : {
             "type" : "string",
-            "enum" : [ "IMAGEM", "DOCUMENTO", "AUDIO" ],
-            "pattern" : "IMAGEM|DOCUMENTO|AUDIO"
+            "enum" : [ "IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO" ],
+            "pattern" : "IMAGEM|DOCUMENTO|AUDIO|VIDEO"
           }
         }, {
           "name" : "antes",
@@ -4731,7 +4731,7 @@
           },
           "categoria" : {
             "type" : "string",
-            "enum" : [ "IMAGEM", "DOCUMENTO", "AUDIO" ]
+            "enum" : [ "IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO" ]
           },
           "mimeType" : {
             "type" : "string"
@@ -4789,7 +4789,7 @@
           },
           "categoria" : {
             "type" : "string",
-            "enum" : [ "IMAGEM", "DOCUMENTO", "AUDIO" ]
+            "enum" : [ "IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO" ]
           },
           "mimeType" : {
             "type" : "string"
@@ -4842,7 +4842,7 @@
           },
           "tipoMensagem" : {
             "type" : "string",
-            "enum" : [ "TEXTO", "IMAGEM", "DOCUMENTO", "AUDIO", "NAO_SUPORTADO" ]
+            "enum" : [ "TEXTO", "IMAGEM", "DOCUMENTO", "AUDIO", "VIDEO", "NAO_SUPORTADO" ]
           },
           "tipoExterno" : {
             "type" : "string",

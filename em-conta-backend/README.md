@@ -7,7 +7,7 @@ verificados com Spring Modulith). Banco MySQL/InnoDB `utf8mb4`, schema exclusiva
 > e troca de senha, administração de usuários, perfis e permissões) + **cadastro de associados PF/PJ,
 > contatos e unidades consumidoras**, com histórico + **fazendas, usinas e vínculos cadastrais UC →
 > usina** + **atendimento via WhatsApp** (Cloud API direta; canal "não configurado" enquanto as
-> variáveis não forem preenchidas), com anexos (imagem, PDF e áudio) no MinIO privado. Detalhes em [docs/seguranca.md](docs/seguranca.md),
+> variáveis não forem preenchidas), com anexos (imagem, PDF, planilha XLSX, vídeo e áudio) no MinIO privado. Detalhes em [docs/seguranca.md](docs/seguranca.md),
 > [docs/associados.md](docs/associados.md), [docs/usinas.md](docs/usinas.md) e
 > [docs/atendimento.md](docs/atendimento.md).
 

@@ -7,11 +7,15 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HexFormat;
+import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Validação de um arquivo temporário já em disco: assinatura do formato, tamanho (não vazio e dentro do
- * limite) e SHA-256, lendo em blocos (nunca o arquivo inteiro na memória).
+ * limite), SHA-256 e, para planilhas, o pacote; lendo em blocos (nunca o arquivo inteiro na memória).
  */
 record ArquivoValidado(long tamanho, byte[] sha256) {
 
@@ -58,6 +62,42 @@ record ArquivoValidado(long tamanho, byte[] sha256) {
         if (!FormatosAnexo.assinaturaConfere(formato, Arrays.copyOf(inicio, noInicio))) {
             throw new Invalido("O conteúdo do arquivo não corresponde ao tipo " + formato.mime() + ".");
         }
+        if (FormatosAnexo.XLSX.equals(formato.mime())) {
+            conferirPlanilha(arquivo);
+        }
         return new ArquivoValidado(total, digest.digest());
+    }
+
+    /** Entradas no pacote de uma planilha além das quais ela não é conferida (nem aceita). */
+    static final int MAXIMO_ENTRADAS_PLANILHA = 10_000;
+
+    /**
+     * Pacote OOXML de planilha: lê só o diretório central do ZIP (nada é descompactado) e exige
+     * {@code [Content_Types].xml} e {@code xl/workbook.xml}. Projeto VBA (planilha com macros renomeada
+     * para .xlsx) é recusado: o WhatsApp aceita XLSX, não XLSM.
+     */
+    private static void conferirPlanilha(Path arquivo) throws Invalido {
+        boolean tipos = false;
+        boolean pasta = false;
+        int entradas = 0;
+        try (ZipFile zip = new ZipFile(arquivo.toFile())) {
+            Enumeration<? extends ZipEntry> todas = zip.entries();
+            while (todas.hasMoreElements()) {
+                String nome = todas.nextElement().getName();
+                if (++entradas > MAXIMO_ENTRADAS_PLANILHA) {
+                    throw new Invalido("A planilha tem itens demais para ser conferida.");
+                }
+                tipos |= "[Content_Types].xml".equals(nome);
+                pasta |= "xl/workbook.xml".equals(nome);
+                if ("xl/vbaproject.bin".equals(nome.toLowerCase(Locale.ROOT))) {
+                    throw new Invalido("A planilha contém macros; o WhatsApp aceita só XLSX sem macros.");
+                }
+            }
+        } catch (IOException | IllegalArgumentException e) {
+            throw new Invalido("O arquivo não é uma planilha XLSX válida.");
+        }
+        if (!tipos || !pasta) {
+            throw new Invalido("O arquivo não é uma planilha XLSX válida.");
+        }
     }
 }
