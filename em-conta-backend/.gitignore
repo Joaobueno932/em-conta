@@ -8,6 +8,9 @@ target/
 !.env.example
 infra/.env
 infra/armazenamento.env
+# Antigo local dos segredos da homologação com a Meta (hoje em ~/.emconta/homologacao, fora do repositório):
+# protege contra um editor que recrie o arquivo neste caminho.
+infra/homologacao/
 
 # IDEs
 .idea/
