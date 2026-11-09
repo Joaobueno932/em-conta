@@ -7,6 +7,9 @@
 
 > Indicadores de situação nas mensagens enviadas: [indicadores-situacao/](indicadores-situacao/README.md).
 
+> Vídeo, planilha e atualização em tempo real, com a Meta:
+> [video-planilha-tempo-real/](video-planilha-tempo-real/README.md).
+
 > Atualizado depois: título no cabeçalho global, presença única e só duas visões na fila. Ver
 > [atendimento-compacto/](atendimento-compacto/README.md).
 

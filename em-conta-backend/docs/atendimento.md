@@ -454,7 +454,53 @@ enviar do celular de teste uma imagem JPEG/PNG, um PDF e um áudio (nota de voz 
 download, hash e reprodução; responder com imagem com legenda, PDF e áudio e acompanhar
 ACEITA → ENTREGUE/LIDA; conferir a versão da Graph API.
 
-A homologação com o canal real **ainda não foi feita**: depende do acesso à Meta e do número de teste.
+### Homologação com a Meta (conta e número de TESTE)
+
+Ambiente separado, só com o app "Em Conta Teste", a WABA de teste e o número de teste (+1 555 616 8584,
+modo de desenvolvimento). O número oficial (GDASH) não é usado nem alterado. Tudo por
+`infra/homologacao-meta.sh` (ver o cabeçalho do script):
+
+| Peça | Onde |
+|---|---|
+| API | `127.0.0.1:8091` (`emconta-api-homolog`), banco `emconta_homolog`, bucket `emconta-homolog` com conta de serviço restrita a ele |
+| Frontend | `npx vite preview --port 5175` com `EM_CONTA_API_PROXY_TARGET=http://localhost:8091` (build de produção) |
+| Segredos | `~/.emconta/homologacao/` (fora do repositório e do OneDrive; o script recusa outro lugar): `whatsapp.env`, `armazenamento.env`, `admin.txt`, `cacerts` |
+| Túnel | Cloudflare Quick Tunnel (imagem oficial fixada por digest) → nginx (`infra/homologacao-webhook.conf`) que só repassa `/api/v1/integracoes/whatsapp/webhook`; raiz e demais rotas dão 404 |
+
+Procedimento:
+
+1. `docker build -t em-conta-backend:homolog .` (redes com inspeção TLS: `--secret id=extra_ca,...`).
+2. Uma vez: `WHATSAPP_PHONE_NUMBER_ID=<id> WHATSAPP_WABA_ID=<id> CA_EXTRA=<pem> bash infra/homologacao-meta.sh preparar`
+   e preencher à mão, no `whatsapp.env`, o token de acesso e o App Secret (nunca no chat nem em comando).
+3. `bash infra/homologacao-meta.sh conferir`: validade e expiração do token, app, WABAs que ele
+   alcança, número e app assinado na WABA, sem exibir valores.
+4. `subir`; depois `tunel-abrir`, que confere 404 na raiz e 403 no webhook sem token antes de abrir e
+   grava a URL em `tunel-url.txt`. Cadastrar na Meta `https://<url>/api/v1/integracoes/whatsapp/webhook`
+   com o `WHATSAPP_VERIFY_TOKEN` e assinar só o campo `messages`. A URL muda a cada abertura.
+5. **Token temporário** (expira em poucas horas): renovar no painel da Meta, salvar no `whatsapp.env`,
+   rodar `conferir` e recriar só a API (`descer` + `subir`); o túnel e o cadastro continuam.
+6. Destinatário no modo de desenvolvimento: o número precisa estar na lista "Até" do painel no mesmo
+   formato do `wa_id` que a Meta devolve. Celular brasileiro chegou com 12 dígitos (sem o nono dígito); com
+   13 dígitos na lista, a resposta falhou com #131030. O Em Conta usa o `wa_id` como veio, sem regra de
+   nono dígito.
+7. Ao terminar: `tunel-fechar`, `descer` e parar o preview 5175. Banco, bucket e arquivos ficam para a
+   próxima rodada.
+
+Resultados de 09/11/2026, com a Meta e confirmados no celular de teste:
+
+| Item | Resultado |
+|---|---|
+| Webhook | Verificação pela Meta (200 com o verify token, 403 sem); eventos de outro número/WABA, assinados localmente contra a 8091: 200 sem gravar nada |
+| Texto recebido | Aparece em Aguardando, uma vez |
+| Resposta de texto | Aceita → enviada → entregue → lida, com correlação; `read` antes de `delivered` não regride |
+| Recebidos do celular | Imagem JPEG, nota de voz OGG/Opus, PDF, vídeo MP4 e planilha XLSX: download na 1ª tentativa, hash igual ao da Meta, armazenamento privado, abertura ou download no Em Conta (vídeo toca no player; planilha só com download) em desktop e celular |
+| Enviados pelo Em Conta (sintéticos) | MP4 convencional H.264/AAC: lido; planilha XLSX e PDF: entregues; os três chegaram e abriram no celular |
+| MP4 fragmentado (mesmos codecs, gerado pelo MediaRecorder) | **Falha confirmada pela Meta**: aceito e, 1 s depois, `failed` #131053 "Media upload error". O convencional com o mesmo conteúdo passou, então é o formato fragmentado, não o envio de vídeo |
+| "Digitando…" | Apareceu no WhatsApp antes do texto; a última mensagem recebida (a planilha) ficou com tiques azuis, como a Meta exige |
+| Tempo real | Balão com relógio 12 a 60 ms após enviar; webhook → processamento 8 a 14 ms (antes 0,1 a 2 s); processamento → ícone na tela 44 a 140 ms (antes até 5 s). O tempo da Meta até o webhook (1,3 a 4,2 s) não depende do Em Conta |
+
+Ainda não homologado com a Meta: envio de imagem com legenda e de áudio pelo Em Conta, e encerramento,
+histórico e novo ciclo com o canal real (cobertos só pelos testes controlados).
 
 ## Testes
 
