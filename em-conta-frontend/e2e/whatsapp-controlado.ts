@@ -37,6 +37,8 @@ const URL_PARA_API = process.env.E2E_GRAPH_URL_API ?? `http://host.docker.intern
 
 export class GraphControlada {
   readonly envios: EnvioRecebido[] = []
+  /** Pedidos de "digitando…" (leitura da mensagem recebida + `typing_indicator`), que não são envios. */
+  readonly digitando: { mensagemLida: string }[] = []
   /** Uploads recebidos (`POST .../media`): tamanho e tipo declarado. */
   readonly uploads: { bytes: number; tipo: string }[] = []
   private readonly midias = new Map<string, { conteudo: Buffer; mime: string }>()
@@ -96,15 +98,24 @@ export class GraphControlada {
           image?: { id?: string; caption?: string }
           document?: { id?: string; caption?: string }
           audio?: { id?: string }
+          video?: { id?: string; caption?: string }
+          status?: string
+          message_id?: string
+          typing_indicator?: { type?: string }
+        }
+        if (dados.status === 'read' && dados.typing_indicator) {
+          this.digitando.push({ mensagemLida: dados.message_id ?? '' })
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          return res.end(JSON.stringify({ success: true }))
         }
         const idExterno = `wamid.E2E${randomUUID().replaceAll('-', '')}`
-        const midia = dados.image ?? dados.document ?? dados.audio
+        const midia = dados.image ?? dados.document ?? dados.audio ?? dados.video
         this.envios.push({
           caminho: req.url ?? '',
           para: dados.to ?? '',
           tipo: dados.type ?? '',
           texto: dados.text?.body ?? '',
-          legenda: (dados.image ?? dados.document)?.caption,
+          legenda: (dados.image ?? dados.document ?? dados.video)?.caption,
           idMidia: midia?.id,
           idExterno,
         })

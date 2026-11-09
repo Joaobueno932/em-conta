@@ -109,7 +109,7 @@ test('recebe anexo, abre e baixa, envia anexo, acompanha a situação, consulta 
     buffer: PNG,
   })
   await expect(page.getByText('comprovante.png')).toBeVisible()
-  await expect(page.getByText(/Imagem · 1 KB/)).toBeVisible()
+  await expect(page.getByText(/Imagem PNG · 1 KB/)).toBeVisible()
   await page.getByLabel('Legenda (opcional)').fill('Segue o comprovante')
   await page.getByRole('button', { name: 'Enviar' }).click()
   await expect(page.getByRole('group', { name: 'Arquivo selecionado' })).toHaveCount(0)

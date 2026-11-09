@@ -120,6 +120,10 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   await expect.poll(() => graph.envios.length, { timeout: 15_000 }).toBe(1)
   expect(graph.envios[0]).toMatchObject({ para: waId, texto: 'Bom dia! Vou verificar sua fatura.' })
   expect(graph.envios[0]!.caminho).toContain(`/${NUMERO_TESTE}/messages`)
+  // Digitar pediu "digitando…" uma vez, junto com a leitura da mensagem recebida (não é envio).
+  expect(graph.digitando).toHaveLength(1)
+  expect(graph.digitando[0]!.mensagemLida).toMatch(/^wamid\./)
+  await expect(page.getByText('Bom dia! Vou verificar sua fatura.', { exact: true })).toHaveCount(1)
   // Aceita pela API não é entregue: só o status do webhook muda para "Entregue".
   await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
   const entregue = await webhookDeTeste.situacao(
@@ -129,7 +133,8 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
     'delivered',
   )
   expect(entregue.status()).toBe(200)
-  await expect(page.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 15_000 })
+  // Pelo aviso SSE, bem antes da consulta de segurança (30 s com avisos).
+  await expect(page.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 4_000 })
 
   // 3. Vincular o associado sugerido pelo telefone (escolha do atendente, não automática).
   const painel = page.getByRole('complementary', { name: 'Associado' })
