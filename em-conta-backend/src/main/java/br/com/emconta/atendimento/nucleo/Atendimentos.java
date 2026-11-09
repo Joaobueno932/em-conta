@@ -10,7 +10,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,9 @@ public class Atendimentos {
     private final WhatsAppCloud canal;
     private final Clock clock;
     private final AvisosAtendimento avisos;
+    private final boolean digitandoHabilitado;
+    /** Último pedido de "digitando…" por atendimento (nesta instância). */
+    private final Map<Long, Instant> digitando = new ConcurrentHashMap<>();
 
     Atendimentos(
             JdbcClient jdbc,
@@ -55,13 +60,15 @@ public class Atendimentos {
             CatalogoAssociados associados,
             WhatsAppCloud canal,
             Clock clock,
-            AvisosAtendimento avisos) {
+            AvisosAtendimento avisos,
+            @Value("${emconta.atendimento.digitando.habilitado:true}") boolean digitandoHabilitado) {
         this.jdbc = jdbc;
         this.autoria = autoria;
         this.associados = associados;
         this.canal = canal;
         this.clock = clock;
         this.avisos = avisos;
+        this.digitandoHabilitado = digitandoHabilitado;
     }
 
     record Estado(long id, long conversaId, String situacao, Long responsavel, long versao) {}
@@ -208,10 +215,55 @@ public class Atendimentos {
                 .update();
         avisos.conversa(estado.conversaId());
         avisos.trabalho(); // envio
+        respondeu(atendimento);
         return jdbc.sql("select id from atd_mensagem where chave_idempotencia = :chave")
                 .param("chave", chaveIdempotencia)
                 .query(Long.class)
                 .single();
+    }
+
+    /** Intervalo mínimo entre pedidos de "digitando…" de um atendimento (o indicador dura até 25 s). */
+    static final Duration INTERVALO_DIGITANDO = Duration.ofSeconds(20);
+
+    /**
+     * "Digitando…" no WhatsApp do contato enquanto o responsável escreve a resposta. Valem as regras de
+     * resposta ({@link #exigirPodeResponder}: responsável atual, em atendimento, janela aberta). O indicador
+     * vai junto com a leitura da última mensagem recebida neste atendimento, como a Cloud API exige: o
+     * contato vê essa mensagem como lida (no Em Conta nada muda). Sem mensagem recebida no atendimento,
+     * nada é pedido. No máximo um pedido a cada {@link #INTERVALO_DIGITANDO} por atendimento; uma
+     * resposta registrada libera o próximo (o indicador some com a resposta).
+     *
+     * @return se o indicador foi pedido e aceito pela Meta
+     */
+    public boolean digitando(long ator, long atendimento) {
+        if (!digitandoHabilitado || !canal.configurado()) {
+            return false;
+        }
+        exigirPodeResponder(ator, atendimento, false);
+        Instant agora = clock.instant();
+        boolean[] liberado = {false};
+        digitando.compute(atendimento, (id, ultimo) -> {
+            liberado[0] = ultimo == null || !agora.isBefore(ultimo.plus(INTERVALO_DIGITANDO));
+            return liberado[0] ? agora : ultimo;
+        });
+        if (!liberado[0]) {
+            return false;
+        }
+        if (digitando.size() > 1000) {
+            digitando.values().removeIf(ultimo -> ultimo.isBefore(agora.minus(INTERVALO_DIGITANDO)));
+        }
+        return jdbc.sql("select id_externo from atd_mensagem where atendimento_id = :a and direcao = 'ENTRADA'"
+                        + " and id_externo is not null order by id desc limit 1")
+                .param("a", atendimento)
+                .query(String.class)
+                .optional()
+                .map(canal::indicarDigitando)
+                .orElse(false);
+    }
+
+    /** Uma resposta foi registrada: o próximo "digitando…" deste atendimento já pode ser pedido. */
+    void respondeu(long atendimento) {
+        digitando.remove(atendimento);
     }
 
     /**

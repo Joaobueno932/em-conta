@@ -311,6 +311,52 @@ public class WhatsAppCloud {
         return enviarMensagem(para, tipo, midia, correlacao);
     }
 
+    /**
+     * Mostra "digitando…" no WhatsApp do contato ({@code typing_indicator} do tipo {@code text}, o único
+     * documentado; não existe indicador de gravação de áudio). A Cloud API só aceita o indicador junto com
+     * a leitura de uma mensagem recebida ({@code status: read} com o {@code message_id} dela): o contato
+     * passa a ver essa mensagem como lida. O indicador some quando a empresa responde ou em 25 s.
+     *
+     * @return se a Meta aceitou (falha só é registrada no log, sem conteúdo)
+     */
+    public boolean indicarDigitando(String idMensagemRecebida) {
+        if (!configurado() || idMensagemRecebida == null) {
+            return false;
+        }
+        Map<String, Object> corpo = new LinkedHashMap<>();
+        corpo.put("messaging_product", "whatsapp");
+        corpo.put("status", "read");
+        corpo.put("message_id", idMensagemRecebida);
+        corpo.put("typing_indicator", Map.of("type", "text"));
+        HttpRequest requisicao = HttpRequest.newBuilder(propriedades
+                        .graphUrl()
+                        .resolve("/" + propriedades.graphVersion() + "/" + propriedades.phoneNumberId() + "/messages"))
+                .timeout(propriedades.timeoutResposta())
+                .header("Authorization", "Bearer " + propriedades.accessToken())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(corpo)))
+                .build();
+        try {
+            HttpResponse<String> resposta = http.send(requisicao, HttpResponse.BodyHandlers.ofString());
+            if (resposta.statusCode() / 100 == 2) {
+                return true;
+            }
+            JsonNode erro = json.readTree(resposta.body() == null ? "{}" : resposta.body())
+                    .path("error");
+            log.warn(
+                    "WhatsApp: indicador de digitação recusado (HTTP {}, código {})",
+                    resposta.statusCode(),
+                    erro.path("code").isMissingNode() ? null : erro.path("code").asInt());
+        } catch (IOException | RuntimeException e) {
+            log.warn(
+                    "WhatsApp: falha no indicador de digitação ({})",
+                    e.getClass().getSimpleName());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return false;
+    }
+
     private ResultadoEnvio enviarMensagem(String para, String tipo, Map<String, Object> conteudo, String correlacao) {
         if (!configurado()) {
             return new Recusada(null, "Canal não configurado", false);

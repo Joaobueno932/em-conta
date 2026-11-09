@@ -161,6 +161,7 @@ class SecurityConfiguration {
             auth.requestMatchers(
                             HttpMethod.POST,
                             "/api/v1/atendimento/atendimentos/*/mensagens",
+                            "/api/v1/atendimento/atendimentos/*/digitando",
                             "/api/v1/atendimento/atendimentos/*/anexos",
                             "/api/v1/atendimento/atendimentos/*/anexos/*/nova-tentativa")
                     .hasAuthority(Permissao.ATENDIMENTO_RESPONDER.autoridade());

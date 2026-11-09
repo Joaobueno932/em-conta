@@ -251,6 +251,7 @@ public class Anexos {
                 .update();
         avisos.conversa(estado.conversaId());
         avisos.trabalho(); // upload e envio
+        atendimentos.respondeu(pedida.atendimento());
         return mensagem;
     }
 

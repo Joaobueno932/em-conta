@@ -274,6 +274,21 @@ class AtendimentoController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new RespostaResponse(mensagem));
     }
 
+    @PostMapping("/atendimentos/{id}/digitando")
+    @Operation(
+            operationId = "indicarDigitando",
+            summary = "Mostra \"digitando…\" no WhatsApp do contato enquanto o responsável escreve; a Cloud API"
+                    + " exige marcar como lida a última mensagem recebida junto (atendimento:responder)")
+    @ApiResponse(
+            responseCode = "204",
+            description = "Pedido à Meta ou dispensado (intervalo mínimo de 20 s, sem mensagem recebida, canal não"
+                    + " configurado)")
+    @ApiResponse(responseCode = "409", description = "NAO_E_RESPONSAVEL ou JANELA_ENCERRADA")
+    ResponseEntity<Void> digitando(@PathVariable long id) {
+        atendimentos.digitando(autoria.usuarioAtual(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping(path = "/atendimentos/{id}/associado", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
             operationId = "vincularAssociadoAtendimento",

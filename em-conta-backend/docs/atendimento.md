@@ -107,12 +107,27 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
   `JANELA_EXPIRADA` e, para `DESCONHECIDA`, "Envio não confirmado" com ícone próprio. Falha e
   resultado desconhecido abrem a causa num detalhe (clique, toque ou teclado; Esc fecha). Mostra só a
   situação atual: a ordem acima e a mescla da linha do tempo (`maisNovo`) impedem a regressão.
-- **Digitando / gravando áudio**: a Cloud API **não** envia ao webhook evento de que o contato está
-  digitando ou gravando (o campo `messages` traz só mensagens, status e erros). Ela oferece apenas o
-  caminho inverso: a empresa mostra "digitando" ao contato (`typing_indicator` de tipo `text`, junto
-  com a leitura de uma mensagem recebida; some na resposta ou em 25 s). Por isso o Em Conta não exibe
-  "Digitando…" nem "Gravando áudio…": sem sinal real de entrada, seria simulação. Um áudio recebido é
-  só a chegada do arquivo.
+- **Digitando / gravando áudio** (documentação oficial conferida em 09/11/2026: [Typing
+  indicators](https://developers.facebook.com/docs/whatsapp/cloud-api/typing-indicators) e o webhook
+  `messages`), as quatro direções:
+
+  | Direção | Suporte na Cloud API | No Em Conta |
+  |---|---|---|
+  | Cliente digitando → Em Conta | não existe evento no webhook (o campo `messages` traz só mensagens, status e erros) | não exibido; nada é simulado |
+  | Atendente digitando → WhatsApp do cliente | `typing_indicator` do tipo `text`, **só junto com `status: read` de uma mensagem recebida** (`message_id` obrigatório); some com a resposta ou em 25 s | implementado (abaixo) |
+  | Cliente gravando áudio → Em Conta | não existe evento | não exibido; um áudio recebido é só a chegada do arquivo |
+  | Atendente gravando áudio → WhatsApp do cliente | não existe tipo de indicador de gravação (só `text`); o Em Conta também não grava pelo microfone | não implementado |
+
+  **"Digitando…" para o cliente** (`POST …/digitando`, atendimento:responder): o compositor pede ao
+  digitar texto de fato no campo (não ao preencher por código nem com anexo selecionado), no máximo
+  uma vez a cada 20 s; o servidor confere as regras de resposta (responsável, em atendimento, janela de
+  24 h) e repete o limite por atendimento; uma resposta registrada libera o próximo pedido. O indicador
+  vai junto com a leitura da **última mensagem recebida neste atendimento**, como a Meta exige: o
+  cliente passa a ver essa mensagem com os tiques azuis de lida. No Em Conta nada muda (não há estado
+  de leitura das mensagens recebidas) e a situação das mensagens enviadas continua vindo só dos status
+  da Meta. Sem mensagem recebida no atendimento, nada é pedido. Para não enviar confirmações de
+  leitura, desligue com `EMCONTA_ATENDIMENTO_DIGITANDO_HABILITADO=false`. Falha do indicador só vai
+  para o log (sem conteúdo).
 
 ## Regras
 
@@ -141,6 +156,7 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `GET atendimentos/{id}/linha-do-tempo?somenteEste=&antes=&tamanho=` | página da linha do tempo (ver abaixo) |
 | `POST atendimentos/{id}/assuncao` | assumir (204) |
 | `POST atendimentos/{id}/mensagens` | responder (`texto`, `chaveIdempotencia`) → 202 |
+| `POST atendimentos/{id}/digitando` | "digitando…" no WhatsApp do cliente, com a leitura da última recebida (204; até 1 pedido a cada 20 s) |
 | `POST atendimentos/{id}/transferencia` | `versao`, `destinoId?`, `motivo?` |
 | `POST atendimentos/{id}/encerramento` | `versao` |
 | `PUT atendimentos/{id}/associado`, `GET …/associados-sugeridos`, `GET associados?busca=` | vínculo |
@@ -457,7 +473,9 @@ A homologação com o canal real **ainda não foi feita**: depende do acesso à 
 - `EventosConversaIntegrationTests`: aviso SSE só depois do commit e só para a conversa alterada, sem
   conteúdo; ação recusada não sinaliza; sessão, permissão e atendimento existente; chave da operação só
   para o autor. `ProcessamentoAtendimentoTests`: pedidos de processamento imediato agrupados, sem perder
-  o que chega durante uma execução.
+  o que chega durante uma execução. `DigitandoIntegrationTests`: formato documentado do indicador
+  (leitura da última recebida + `typing_indicator`), intervalo mínimo, resposta liberando o próximo,
+  regras de resposta e permissão.
 - Frontend: `src/features/atendimento/__tests__` (Vitest; `tempo-real.spec.ts` cobre aviso → releitura,
   ícones fora de ordem, balão local sem duplicar, falha, troca de conversa e reconexão) e
   `e2e/atendimento.spec.ts` (Playwright),
