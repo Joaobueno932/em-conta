@@ -10,7 +10,13 @@ import {
   paginaDoAdministrador,
   SENHA_PADRAO,
 } from './apoio'
-import { GraphControlada, NUMERO_TESTE, SEGREDO_TESTE, webhookDeTeste } from './whatsapp-controlado'
+import {
+  ACEITA,
+  GraphControlada,
+  NUMERO_TESTE,
+  SEGREDO_TESTE,
+  webhookDeTeste,
+} from './whatsapp-controlado'
 
 /**
  * Jornada de atendimento contra o backend real, com o canal num AMBIENTE EXTERNO CONTROLADO de
@@ -115,7 +121,7 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   expect(graph.envios[0]).toMatchObject({ para: waId, texto: 'Bom dia! Vou verificar sua fatura.' })
   expect(graph.envios[0]!.caminho).toContain(`/${NUMERO_TESTE}/messages`)
   // Aceita pela API não é entregue: só o status do webhook muda para "Entregue".
-  await expect(page.getByText(/Aceita pelo WhatsApp/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
   const entregue = await webhookDeTeste.situacao(
     page.request,
     waId,
@@ -123,7 +129,7 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
     'delivered',
   )
   expect(entregue.status()).toBe(200)
-  await expect(page.getByText(/· Entregue/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 15_000 })
 
   // 3. Vincular o associado sugerido pelo telefone (escolha do atendente, não automática).
   const painel = page.getByRole('complementary', { name: 'Associado' })
@@ -241,7 +247,7 @@ test('transferência entre dois atendentes: só o novo responsável responde e e
   await atendente.getByLabel('Mensagem').fill('Olá! Sou do financeiro.')
   await atendente.getByRole('button', { name: 'Enviar' }).click()
   await expect.poll(() => graph.envios.some((e) => e.para === waId), { timeout: 15_000 }).toBe(true)
-  await expect(atendente.getByText(/Aceita pelo WhatsApp/)).toBeVisible({ timeout: 15_000 })
+  await expect(atendente.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
   await atendente.getByRole('button', { name: 'Encerrar', exact: true }).click()
   await atendente
     .getByRole('dialog', { name: 'Encerrar atendimento?' })

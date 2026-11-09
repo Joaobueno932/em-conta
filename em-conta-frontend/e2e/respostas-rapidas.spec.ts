@@ -1,7 +1,13 @@
 import { expect, test } from '@playwright/test'
 
 import { ADMIN_EMAIL, ADMIN_SENHA, paginaDoAdministrador } from './apoio'
-import { GraphControlada, NUMERO_TESTE, SEGREDO_TESTE, webhookDeTeste } from './whatsapp-controlado'
+import {
+  ACEITA,
+  GraphControlada,
+  NUMERO_TESTE,
+  SEGREDO_TESTE,
+  webhookDeTeste,
+} from './whatsapp-controlado'
 
 /**
  * Respostas rápidas contra o backend real, com o canal no ambiente externo controlado de teste (ver
@@ -82,7 +88,7 @@ test('cadastra, usa na conversa (revisada antes de enviar) e desativa', async ({
     .poll(() => graph.envios.filter((e) => e.para === waId).length, { timeout: 15_000 })
     .toBe(1)
   expect(graph.envios.find((e) => e.para === waId)).toMatchObject({ texto: enviado })
-  await expect(page.getByText(/Aceita pelo WhatsApp/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
 
   // 6. Desativa no catálogo: some do seletor; a mensagem enviada continua igual.
   await page.goto('/atendimento/respostas-rapidas')

@@ -1,8 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ROTULO_SITUACAO_MENSAGEM } from '@/features/atendimento/atendimento-api'
 import { apiFalsa, csrf, montarApp, problema, usuarioAtual, type Rotas } from '@/test/api-falsa'
 import { jsonResponse } from '@/test/render-with-providers'
+
+const ACEITA = ROTULO_SITUACAO_MENSAGEM.ACEITA!
 
 const TODAS = [
   'atendimento:consultar',
@@ -331,11 +334,11 @@ describe('Anexos no atendimento', () => {
     expect(await screen.findByText('recente')).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: 'Carregar mensagens anteriores' }))
     expect(await screen.findByText('antiga enviada')).toBeTruthy()
-    expect(screen.getByText(/Aceita pelo WhatsApp/)).toBeTruthy()
+    expect(screen.getByRole('img', { name: ACEITA })).toBeTruthy()
 
     // Uma atualização (aqui provocada por uma ação) confere as mensagens antigas em lote.
     await fireEvent.click(screen.getByRole('button', { name: 'Assumir atendimento' }))
-    await waitFor(() => expect(screen.getByText(/· Entregue/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Entregue' })).toBeTruthy())
     expect(screen.getByText('antiga enviada')).toBeTruthy()
     expect(screen.getByText('recente')).toBeTruthy()
     expect(consultas).toBeGreaterThan(1)

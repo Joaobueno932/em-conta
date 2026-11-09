@@ -18,6 +18,8 @@ import type { APIRequestContext } from '@playwright/test'
  */
 export const SEGREDO_TESTE = process.env.E2E_WHATSAPP_APP_SECRET ?? ''
 export const NUMERO_TESTE = process.env.E2E_WHATSAPP_PHONE_NUMBER_ID ?? ''
+/** Rótulo acessível do indicador de uma mensagem aceita pela Meta, ainda sem confirmação de envio. */
+export const ACEITA = 'Aceita pela Meta, aguardando confirmação de envio'
 const PORTA = Number(process.env.E2E_GRAPH_PORT ?? 8099)
 
 export interface EnvioRecebido {

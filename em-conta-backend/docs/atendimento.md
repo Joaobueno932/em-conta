@@ -95,6 +95,19 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
   `CONFLITO_CONCORRENTE`).
 - **Atualização da tela**: consulta periódica a cada 5 s (TanStack Query). Escolhido em vez de SSE por
   funcionar igual com várias réplicas e com a sessão revogada (o 401 leva ao login).
+- **Indicador no balão enviado** (`IndicadorSituacao.vue`, ao lado do horário, com rótulo acessível e
+  tooltip; o mesmo na conversa e no detalhe do histórico): relógio para `PENDENTE`, `ENVIANDO` e
+  `ACEITA` (aceite é só da requisição, ainda sem confirmação de envio), um tique cinza para `ENVIADA`,
+  dois cinza para `ENTREGUE`, dois azuis (`--cor-lida`) para `LIDA`, exclamação vermelha para `FALHA` e
+  `JANELA_EXPIRADA` e, para `DESCONHECIDA`, "Envio não confirmado" com ícone próprio. Falha e
+  resultado desconhecido abrem a causa num detalhe (clique, toque ou teclado; Esc fecha). Mostra só a
+  situação atual: a ordem acima e a mescla da linha do tempo (`maisNovo`) impedem a regressão.
+- **Digitando / gravando áudio**: a Cloud API **não** envia ao webhook evento de que o contato está
+  digitando ou gravando (o campo `messages` traz só mensagens, status e erros). Ela oferece apenas o
+  caminho inverso: a empresa mostra "digitando" ao contato (`typing_indicator` de tipo `text`, junto
+  com a leitura de uma mensagem recebida; some na resposta ou em 25 s). Por isso o Em Conta não exibe
+  "Digitando…" nem "Gravando áudio…": sem sinal real de entrada, seria simulação. Um áudio recebido é
+  só a chegada do arquivo.
 
 ## Regras
 

@@ -2,18 +2,14 @@
 import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import AnexoMensagem from './AnexoMensagem.vue'
-import {
-  formatarHora,
-  ROTULO_EVENTO,
-  ROTULO_SITUACAO_MENSAGEM,
-  SITUACOES_SEM_ENVIO,
-  type Item,
-} from './atendimento-api'
+import { formatarHora, ROTULO_EVENTO, type Item } from './atendimento-api'
+import IndicadorSituacao from './IndicadorSituacao.vue'
 
 /**
  * Um item da linha do tempo (AT-04/HG-03): evento em pílula centralizada ou mensagem em balão (entrada
- * à esquerda, saída à direita), com anexo, legenda, horário e situação do envio por extenso (nunca
- * só pela cor). Usado na conversa e no detalhe somente leitura do histórico.
+ * à esquerda, saída à direita), com anexo, legenda, horário e, na saída, o indicador da situação do
+ * envio ({@link IndicadorSituacao}, com rótulo acessível). Usado na conversa e no detalhe somente
+ * leitura do histórico.
  */
 defineProps<{
   item: Item
@@ -61,16 +57,13 @@ defineProps<{
     <p v-else class="texto">{{ item.texto }}</p>
     <p class="meta">
       <span v-if="item.autor">{{ item.autor.nome }} · </span>
-      {{ formatarHora(item.ocorridoEm) }}
-      <span
-        v-if="item.direcao === 'SAIDA'"
-        :class="{ falha: SITUACOES_SEM_ENVIO.includes(item.situacao ?? '') }"
-      >
-        · {{ ROTULO_SITUACAO_MENSAGEM[item.situacao ?? ''] }}
-        <template v-if="item.situacao === 'FALHA' && item.erroTitulo"
-          >: {{ item.erroTitulo }}</template
-        >
-      </span>
+      <span class="hora"
+        >{{ formatarHora(item.ocorridoEm) }}
+        <IndicadorSituacao
+          v-if="item.direcao === 'SAIDA'"
+          :situacao="item.situacao"
+          :erro-titulo="item.erroTitulo"
+      /></span>
     </p>
   </div>
 </template>
@@ -144,7 +137,8 @@ defineProps<{
   text-align: right;
 }
 
-.falha {
-  color: var(--cor-erro);
+/* Horário e indicador de situação quebram juntos (o detalhe da causa tem quebra própria). */
+.hora {
+  white-space: nowrap;
 }
 </style>

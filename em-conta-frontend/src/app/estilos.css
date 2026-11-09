@@ -18,6 +18,9 @@
   --cor-alerta: #a86a12;
   --cor-erro: #b42318;
   --cor-foco: #1b7f3a;
+  /* Dois tiques de "lida" (como no WhatsApp). O azul do WhatsApp não chega a 3:1 no balão verde de
+     saída; este chega a 4,3:1 (4,9:1 no branco). */
+  --cor-lida: #1a73c4;
   --raio: 8px;
   --raio-controle: 10px;
   --raio-cartao: 12px;

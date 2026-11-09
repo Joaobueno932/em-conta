@@ -5,6 +5,8 @@
 
 > Balão do cliente destacado do fundo branco da conversa: [balao-cliente/](balao-cliente/README.md).
 
+> Indicadores de situação nas mensagens enviadas: [indicadores-situacao/](indicadores-situacao/README.md).
+
 > Atualizado depois: título no cabeçalho global, presença única e só duas visões na fila. Ver
 > [atendimento-compacto/](atendimento-compacto/README.md).
 

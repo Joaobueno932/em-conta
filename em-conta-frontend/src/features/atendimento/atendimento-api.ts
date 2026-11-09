@@ -37,18 +37,22 @@ export const ROTULO_SITUACAO_MENSAGEM: Record<string, string> = {
   RECEBIDA: 'Recebida',
   PENDENTE: 'Aguardando envio',
   ENVIANDO: 'Enviando',
-  ACEITA: 'Aceita pelo WhatsApp',
+  // Aceite é só da requisição; envio, entrega e leitura chegam depois pelo webhook.
+  ACEITA: 'Aceita pela Meta, aguardando confirmação de envio',
   ENVIADA: 'Enviada',
   ENTREGUE: 'Entregue',
   LIDA: 'Lida',
   FALHA: 'Falha no envio',
-  DESCONHECIDA: 'Resultado desconhecido — confirme com o cliente antes de reenviar',
-  JANELA_EXPIRADA:
-    'Não enviada: a janela de 24 horas expirou antes do envio. Nada foi enviado ao WhatsApp; o contato precisa mandar uma nova mensagem',
+  DESCONHECIDA: 'Envio não confirmado',
+  JANELA_EXPIRADA: 'Não enviada',
 }
 
-/** Situações de saída que terminaram sem envio confirmado pelo canal. */
-export const SITUACOES_SEM_ENVIO = ['FALHA', 'JANELA_EXPIRADA']
+/** Explicação de cada situação sem envio confirmado, mostrada no detalhe do indicador. */
+export const DETALHE_SITUACAO_MENSAGEM: Record<string, string> = {
+  DESCONHECIDA: 'Resultado desconhecido: confirme com o cliente antes de reenviar.',
+  JANELA_EXPIRADA:
+    'Não enviada: a janela de 24 horas expirou antes do envio. Nada foi enviado ao WhatsApp; o contato precisa mandar uma nova mensagem.',
+}
 
 export const ROTULO_EVENTO: Record<string, string> = {
   ATENDIMENTO_INICIADO: 'Novo atendimento na fila',

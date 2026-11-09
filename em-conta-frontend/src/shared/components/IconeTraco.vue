@@ -33,6 +33,10 @@ export type NomeIcone =
   | 'externo'
   | 'sair'
   | 'predio'
+  | 'relogio'
+  | 'tique-duplo'
+  | 'exclamacao'
+  | 'interrogacao'
 
 defineProps<{ nome: NomeIcone; tamanho?: number }>()
 
@@ -88,6 +92,14 @@ const TRACOS: Record<NomeIcone, string[]> = {
   busca: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z', 'M20 20l-4-4'],
   raio: ['M13 3L5 13.5h6L10 21l8-10.5h-6z'],
   documento: ['M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z', 'M14 3v5h5'],
+  relogio: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 7v5l3 2'],
+  'tique-duplo': ['M1.5 12.5l4.5 4.5L15.5 7', 'M10.5 15.5L12 17l9.5-10'],
+  exclamacao: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 7.5v5.5', 'M12 16.5h.01'],
+  interrogacao: [
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z',
+    'M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6',
+    'M12 17h.01',
+  ],
 }
 </script>
 

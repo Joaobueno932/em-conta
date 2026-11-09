@@ -3,7 +3,13 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
 import { ADMIN_EMAIL, ADMIN_SENHA, paginaDoAdministrador } from './apoio'
-import { GraphControlada, NUMERO_TESTE, SEGREDO_TESTE, webhookDeTeste } from './whatsapp-controlado'
+import {
+  ACEITA,
+  GraphControlada,
+  NUMERO_TESTE,
+  SEGREDO_TESTE,
+  webhookDeTeste,
+} from './whatsapp-controlado'
 
 /**
  * Anexos de ponta a ponta contra o backend real (MySQL e MinIO do ambiente de testes), com o canal no
@@ -115,11 +121,11 @@ test('recebe anexo, abre e baixa, envia anexo, acompanha a situação, consulta 
   expect(envio.idMidia).toMatch(/^midia-e2e-/)
   expect(graph.uploads.some((u) => u.tipo === 'image/png')).toBe(true)
   // Upload e aceite não são entrega: só o webhook muda para "Entregue".
-  await expect(page.getByText(/Aceita pelo WhatsApp/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
   expect(
     (await webhookDeTeste.situacao(page.request, waId, envio.idExterno, 'delivered')).status(),
   ).toBe(200)
-  await expect(page.getByText(/· Entregue/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 15_000 })
 
   // 4. Mídia: os três anexos, com filtro por tipo.
   const midia = page.locator('section.midia')
