@@ -297,6 +297,27 @@ describe('Anexos no atendimento', () => {
     expect(await screen.findByText(/acima do limite de 16,0 MB para vídeo/)).toBeTruthy()
   })
 
+  it('vídeo em formato recusado pelo servidor mostra só o motivo, sem sugerir repetir', async () => {
+    const MOTIVO =
+      'Este vídeo está em um formato incompatível com o envio pelo WhatsApp. Exporte como MP4 padrão e tente novamente.'
+    const { fetchFn } = apiFalsa(
+      rotas([mensagem(1)], {
+        [`POST ${BASE}/atendimentos/1/anexos`]: () => problema(400, 'DADOS_INVALIDOS', MOTIVO),
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const entrada = (await waitFor(() => {
+      const el = document.querySelector('input[type=file]')
+      expect(el).toBeTruthy()
+      return el
+    })) as HTMLInputElement
+    await selecionar(entrada, arquivo('gravado.mp4', 'video/mp4', 4096))
+    await fireEvent.click(await screen.findByRole('button', { name: 'Enviar' }))
+    expect(await screen.findByText(MOTIVO)).toBeTruthy()
+    expect(screen.queryByText(/O arquivo foi mantido/)).toBeNull()
+    expect(screen.queryByText('gravado.mp4', { selector: '.texto' })).toBeNull()
+  })
+
   it('envia o anexo com legenda; repetir após falha reutiliza a chave e outra legenda usa outra', async () => {
     const envios: { nome: string; legenda: string | null; chave: string }[] = []
     let tentativa = 0

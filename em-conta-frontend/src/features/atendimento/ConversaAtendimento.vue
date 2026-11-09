@@ -878,9 +878,13 @@ async function carregarAnteriores() {
             </button>
           </div>
         </form>
+        <!-- Arquivo recusado pela validação (formato, conteúdo, tamanho): só o motivo, porque repetir não
+             adianta; nas demais falhas, o arquivo fica para tentar de novo sem duplicar. -->
         <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
-          {{ describeApiError(anexoMut.error.value) }} O arquivo foi mantido; tentar de novo não
-          duplica a mensagem.
+          {{ describeApiError(anexoMut.error.value) }}
+          <template v-if="codigoDoErro(anexoMut.error.value) !== 'DADOS_INVALIDOS'">
+            O arquivo foi mantido; tentar de novo não duplica a mensagem.
+          </template>
         </AlertaMensagem>
         <AlertaMensagem v-if="responderMut.isError.value" tipo="erro">
           {{ describeApiError(responderMut.error.value) }} O texto foi mantido; tentar de novo não

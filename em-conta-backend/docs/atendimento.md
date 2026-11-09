@@ -222,8 +222,13 @@ tamanho lido de fato (o limite vale durante a leitura, não só pelo cabeçalho)
 - **Vídeo enviado**: os cabeçalhos ISO BMFF (`moov → trak → mdia → hdlr/stsd`) são lidos pulando os
   dados de mídia; a faixa de vídeo precisa ser H.264 (`avc1`/`avc3`) e o áudio, se houver, uma única
   faixa AAC (`mp4a`) — a regra da Meta, que de outro modo recusaria o arquivo só depois do upload. O
-  motivo da recusa diz o codec encontrado ("este arquivo usa H.265 (HEVC)"). Vídeo recebido vem da
-  própria Meta: valem assinatura, MIME, tamanho e hash.
+  motivo da recusa diz o codec encontrado ("este arquivo usa H.265 (HEVC)"). **MP4 fragmentado**
+  (`mvex` no `moov` ou `moof` no topo, como o gravado pelo MediaRecorder dos navegadores) é recusado ao
+  anexar, antes de qualquer upload: "Este vídeo está em um formato incompatível com o envio pelo
+  WhatsApp. Exporte como MP4 padrão e tente novamente." Na homologação, a Meta aceitou a requisição de um
+  MP4 fragmentado e o marcou como falho (#131053), enquanto o mesmo conteúdo em MP4 convencional foi
+  entregue (`EstruturaVideoTests` usa os dois arquivos). Vídeo recebido vem da própria Meta: valem
+  assinatura, MIME, tamanho e hash, sem essa regra.
 
 Word, PowerPoint, XLS, texto e figurinhas recebidos ficam visíveis como "não suportado", com o motivo
 e o que a categoria aceita (ex.: "o Em Conta aceita PDF e planilha XLSX"). Os
@@ -495,7 +500,7 @@ Resultados de 09/11/2026, com a Meta e confirmados no celular de teste:
 | Resposta de texto | Aceita → enviada → entregue → lida, com correlação; `read` antes de `delivered` não regride |
 | Recebidos do celular | Imagem JPEG, nota de voz OGG/Opus, PDF, vídeo MP4 e planilha XLSX: download na 1ª tentativa, hash igual ao da Meta, armazenamento privado, abertura ou download no Em Conta (vídeo toca no player; planilha só com download) em desktop e celular |
 | Enviados pelo Em Conta (sintéticos) | MP4 convencional H.264/AAC: lido; planilha XLSX e PDF: entregues; os três chegaram e abriram no celular |
-| MP4 fragmentado (mesmos codecs, gerado pelo MediaRecorder) | **Falha confirmada pela Meta**: aceito e, 1 s depois, `failed` #131053 "Media upload error". O convencional com o mesmo conteúdo passou, então é o formato fragmentado, não o envio de vídeo |
+| MP4 fragmentado (mesmos codecs, gerado pelo MediaRecorder) | **Falha confirmada pela Meta**: aceito e, 1 s depois, `failed` #131053 "Media upload error". O convencional com o mesmo conteúdo passou, então é o formato fragmentado, não o envio de vídeo. Desde então, o Em Conta o recusa ao anexar (ver [Formatos e limites](#formatos-e-limites)) |
 | "Digitando…" | Apareceu no WhatsApp antes do texto; a última mensagem recebida (a planilha) ficou com tiques azuis, como a Meta exige |
 | Tempo real | Balão com relógio 12 a 60 ms após enviar; webhook → processamento 8 a 14 ms (antes 0,1 a 2 s); processamento → ícone na tela 44 a 140 ms (antes até 5 s). O tempo da Meta até o webhook (1,3 a 4,2 s) não depende do Em Conta |
 

@@ -561,6 +561,46 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
         assertThat(GRAPH.uploads()).as("nada recusado chega à Meta").isEmpty();
     }
 
+    /**
+     * Regressão da homologação: o MP4 fragmentado foi aceito na requisição e marcado como falho pela Meta
+     * (#131053); o convencional, com os mesmos codecs, foi entregue. O fragmentado é recusado ao anexar,
+     * sem nada gravado nem enviado; o convencional segue; vídeo fragmentado recebido continua disponível.
+     */
+    @Test
+    void mp4FragmentadoERecusadoAoAnexarEOConvencionalContinuaSendoEnviado() throws Exception {
+        String numero = numeroUnico();
+        Navegador admin = administrador();
+        long atendimento = assumido(admin, numero);
+
+        MockHttpServletResponse recusado = admin.multipart(
+                url(atendimento, "anexos"),
+                arquivo("gravado.mp4", "video/mp4", mp4Fragmentado()),
+                campos("Video gravado no navegador", UUID.randomUUID().toString()));
+        assertThat(recusado.getStatus()).isEqualTo(400);
+        assertThat(corpo(recusado).path("campos").path("arquivo").asString())
+                .isEqualTo("Este vídeo está em um formato incompatível com o envio pelo WhatsApp."
+                        + " Exporte como MP4 padrão e tente novamente.");
+        assertThat(contar("atd_anexo where atendimento_id = :c", atendimento)).isZero();
+        assertThat(contar("atd_mensagem where atendimento_id = :c and direcao = 'SAIDA'", atendimento))
+                .isZero();
+
+        long convencional = enviarAnexo(
+                admin,
+                atendimento,
+                arquivo("padrao.mp4", "video/mp4", MP4),
+                null,
+                UUID.randomUUID().toString());
+        processar();
+        assertThat(situacao(convencional)).isEqualTo("ACEITA");
+        assertThat(GRAPH.uploads()).as("só o convencional chega à Meta").hasSize(1);
+
+        String recebido = midiaUnica();
+        GRAPH.midia(recebido, new Midia(mp4Fragmentado(), "video/mp4", false, Download.NORMAL, null));
+        receber(numero, "video", recebido, "video/mp4", null, null);
+        midias.processarPendentes(10);
+        assertThat(situacaoAnexo(recebido)).as("recebimento não muda").isEqualTo("DISPONIVEL");
+    }
+
     @Test
     void idempotenciaSequencialEConcorrenteSemDuplicarEnvio() throws Exception {
         String email = emailUnico("anexo");
@@ -921,6 +961,19 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
                         "isomavc1".getBytes(StandardCharsets.ISO_8859_1)),
                 caixa("mdat", "dados de video de teste".getBytes(StandardCharsets.ISO_8859_1)),
                 caixa("moov", faixas.toArray(byte[][]::new)));
+    }
+
+    /** MP4 fragmentado sintético: moov com mvex (padrões dos fragmentos) e um fragmento moof + mdat. */
+    static byte[] mp4Fragmentado() {
+        return bytes(
+                caixa(
+                        "ftyp",
+                        "iso5".getBytes(StandardCharsets.ISO_8859_1),
+                        new byte[] {0, 0, 2, 0},
+                        "iso5avc1".getBytes(StandardCharsets.ISO_8859_1)),
+                caixa("moov", faixa("vide", "avc1"), faixa("soun", "mp4a"), caixa("mvex", caixa("trex", new byte[24]))),
+                caixa("moof", caixa("mfhd", new byte[8])),
+                caixa("mdat", "fragmento de video de teste".getBytes(StandardCharsets.ISO_8859_1)));
     }
 
     /** Pacote XLSX sintético: tipos de conteúdo e, se pedido, pasta de trabalho e projeto de macros. */

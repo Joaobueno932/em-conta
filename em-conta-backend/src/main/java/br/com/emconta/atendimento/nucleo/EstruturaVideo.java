@@ -11,9 +11,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Codecs de um vídeo MP4/3GPP a enviar. A Cloud API só aceita vídeo H.264 e áudio AAC, com no máximo
- * uma faixa de áudio ("Supported media types"); fora disso a Meta recusaria o arquivo só depois do
- * upload. Lê apenas os cabeçalhos das caixas ISO BMFF ({@code moov → trak → mdia → hdlr/minf → stbl →
+ * Estrutura e codecs de um vídeo MP4/3GPP a enviar. A Cloud API só aceita vídeo H.264 e áudio AAC, com
+ * no máximo uma faixa de áudio ("Supported media types"); fora disso a Meta recusaria o arquivo só depois
+ * do upload. MP4 fragmentado ({@code mvex} no {@code moov} ou {@code moof} no topo, como o gerado pelo
+ * MediaRecorder dos navegadores) também é recusado: na homologação de 09/11/2026 a Meta aceitou o envio e
+ * o marcou como falho (#131053, "Media upload error"), enquanto o mesmo conteúdo em MP4 convencional
+ * passou. Lê apenas os cabeçalhos das caixas ISO BMFF ({@code moov → trak → mdia → hdlr/minf → stbl →
  * stsd}), pulando os dados de mídia, com limite de caixas e de profundidade. Vídeos recebidos não passam
  * por aqui: vêm da própria Meta e valem só assinatura, MIME, tamanho e hash.
  */
@@ -22,6 +25,9 @@ final class EstruturaVideo {
     private EstruturaVideo() {}
 
     static final int MAXIMO_CAIXAS = 10_000;
+
+    static final String MP4_FRAGMENTADO = "Este vídeo está em um formato incompatível com o envio pelo WhatsApp."
+            + " Exporte como MP4 padrão e tente novamente.";
     private static final int MAXIMO_PROFUNDIDADE = 8;
 
     private static final Map<String, String> NOMES = Map.ofEntries(
@@ -124,6 +130,8 @@ final class EstruturaVideo {
                     leitura.faixas.add(nova);
                     percorrer(canal, corpo, fimCaixa, profundidade + 1, leitura, nova);
                 }
+                // Marcas de MP4 fragmentado: recusa já, sem ler os fragmentos.
+                case "mvex", "moof" -> throw new ArquivoValidado.Invalido(MP4_FRAGMENTADO);
                 case "moov", "mdia", "minf", "stbl" ->
                     percorrer(canal, corpo, fimCaixa, profundidade + 1, leitura, faixa);
                 // hdlr: versão/flags (4), pre_defined (4) e o tipo da faixa.
