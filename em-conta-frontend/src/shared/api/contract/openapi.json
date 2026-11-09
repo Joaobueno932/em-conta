@@ -1851,6 +1851,34 @@
         }
       }
     },
+    "/api/v1/atendimento/atendimentos/{id}/digitando": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Mostra \"digitando…\" no WhatsApp do contato enquanto o responsável escreve; a Cloud API exige marcar como lida a última mensagem recebida junto (atendimento:responder)",
+        "operationId": "indicarDigitando",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Pedido à Meta ou dispensado (intervalo mínimo de 20 s, sem mensagem recebida, canal não configurado)"
+          },
+          "409": {
+            "description": "NAO_E_RESPONSAVEL ou JANELA_ENCERRADA"
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/atendimentos/{id}/assuncao": {
       "post": {
         "tags": [

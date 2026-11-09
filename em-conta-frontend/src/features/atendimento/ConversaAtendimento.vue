@@ -30,6 +30,8 @@ import {
   nomeContato,
   rotuloDia,
   obterDetalhe,
+  indicarDigitando,
+  INTERVALO_DIGITANDO_MS,
   responder,
   responsaveis,
   transferir,
@@ -235,6 +237,7 @@ const responderMut = useMutation({
     texto.value = ''
   },
   onSuccess: (resposta, conteudo) => {
+    ultimoDigitando = 0
     confirmarLocal(chaveDa(props.id, conteudo), resposta.mensagemId)
     tentativas.delete(operacao(props.id, conteudo))
   },
@@ -389,6 +392,23 @@ function verificarBarra() {
 function fecharBarra() {
   if (pelaBarra.value) respostas.value = null
 }
+
+// "Digitando…" para o contato: só com texto digitado de fato no campo (não ao preencher por código nem
+// com anexo), por quem pode responder agora, no máximo um pedido por intervalo; enviar libera o próximo
+// (o indicador some com a resposta). Falha não aparece: é só um indicador.
+let ultimoDigitando = 0
+function aoDigitar() {
+  verificarBarra()
+  if (motivoComposer.value || arquivo.value || !texto.value.trim()) return
+  const agora = Date.now()
+  if (agora - ultimoDigitando < INTERVALO_DIGITANDO_MS) return
+  ultimoDigitando = agora
+  indicarDigitando(http, props.id).catch(() => {})
+}
+watch(
+  () => props.id,
+  () => (ultimoDigitando = 0),
+)
 function teclarNoCampo(evento: KeyboardEvent) {
   if (pelaBarra.value && seletorRespostas.value?.teclar(evento)) {
     evento.preventDefault()
@@ -815,7 +835,7 @@ async function carregarAnteriores() {
             :aria-controls="pelaBarra ? 'seletor-respostas-lista' : undefined"
             :aria-activedescendant="pelaBarra ? seletorRespostas?.opcaoAtiva : undefined"
             @keydown="teclarNoCampo"
-            @input="verificarBarra"
+            @input="aoDigitar"
             @click="verificarBarra"
             @blur="fecharBarra"
           ></textarea>

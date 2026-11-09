@@ -425,6 +425,17 @@ export function responder(http: HttpClient, id: number, texto: string, chaveIdem
   )
 }
 
+/**
+ * "Digitando…" no WhatsApp do contato (o servidor confere responsável e janela e limita a um pedido a
+ * cada 20 s). A Cloud API exige marcar como lida a última mensagem recebida junto com o indicador.
+ */
+export function indicarDigitando(http: HttpClient, id: number) {
+  return http.request<void>('POST', `/v1/atendimento/atendimentos/${id}/digitando`)
+}
+
+/** Intervalo entre pedidos de "digitando…" enquanto a pessoa escreve (o indicador dura até 25 s). */
+export const INTERVALO_DIGITANDO_MS = 20_000
+
 export function vincularAssociado(
   http: HttpClient,
   id: number,

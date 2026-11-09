@@ -542,6 +542,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/atendimentos/{id}/digitando": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mostra "digitando…" no WhatsApp do contato enquanto o responsável escreve; a Cloud API exige marcar como lida a última mensagem recebida junto (atendimento:responder) */
+        post: operations["indicarDigitando"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/atendimentos/{id}/assuncao": {
         parameters: {
             query?: never;
@@ -3136,6 +3153,33 @@ export interface operations {
                 content?: never;
             };
             /** @description NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    indicarDigitando: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedido à Meta ou dispensado (intervalo mínimo de 20 s, sem mensagem recebida, canal não configurado) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description NAO_E_RESPONSAVEL ou JANELA_ENCERRADA */
             409: {
                 headers: {
                     [name: string]: unknown;

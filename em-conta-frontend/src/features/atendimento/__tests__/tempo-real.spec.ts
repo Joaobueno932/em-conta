@@ -241,4 +241,23 @@ describe('Atualização em tempo real da conversa', () => {
       vi.useRealTimers()
     }
   })
+
+  it('digitar pede "digitando…" no máximo uma vez por intervalo', async () => {
+    const { fetchFn, chamadas } = apiFalsa(
+      rotas(() => [], {
+        [`POST ${BASE}/atendimentos/1/digitando`]: () => new Response(null, { status: 204 }),
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const campo = (await screen.findByLabelText('Mensagem')) as HTMLTextAreaElement
+    await waitFor(() => expect(campo.disabled).toBe(false))
+    const pedidos = () =>
+      chamadas.filter((c) => c === `POST ${BASE}/atendimentos/1/digitando`).length
+    await fireEvent.update(campo, 'O')
+    await fireEvent.update(campo, 'Ol')
+    await fireEvent.update(campo, 'Olá')
+    await waitFor(() => expect(pedidos()).toBe(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(pedidos()).toBe(1)
+  })
 })
