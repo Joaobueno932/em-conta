@@ -27,8 +27,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Adaptador da WhatsApp Cloud API (Meta), API pública do módulo de integrações. Implementa só o que o
@@ -92,6 +95,66 @@ public class WhatsAppCloud {
         } catch (java.security.GeneralSecurityException e) {
             throw new IllegalStateException("HMAC-SHA256 indisponível", e);
         }
+    }
+
+    /**
+     * Parte de uma notificação autenticada que pertence a este canal. {@code corpo} é nulo quando nada
+     * pertence; {@code descartadas} conta as mudanças fora do escopo, das quais nada é guardado.
+     */
+    public record Recorte(byte[] corpo, int descartadas) {}
+
+    /**
+     * Recorta uma notificação já autenticada (assinatura conferida sobre o corpo bruto) ao escopo do
+     * canal: mudanças {@code messages} do {@code phone_number_id} configurado e, se configurada, da WABA
+     * ({@code entry[].id}). Tudo no escopo: o corpo bruto, intacto. Lote misto: um corpo só com as
+     * entradas e mudanças do escopo. Nada no escopo (inclusive JSON inválido): corpo nulo.
+     */
+    public Recorte recortar(byte[] corpo) {
+        JsonNode raiz;
+        try {
+            raiz = json.readTree(corpo);
+        } catch (JacksonException e) {
+            return new Recorte(null, 1);
+        }
+        if (!(raiz instanceof ObjectNode objeto)
+                || !"whatsapp_business_account".equals(raiz.path("object").asString(""))) {
+            return new Recorte(null, 1);
+        }
+        String waba = propriedades.wabaId();
+        ArrayNode entradas = json.createArrayNode();
+        int descartadas = 0;
+        for (JsonNode entrada : raiz.path("entry")) {
+            boolean daWaba = waba == null
+                    || waba.isBlank()
+                    || waba.equals(entrada.path("id").asString(""));
+            ArrayNode mudancas = json.createArrayNode();
+            for (JsonNode mudanca : entrada.path("changes")) {
+                if (daWaba
+                        && "messages".equals(mudanca.path("field").asString(""))
+                        && propriedades
+                                .phoneNumberId()
+                                .equals(mudanca.path("value")
+                                        .path("metadata")
+                                        .path("phone_number_id")
+                                        .asString(""))) {
+                    mudancas.add(mudanca);
+                } else {
+                    descartadas++;
+                }
+            }
+            if (!mudancas.isEmpty()) {
+                entradas.add(((ObjectNode) entrada).deepCopy().set("changes", mudancas));
+            } else if (entrada.path("changes").isEmpty()) {
+                descartadas++; // entrada sem mudanças: o corpo bruto não pode seguir intacto
+            }
+        }
+        if (entradas.isEmpty()) {
+            return new Recorte(null, descartadas);
+        }
+        if (descartadas == 0) {
+            return new Recorte(corpo, 0);
+        }
+        return new Recorte(json.writeValueAsBytes(objeto.deepCopy().set("entry", entradas)), descartadas);
     }
 
     /**

@@ -19,6 +19,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param hostsMidia hosts HTTPS de onde a mídia pode ser baixada com o token (URLs devolvidas pela
  *     consulta de mídia); qualquer outro destino é recusado sem enviar o token
  * @param timeoutDownload tempo máximo de um download de mídia
+ * @param wabaId WhatsApp Business Account do número (opcional); quando informado, eventos de outra
+ *     WABA são descartados no webhook, como os de outro número
  */
 @ConfigurationProperties("emconta.whatsapp")
 public record WhatsAppProperties(
@@ -31,7 +33,8 @@ public record WhatsAppProperties(
         @DefaultValue("5s") Duration timeoutConexao,
         @DefaultValue("20s") Duration timeoutResposta,
         @DefaultValue("lookaside.fbsbx.com") java.util.List<String> hostsMidia,
-        @DefaultValue("60s") Duration timeoutDownload) {
+        @DefaultValue("60s") Duration timeoutDownload,
+        String wabaId) {
 
     public boolean configurado() {
         return preenchido(accessToken) && preenchido(phoneNumberId) && preenchido(appSecret) && preenchido(verifyToken);

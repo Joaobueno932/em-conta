@@ -771,8 +771,8 @@ class AnexosIntegrationTests extends AtendimentoIntegracao {
     }
 
     private void webhookSituacao(String idExterno, String situacao) throws Exception {
-        String corpo = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"1\",\"changes\":[{\"value\":{"
-                + "\"messaging_product\":\"whatsapp\",\"metadata\":{\"phone_number_id\":\"" + NUMERO
+        String corpo = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"" + WABA + "\",\"changes\":["
+                + "{\"value\":{\"messaging_product\":\"whatsapp\",\"metadata\":{\"phone_number_id\":\"" + NUMERO
                 + "\"},\"statuses\":[{"
                 + "\"id\":\"" + idExterno + "\",\"status\":\"" + situacao + "\",\"timestamp\":\"" + agoraEpoch()
                 + "\",\"recipient_id\":\"1\"}]},\"field\":\"messages\"}]}]}";

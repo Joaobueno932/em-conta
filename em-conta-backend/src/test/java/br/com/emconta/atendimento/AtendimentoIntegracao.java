@@ -47,6 +47,9 @@ abstract class AtendimentoIntegracao extends ApiIntegracao {
 
     protected static final String SEGREDO = "app-secret-de-teste";
     protected static final String NUMERO = "106540352242922";
+    /** WABA configurada ({@code entry[].id} das notificações); eventos de outra WABA são descartados. */
+    protected static final String WABA = "102290129340398";
+
     protected static final GraphApiControlada GRAPH;
 
     /**
@@ -76,6 +79,7 @@ abstract class AtendimentoIntegracao extends ApiIntegracao {
     static void canal(DynamicPropertyRegistry registro) {
         registro.add("emconta.whatsapp.access-token", () -> "token-de-teste");
         registro.add("emconta.whatsapp.phone-number-id", () -> NUMERO);
+        registro.add("emconta.whatsapp.waba-id", () -> WABA);
         registro.add("emconta.whatsapp.app-secret", () -> SEGREDO);
         registro.add("emconta.whatsapp.verify-token", () -> "verificacao-de-teste");
         registro.add("emconta.whatsapp.graph-url", GRAPH::url);
@@ -194,13 +198,28 @@ abstract class AtendimentoIntegracao extends ApiIntegracao {
 
     /** Notificação de mensagem de texto no formato do exemplo oficial da Meta. */
     protected static String mensagem(String de, String nome, String id, String texto, long timestamp) {
-        return "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"102290129340398\",\"changes\":[{\"value\":{"
-                + "\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
-                + "\"phone_number_id\":\"" + NUMERO + "\"},\"contacts\":[{\"profile\":{\"name\":\"" + nome + "\"},"
+        return notificacao(entrada(WABA, mudancaTexto(NUMERO, de, nome, id, texto, timestamp)));
+    }
+
+    /** Notificação com uma ou mais entradas ({@code entry[]}), como nos lotes da Meta. */
+    protected static String notificacao(String... entradas) {
+        return "{\"object\":\"whatsapp_business_account\",\"entry\":[" + String.join(",", entradas) + "]}";
+    }
+
+    /** Entrada de uma WABA ({@code entry[].id}) com uma ou mais mudanças. */
+    protected static String entrada(String waba, String... mudancas) {
+        return "{\"id\":\"" + waba + "\",\"changes\":[" + String.join(",", mudancas) + "]}";
+    }
+
+    /** Mudança {@code messages} com uma mensagem de texto recebida pelo número {@code numeroId}. */
+    protected static String mudancaTexto(
+            String numeroId, String de, String nome, String id, String texto, long timestamp) {
+        return "{\"value\":{\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
+                + "\"phone_number_id\":\"" + numeroId + "\"},\"contacts\":[{\"profile\":{\"name\":\"" + nome + "\"},"
                 + "\"wa_id\":\"" + de + "\"}],\"messages\":[{\"from\":\"" + de + "\",\"id\":\"" + id
                 + "\",\"timestamp\":\""
                 + timestamp + "\",\"type\":\"text\",\"text\":{\"body\":\"" + texto
-                + "\"}}]},\"field\":\"messages\"}]}]}";
+                + "\"}}]},\"field\":\"messages\"}";
     }
 
     protected void webhookSituacao(String idExterno, String situacao, String correlacao, Integer erro)

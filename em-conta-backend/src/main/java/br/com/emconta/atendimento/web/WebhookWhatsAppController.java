@@ -21,7 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
  * assinatura {@code X-Hub-Signature-256} calculada sobre o corpo bruto com o App Secret; a verificação
  * inicial usa o verify token, que é outro segredo. Sem canal configurado, tudo é recusado.
  *
- * <p>O corpo autenticado é gravado na caixa de entrada antes do 200; o processamento é assíncrono.
+ * <p>Depois da assinatura, só a parte do número e da WABA configurados é gravada na caixa de entrada,
+ * antes do 200; o restante é descartado sem persistir conteúdo. O processamento é assíncrono.
  * Fora do contrato OpenAPI da aplicação (é contrato da Meta).
  */
 @Hidden
@@ -65,7 +66,17 @@ class WebhookWhatsAppController {
             log.warn("WhatsApp: evento do webhook com assinatura inválida recusado");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        recebimento.registrar(corpo);
+        // Só depois da assinatura: o que não é deste número e desta WABA não é gravado. Responde 200
+        // mesmo assim, para a Meta não reentregar o que nunca será aceito.
+        WhatsAppCloud.Recorte recorte = canal.recortar(corpo);
+        if (recorte.descartadas() > 0) {
+            log.info(
+                    "WhatsApp: {} mudança(s) fora do número ou da WABA descartada(s) sem gravar",
+                    recorte.descartadas());
+        }
+        if (recorte.corpo() != null) {
+            recebimento.registrar(recorte.corpo());
+        }
         return ResponseEntity.ok().build();
     }
 }

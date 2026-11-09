@@ -18,7 +18,8 @@ a documentação oficial:
 |---|---|
 | Verificação do webhook | `GET …/webhook?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` devolve o `challenge` só se o token confere (comparação em tempo constante); senão 403 |
 | Autenticidade | `X-Hub-Signature-256: sha256=<HMAC-SHA256 do corpo bruto com o App Secret>`; sem assinatura válida → 401 e nada é gravado |
-| Notificações | `entry[].changes[].value` com `metadata.phone_number_id`, `contacts`, `messages`, `statuses`; eventos de outro `phone_number_id` são ignorados (contados) |
+| Notificações | `entry[].changes[].value` com `metadata.phone_number_id`, `contacts`, `messages`, `statuses` |
+| Escopo | depois da assinatura, só mudanças `messages` do `phone_number_id` configurado e, com `WHATSAPP_WABA_ID`, da WABA (`entry[].id`) são gravadas. Tudo no escopo: o corpo bruto, intacto. Lote misto: só as entradas e mudanças do escopo. Nada no escopo (outro número, outra WABA, outro campo, JSON inválido): 200 sem gravar nada, para a Meta não reentregar; o log conta as mudanças descartadas, sem conteúdo |
 | Envio | `POST {graph-url}/{versão}/{phone-number-id}/messages` (texto), `Authorization: Bearer`; resposta `messages[].id` + `message_status: accepted` |
 | Correlação | `biz_opaque_callback_data` = correlação interna da mensagem, para casar status mesmo sem o `wamid` |
 | Janela de 24 h | resposta livre até o instante exato de 24 h após a última mensagem do contato, inclusive; depois 409 `JANELA_ENCERRADA` (templates estão fora do escopo). Conferida no registro **e** de novo antes de cada tentativa de envio |
@@ -37,7 +38,8 @@ fictício.
 | `WHATSAPP_APP_SECRET` | segredo do app, valida `X-Hub-Signature-256` |
 | `WHATSAPP_VERIFY_TOKEN` | token escolhido por nós e informado na Meta ao cadastrar o webhook |
 | `WHATSAPP_GRAPH_URL` | padrão `https://graph.facebook.com` (só se troca em teste controlado) |
-| `WHATSAPP_GRAPH_VERSION` | padrão `v23.0` |
+| `WHATSAPP_GRAPH_VERSION` | padrão `v23.0` (disponível até 08/10/2027, conforme o changelog de versões da Graph API) |
+| `WHATSAPP_WABA_ID` | opcional; WABA do número. Com ela, eventos de outra WABA também são descartados no webhook |
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
@@ -51,7 +53,7 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
 | `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação (V7 acrescenta `JANELA_EXPIRADA`), erro, tentativas |
 | `atd_mensagem_situacao` | histórico de status de cada mensagem |
 | `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo) |
-| `atd_webhook_evento` | caixa de entrada do webhook (corpo bruto, hash único, situação, tentativas) |
+| `atd_webhook_evento` | caixa de entrada do webhook (corpo autenticado e recortado ao escopo do canal, hash único, situação, tentativas) |
 | `atd_anexo` | V8: anexo da mensagem (categoria, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
 | `atd_objeto_pendente` | V9: diário durável de objetos do armazenamento que podem ter ficado sem dono no recebimento (`GRAVANDO` antes de gravar, `REMOVER` quando excedente), com tentativas, próxima tentativa e erro; `atd_anexo.reserva` guarda o token da reserva vigente |
 | `atd_presenca` | presença manual do atendente (Disponível/Ausente; não afeta distribuição) |

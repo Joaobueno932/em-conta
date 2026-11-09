@@ -55,6 +55,8 @@ emconta:
     verify-token: ${WHATSAPP_VERIFY_TOKEN:}
     graph-url: ${WHATSAPP_GRAPH_URL:https://graph.facebook.com}
     graph-version: ${WHATSAPP_GRAPH_VERSION:v23.0}
+    # WABA do número (entry[].id). Opcional; quando informada, eventos de outra WABA são descartados.
+    waba-id: ${WHATSAPP_WABA_ID:}
     # Hosts HTTPS de onde a mídia pode ser baixada com o token (o da URL devolvida pela consulta de
     # mídia). Qualquer outro destino é recusado sem enviar o token.
     hosts-midia: ${WHATSAPP_HOSTS_MIDIA:lookaside.fbsbx.com}

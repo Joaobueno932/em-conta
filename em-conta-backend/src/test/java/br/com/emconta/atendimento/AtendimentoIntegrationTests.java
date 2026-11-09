@@ -96,13 +96,75 @@ class AtendimentoIntegrationTests extends AtendimentoIntegracao {
     }
 
     @Test
-    void outroNumeroETipoNaoSuportadoNaoSaoDescartadosEmSilencio() throws Exception {
+    void eventoAssinadoDeOutroNumeroWabaOuCampoNaoEGravadoNemAbreAtendimento() throws Exception {
         String numero = numeroUnico();
-        String outro =
-                mensagem(numero, "X", wamid(), "de outro número", agoraEpoch()).replace(NUMERO, "999999999");
-        enviarWebhook(outro, assinar(outro));
-        String imagem = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"1\",\"changes\":[{\"value\":{"
-                + "\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
+        String base = mensagem(numero, "X", wamid(), "conteudo fora do escopo", agoraEpoch());
+        List<String> foraDoEscopo = List.of(
+                base.replace(NUMERO, "999999999"),
+                base.replace(WABA, "777777777"),
+                base.replace("\"field\":\"messages\"", "\"field\":\"account_update\""),
+                base.replace("whatsapp_business_account", "page"),
+                "não é json " + numero);
+        for (String corpo : foraDoEscopo) {
+            assertThat(enviarWebhook(corpo, assinar(corpo)).getStatus())
+                    .as("assinado: 200 para a Meta não reentregar")
+                    .isEqualTo(200);
+        }
+        processar();
+
+        assertThat(contar("atd_webhook_evento where corpo like :c", "%" + numero + "%"))
+                .as("conteúdo fora do número e da WABA configurados não é persistido")
+                .isZero();
+        assertThat(contar("atd_contato where wa_id = :c", numero)).isZero();
+        assertThat(contar("atd_mensagem where texto = :c", "conteudo fora do escopo"))
+                .isZero();
+    }
+
+    @Test
+    void loteMistoGravaSoAParteDoNumeroEDaWabaConfigurados() throws Exception {
+        String contato = numeroUnico();
+        String alheioOutroNumero = numeroUnico();
+        String alheioOutraWaba = numeroUnico();
+        String daqui = wamid();
+        String deOutroNumero = wamid();
+        String deOutraWaba = wamid();
+        long agora = agoraEpoch();
+        String lote = notificacao(
+                entrada(
+                        WABA,
+                        mudancaTexto(NUMERO, contato, "Contato", daqui, "do numero de teste", agora),
+                        mudancaTexto("999999999", alheioOutroNumero, "Alheio", deOutroNumero, "alheio A", agora)),
+                entrada("777777777", mudancaTexto(NUMERO, alheioOutraWaba, "Alheio", deOutraWaba, "alheio B", agora)));
+
+        assertThat(enviarWebhook(lote, assinar(lote)).getStatus()).isEqualTo(200);
+        assertThat(enviarWebhook(lote, assinar(lote)).getStatus()).isEqualTo(200);
+        assertThat(contar("atd_webhook_evento where corpo like :c", "%" + daqui + "%"))
+                .as("reentrega idêntica do lote não duplica")
+                .isEqualTo(1);
+        String gravado = jdbc.sql("select corpo from atd_webhook_evento where corpo like :c")
+                .param("c", "%" + daqui + "%")
+                .query(String.class)
+                .single();
+        assertThat(gravado)
+                .doesNotContain("alheio A", "alheio B", deOutroNumero, deOutraWaba, alheioOutroNumero, alheioOutraWaba)
+                .doesNotContain("999999999", "777777777");
+        processar();
+
+        assertThat(contar("atd_mensagem where id_externo = :c", daqui)).isEqualTo(1);
+        assertThat(contar("atd_contato where wa_id = :c", contato)).isEqualTo(1);
+        for (String alheio : List.of(alheioOutroNumero, alheioOutraWaba)) {
+            assertThat(contar("atd_contato where wa_id = :c", alheio)).isZero();
+        }
+        for (String id : List.of(deOutroNumero, deOutraWaba)) {
+            assertThat(contar("atd_mensagem where id_externo = :c", id)).isZero();
+        }
+    }
+
+    @Test
+    void tipoNaoSuportadoNaoEDescartadoEmSilencio() throws Exception {
+        String numero = numeroUnico();
+        String imagem = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"" + WABA + "\",\"changes\":["
+                + "{\"value\":{\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15550783881\","
                 + "\"phone_number_id\":\"" + NUMERO
                 + "\"},\"contacts\":[{\"profile\":{\"name\":\"Imagem\"},\"wa_id\":\""
                 + numero + "\"}],\"messages\":[{\"from\":\"" + numero + "\",\"id\":\"" + wamid() + "\",\"timestamp\":\""
@@ -111,12 +173,6 @@ class AtendimentoIntegrationTests extends AtendimentoIntegracao {
         enviarWebhook(imagem, assinar(imagem));
         processar();
 
-        assertThat(jdbc.sql("select ignorados from atd_webhook_evento where corpo = :c")
-                        .param("c", outro)
-                        .query(Integer.class)
-                        .single())
-                .isEqualTo(1);
-        assertThat(contar("atd_mensagem where texto = :c", "de outro número")).isZero();
         Map<String, Object> msg = jdbc.sql("select m.tipo, m.tipo_externo from atd_mensagem m join atd_conversa v on"
                         + " v.id = m.conversa_id join atd_contato c on c.id = v.contato_id where c.wa_id = :n")
                 .param("n", numero)
@@ -277,7 +333,8 @@ class AtendimentoIntegrationTests extends AtendimentoIntegracao {
                 .isEqualTo(1);
 
         // Falha de processamento: retentativas e, ao final, FALHA com reprocessamento manual.
-        String quebrado = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"field\":\"messages\","
+        String quebrado = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"" + WABA
+                + "\",\"changes\":[{\"field\":\"messages\","
                 + "\"value\":{\"metadata\":{\"phone_number_id\":\"" + NUMERO
                 + "\"},\"messages\":[{\"from\":\"1\",\"id\":\""
                 + wamid() + "\",\"type\":\"text\",\"text\":{\"body\":\"" + "x".repeat(70_000) + "\"}}]}}]}]}";
