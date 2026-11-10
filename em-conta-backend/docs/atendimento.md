@@ -482,8 +482,10 @@ Procedimento:
 4. `subir`; depois `tunel-abrir`, que confere 404 na raiz e 403 no webhook sem token antes de abrir e
    grava a URL em `tunel-url.txt`. Cadastrar na Meta `https://<url>/api/v1/integracoes/whatsapp/webhook`
    com o `WHATSAPP_VERIFY_TOKEN` e assinar só o campo `messages`. A URL muda a cada abertura.
-5. **Token temporário** (expira em poucas horas): renovar no painel da Meta, salvar no `whatsapp.env`,
-   rodar `conferir` e recriar só a API (`descer` + `subir`); o túnel e o cadastro continuam.
+5. **Token temporário** (expira em cerca de 1 h): renovar no painel da Meta, salvar no `whatsapp.env`,
+   rodar `conferir` e recriar só a API (`descer` + `subir`); o túnel e o cadastro continuam. Com o
+   editor aberto no arquivo, não deixe o valor selecionado ao conversar com assistentes integrados ao
+   editor: a seleção vai junto com a mensagem.
 6. Destinatário no modo de desenvolvimento: o número precisa estar na lista "Até" do painel no mesmo
    formato do `wa_id` que a Meta devolve. Celular brasileiro chegou com 12 dígitos (sem o nono dígito); com
    13 dígitos na lista, a resposta falhou com #131030. O Em Conta usa o `wa_id` como veio, sem regra de
@@ -504,8 +506,28 @@ Resultados de 09/11/2026, com a Meta e confirmados no celular de teste:
 | "Digitando…" | Apareceu no WhatsApp antes do texto; a última mensagem recebida (a planilha) ficou com tiques azuis, como a Meta exige |
 | Tempo real | Balão com relógio 12 a 60 ms após enviar; webhook → processamento 8 a 14 ms (antes 0,1 a 2 s); processamento → ícone na tela 44 a 140 ms (antes até 5 s). O tempo da Meta até o webhook (1,3 a 4,2 s) não depende do Em Conta |
 
-Ainda não homologado com a Meta: envio de imagem com legenda e de áudio pelo Em Conta, e encerramento,
-histórico e novo ciclo com o canal real (cobertos só pelos testes controlados).
+Resultados de 10/11/2026 (mesmo número e WABA de teste; número oficial e GDASH intocados). Em cada
+envio: o que a Meta aceitou, o que chegou pelo webhook e o que foi confirmado no celular.
+
+| Cenário | Meta | Webhook | Celular |
+|---|---|---|---|
+| Imagem JPEG sintética com legenda | upload e mensagem aceitos | `sent`, `delivered` (repetido pela Meta, sem efeito), `read`; cada um processado 7 a 13 ms após chegar | imagem e legenda chegaram juntas |
+| Áudio AAC sintético (3 s) | upload e mensagem aceitos | `sent`, `delivered`, `read` | chegou e tocou |
+| Encerramento do ATD-000001 pela tela | — | — | saiu de Em andamento, Meus e Aguardando; no histórico, "Conversa encerrada · Somente leitura", sem compositor nem ações, com as 22 mensagens, as situações (9 lidas, 4 falhas: as três #131030 e o MP4 fragmentado) e os 12 anexos |
+| Nova mensagem do celular | — | mensagem recebida | abriu o **ATD-000002** em Aguardando, sem responsável; uma só conversa e um só atendimento aberto; o ATD-000001 ficou igual (situação, versão, encerramento, mensagens, eventos e anexos) |
+
+Achados da rodada:
+
+- O compositor recusava `.aac` no Windows ("Tipo não suportado"): o sistema registra a extensão como
+  `audio/vnd.dlna.adts`. Nada chegava ao servidor nem à Meta. Corrigido: apelidos conhecidos dos tipos
+  aceitos valem com a extensão certa e o envio leva o tipo canônico.
+- Depois de uma reinicialização da máquina, o Docker parado derruba API, túnel e callback; o Quick Tunnel
+  volta com outra URL, que precisa ser recadastrada.
+- **Troca do verify token** (o anterior ficou exposto): `trocar-verify-token`, `descer` e `subir`
+  (token antigo → 403, novo → 200 com o desafio). Salvar no painel com a mesma URL não refez a
+  verificação (nenhum GET chegou ao proxy). A verificação foi forçada pela Graph API, com autorização,
+  atualizando a assinatura do app de teste (`POST /{app-id}/subscriptions` com a mesma URL, `messages` e o
+  token lido do arquivo): a Meta verificou na hora (GET 200) e respondeu `success: true`.
 
 ## Testes
 
