@@ -327,9 +327,32 @@ export function formatoDoAnexo(
 }
 
 /**
+ * Outros nomes que sistemas operacionais dão aos tipos aceitos. O Windows, por exemplo, registra .aac
+ * como `audio/vnd.dlna.adts` e o Chrome repassa esse tipo (visto na homologação). Só valem com a extensão
+ * do formato; o envio leva o tipo canônico.
+ */
+const APELIDOS_MIME: Record<string, string> = {
+  'audio/vnd.dlna.adts': 'audio/aac',
+  'audio/x-aac': 'audio/aac',
+  'audio/aacp': 'audio/aac',
+  'audio/x-hx-aac-adts': 'audio/aac',
+  'audio/x-m4a': 'audio/mp4',
+  'audio/m4a': 'audio/mp4',
+  'audio/mp3': 'audio/mpeg',
+  'audio/x-mp3': 'audio/mpeg',
+  'audio/mpeg3': 'audio/mpeg',
+  'audio/x-mpeg': 'audio/mpeg',
+  'audio/opus': 'audio/ogg',
+  'image/jpg': 'image/jpeg',
+  'image/pjpeg': 'image/jpeg',
+  'application/x-pdf': 'application/pdf',
+}
+
+/**
  * Validação antecipada (o servidor confere de novo, inclusive o conteúdo). Sem tipo informado pelo
- * sistema (comum em .3gp e .xlsx no Windows), o formato vem da extensão e o envio leva esse tipo; o
- * servidor confere o conteúdo do mesmo jeito.
+ * sistema (comum em .3gp e .xlsx no Windows), o formato vem da extensão; com um apelido conhecido
+ * ({@link APELIDOS_MIME}), vale o tipo canônico. Nos dois casos o envio leva o tipo canônico e o servidor
+ * confere o conteúdo do mesmo jeito.
  */
 export function validarArquivo(
   arquivo: File,
@@ -340,7 +363,7 @@ export function validarArquivo(
   const semTipo = !arquivo.type || arquivo.type === 'application/octet-stream'
   const formato = semTipo
     ? FORMATOS_ANEXO.find((f) => f.extensoes.includes(extensao))
-    : FORMATOS_ANEXO.find((f) => f.mime === arquivo.type)
+    : FORMATOS_ANEXO.find((f) => f.mime === (APELIDOS_MIME[arquivo.type] ?? arquivo.type))
   if (!formato)
     return {
       erro: 'Tipo não suportado. Envie JPEG, PNG, PDF, planilha XLSX, vídeo MP4 ou 3GP, ou áudio (AAC, AMR, MP3, M4A, OGG).',

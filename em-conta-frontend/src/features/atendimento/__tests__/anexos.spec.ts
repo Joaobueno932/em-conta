@@ -297,6 +297,34 @@ describe('Anexos no atendimento', () => {
     expect(await screen.findByText(/acima do limite de 16,0 MB para vídeo/)).toBeTruthy()
   })
 
+  it('áudio .aac com o tipo que o Windows informa é aceito e enviado como audio/aac', async () => {
+    const enviados: File[] = []
+    const { fetchFn } = apiFalsa(
+      rotas([mensagem(1)], {
+        [`POST ${BASE}/atendimentos/1/anexos`]: (init) => {
+          const dados = init?.body as FormData
+          enviados.push(dados.get('arquivo') as File)
+          return jsonResponse({ mensagemId: 99 }, 202)
+        },
+      }),
+    )
+    await montarApp(fetchFn, '/atendimento?id=1')
+    const entrada = (await waitFor(() => {
+      const el = document.querySelector('input[type=file]')
+      expect(el).toBeTruthy()
+      return el
+    })) as HTMLInputElement
+    // Apelido só vale com a extensão do formato.
+    await selecionar(entrada, arquivo('audio.mp3', 'audio/vnd.dlna.adts', 2048))
+    expect(await screen.findByText(/não corresponde ao tipo/)).toBeTruthy()
+    await selecionar(entrada, arquivo('mensagem.aac', 'audio/vnd.dlna.adts', 2048))
+    expect(await screen.findByText(/Áudio AAC · 2 KB/)).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    await waitFor(() => expect(enviados).toHaveLength(1))
+    expect(enviados[0]!.name).toBe('mensagem.aac')
+    expect(enviados[0]!.type).toBe('audio/aac')
+  })
+
   it('vídeo em formato recusado pelo servidor mostra só o motivo, sem sugerir repetir', async () => {
     const MOTIVO =
       'Este vídeo está em um formato incompatível com o envio pelo WhatsApp. Exporte como MP4 padrão e tente novamente.'
