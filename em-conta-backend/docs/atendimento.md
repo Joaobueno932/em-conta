@@ -2,7 +2,9 @@
 
 Primeira jornada: receber mensagem → localizar ou criar a conversa → fila → assumir → ler e
 responder → vincular associado existente → transferir → encerrar e consultar o histórico. Nova
-mensagem depois do encerramento abre outro atendimento (`AGUARDANDO`) na mesma conversa.
+mensagem depois do encerramento abre outro atendimento (`AGUARDANDO`) na mesma conversa. Segunda
+etapa: presença automática ou manual, aviso ao cliente de quem passa a atendê-lo e notas internas (ver
+[Presença, avisos e notas](#presença-avisos-e-notas)).
 
 Fora do escopo desta versão (sem botões na interface): envio em massa, respostas rápidas, chatbot/IA,
 CRM, tickets/SLA, automações, dashboards, templates, setor, protocolo, etiquetas, gravação pelo
@@ -43,20 +45,21 @@ fictício.
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
-## Modelo (V6 a V12)
+## Modelo (V6 a V15)
 
 | Tabela | Conteúdo |
 |---|---|
 | `atd_contato` | contato do WhatsApp (`wa_id` único, nome do perfil) |
 | `atd_conversa` | uma por contato; associado vinculado, última entrada (janela de 24 h), `versao` |
 | `atd_atendimento` | ciclo `AGUARDANDO → EM_ATENDIMENTO → ENCERRADO`, responsável, `versao`; índice único garante um só ciclo aberto por conversa |
-| `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação (V7 acrescenta `JANELA_EXPIRADA`), erro, tentativas |
+| `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação (V7 acrescenta `JANELA_EXPIRADA`), erro, tentativas; V14 acrescenta a `origem` (CONTATO, ATENDENTE ou AVISO_RESPONSAVEL) |
 | `atd_mensagem_situacao` | histórico de status de cada mensagem |
 | `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo) |
 | `atd_webhook_evento` | caixa de entrada do webhook (corpo autenticado e recortado ao escopo do canal, hash único, situação, tentativas) |
 | `atd_anexo` | V8: anexo da mensagem (categoria — V11 acrescenta `VIDEO` —, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
 | `atd_objeto_pendente` | V9: diário durável de objetos do armazenamento que podem ter ficado sem dono no recebimento (`GRAVANDO` antes de gravar, `REMOVER` quando excedente), com tentativas, próxima tentativa e erro; `atd_anexo.reserva` guarda o token da reserva vigente |
-| `atd_presenca` | presença manual do atendente (Disponível/Ausente; não afeta distribuição) |
+| `atd_presenca` | presença do atendente (Disponível/Ausente; não afeta distribuição); V13 acrescenta o `modo` (AUTOMATICO ou MANUAL) |
+| `atd_nota` | V15: nota interna da equipe (conversa, ciclo, autor, texto, horário, chave de idempotência); fora de `atd_mensagem`, então nunca na fila de envio |
 | `atd_sinal` | V12: contador de mudanças por conversa, incrementado depois de cada commit que altera a linha do tempo; só sinal, sem conteúdo (ver [Atualização em tempo real](#atualização-em-tempo-real)) |
 
 ## Consistência, eventos e repetição
@@ -150,7 +153,9 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | Método e caminho | Uso |
 |---|---|
 | `GET canal` | canal configurado ou não |
-| `GET`/`PUT presenca` | presença manual |
+| `GET`/`PUT presenca` | presença; `PUT` com `modo` MANUAL (+ `disponivel`) ou AUTOMATICO |
+| `POST presenca/atividade` | começou a responder (`atendimentoId`): no automático passa a Disponível; escolha manual não muda (atendimento:responder) |
+| `POST atendimentos/{id}/notas` | nota interna (`texto`, `chaveIdempotencia`) → 201; só o responsável atual, em atendimento (atendimento:responder) |
 | `GET atendimentos?visao=AGUARDANDO\|EM_ANDAMENTO\|MEUS\|ENCERRADOS&busca=&pagina=&tamanho=` | fila com contagens |
 | `GET atendimentos/{id}` | conversa |
 | `GET atendimentos/{id}/linha-do-tempo?somenteEste=&antes=&tamanho=` | página da linha do tempo (ver abaixo) |
@@ -398,6 +403,62 @@ atendimento a usa em `associado_id in (...)`. O banco resolve a semijunção; n�
 de associados em memória, junção de linhas (sem duplicar atendimentos) nem exposição de documento.
 Total, páginas e ordenação continuam os mesmos da consulta.
 
+## Presença, avisos e notas
+
+### Presença do atendente (V13)
+
+Presença é só da pessoa: informa os colegas, não muda a distribuição nem o estado das conversas.
+
+- **Automático** (padrão de quem nunca escolheu): ao começar a escrever uma resposta numa conversa que
+  pode atender (responsável atual, em atendimento), a tela pede `POST presenca/atividade` e a presença
+  passa a Disponível. Só pede quando está no automático e Ausente.
+- **Manual**: Disponível ou Ausente escolhidos na fila valem até a pessoa voltar ao automático. A
+  atividade é ignorada nesse modo, e a condição está no próprio comando
+  (`situacao = if(modo = 'AUTOMATICO', 'DISPONIVEL', situacao)`): um pedido automático atrasado, de
+  outra aba ou de uma rede lenta, que chegue depois da escolha manual, não a sobrescreve.
+- **Entre abas**: cada mudança avisa as outras abas pelo `BroadcastChannel` (`emconta-presenca`), que
+  relêem do servidor; ao voltar o foco, a consulta também relê. Entre duas respostas fora de ordem, a
+  tela fica com a de `atualizadoEm` mais novo.
+
+### Aviso ao cliente na mudança de responsável (V14)
+
+Ao assumir um atendimento ou transferi-lo para alguém, a mesma transação grava na fila de envio uma
+mensagem ao cliente: "Olá! Seu atendimento agora está com {nome}." (o nome de exibição do novo
+responsável). Devolver à fila não avisa.
+
+- **Um aviso por mudança efetiva**: a chave `aviso:responsavel:<atendimento>:<versão>` é única. Assumir
+  ao mesmo tempo já deixa só um vencedor (UPDATE condicional) e transferir exige a versão vista, então
+  repetir, reprocessar ou disputar a ação não cria outro aviso. O `:` não é aceito nas chaves vindas da
+  interface, que não podem ocupar a do aviso.
+- **Mesma fila e mesmas regras das respostas**: o `Envio` confere a janela de 24 h na hora do envio
+  (fora dela, `JANELA_EXPIRADA`), registra recusa (`FALHA`) ou resultado desconhecido e nunca desfaz a
+  atribuição, que já foi confirmada.
+- **Origem `AVISO_RESPONSAVEL`**: aparece na conversa como mensagem enviada, com "Aviso automático" no
+  lugar do autor; não muda a ordem da fila; fica fora da **primeira resposta humana**
+  (`primeiraRespostaHumanaEm` no detalhe, mostrada no histórico), que só conta mensagens de origem
+  ATENDENTE.
+- Desligável com `EMCONTA_ATENDIMENTO_AVISO_RESPONSAVEL_HABILITADO=false`. Sem canal configurado, nada é
+  gravado.
+
+### Notas internas (V15)
+
+Aba **Nota interna** ao lado de **Mensagem** no compositor (AT-04), com rascunho próprio. A nota registra
+texto (até 4096), autor e horário e entra na linha do tempo da conversa e no histórico do ciclo, no
+centro, com fundo próprio e o rótulo "Nota interna · só a equipe vê", para quem tem
+`atendimento:consultar`.
+
+- **Nunca vai ao cliente**: fica em `atd_nota`, separada de `atd_mensagem`; a fila de envio só lê
+  mensagens. Digitar na nota não aciona "digitando…" nem a presença automática.
+- Mesma regra das ações na conversa: só o **responsável atual**, com o atendimento em andamento e a
+  permissão `atendimento:responder`, registra notas; outros atendentes leem (409 `NAO_E_RESPONSAVEL`,
+  inclusive na fila sem responsável e para quem transferiu). A janela de 24 h e o canal não se aplicam,
+  porque nada vai ao cliente: com a janela fechada, a aba Mensagem mostra o motivo e a aba Nota interna
+  continua disponível. Atendimento encerrado → 409 `ATENDIMENTO_ENCERRADO`. A interface mostra as abas
+  só a quem o servidor aceita. Chave de idempotência como nas respostas: repetir devolve a mesma nota;
+  mesma chave com outro texto → 409.
+- Na linha do tempo, o cursor das notas tem ordem `2` (`<microssegundos>.2.<id>`), depois de evento
+  (`0`) e mensagem (`1`) no mesmo instante. Cada nota avisa as telas abertas (SSE) como as mensagens.
+
 ## Respostas rápidas (V10)
 
 Catálogo da equipe com textos internos para inserir no campo de resposta. **Não são templates
@@ -546,7 +607,14 @@ Achados da rodada:
 - `EventosConversaIntegrationTests`: aviso SSE só depois do commit e só para a conversa alterada, sem
   conteúdo; ação recusada não sinaliza; sessão, permissão e atendimento existente; chave da operação só
   para o autor. `ProcessamentoAtendimentoTests`: pedidos de processamento imediato agrupados, sem perder
-  o que chega durante uma execução. `DigitandoIntegrationTests`: formato documentado do indicador
+  o que chega durante uma execução. `PresencaIntegrationTests`: automático, precedência da escolha
+  manual contra atividade atrasada, volta ao automático e permissões. `AvisoResponsavelIntegrationTests`
+  (aviso ligado): um aviso por mudança efetiva (assumir, transferir, repetir, versão antiga, quatro
+  sessões assumindo ao mesmo tempo), nome de quem passa a atender, falha e janela fechada sem desfazer a
+  atribuição e fora da primeira resposta humana. `NotasIntegrationTests`: nota na linha do tempo e no
+  histórico, nada na fila nem na Graph, idempotência, janela fechada, responsável, outro atendente (antes
+  e depois de transferir), fila sem responsável e atendimento encerrado.
+  `DigitandoIntegrationTests`: formato documentado do indicador
   (leitura da última recebida + `typing_indicator`), intervalo mínimo, resposta liberando o próximo,
   regras de resposta e permissão.
 - Frontend: `src/features/atendimento/__tests__` (Vitest; `tempo-real.spec.ts` cobre aviso → releitura,
