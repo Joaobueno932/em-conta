@@ -530,7 +530,7 @@ modo de desenvolvimento). O número oficial (GDASH) não é usado nem alterado. 
 |---|---|
 | API | `127.0.0.1:8091` (`emconta-api-homolog`), banco `emconta_homolog`, bucket `emconta-homolog` com conta de serviço restrita a ele |
 | Frontend | `npx vite preview --port 5175` com `EM_CONTA_API_PROXY_TARGET=http://localhost:8091` (build de produção) |
-| Segredos | `~/.emconta/homologacao/` (fora do repositório e do OneDrive; o script recusa outro lugar): `whatsapp.env`, `armazenamento.env`, `admin.txt`, `cacerts` |
+| Segredos | `~/.emconta/homologacao/` (fora do repositório e do OneDrive; o script recusa outro lugar): `whatsapp.env`, `armazenamento.env`, `admin.txt`, `cacerts` e, para a jornada com duas atendentes, `atendente2.txt` |
 | Túnel | Cloudflare Quick Tunnel (imagem oficial fixada por digest) → nginx (`infra/homologacao-webhook.conf`) que só repassa `/api/v1/integracoes/whatsapp/webhook`; raiz e demais rotas dão 404 |
 
 Procedimento:
@@ -589,6 +589,27 @@ Achados da rodada:
   verificação (nenhum GET chegou ao proxy). A verificação foi forçada pela Graph API, com autorização,
   atualizando a assinatura do app de teste (`POST /{app-id}/subscriptions` com a mesma URL, `messages` e o
   token lido do arquivo): a Meta verificou na hora (GET 200) e respondeu `success: true`.
+
+Resultados de 16/11/2026: presença, avisos de responsável e notas internas no **ATD-000002** (mesmo
+número e WABA de teste; número oficial e GDASH intocados). Duas sessões de atendente na 5175: a
+"Administrador da homologação" e a "Segunda Atendente" (convite pelo Mailpit, perfil Administrador, senha
+só em `~/.emconta/homologacao/atendente2.txt`). Callback recadastrado no painel (GET 200 da Meta) e
+assinatura conferida pela Graph API: ativa, só `messages`, sem `override_callback_uri` na WABA.
+
+| Passo | Em Conta | Meta e webhook | Celular |
+|---|---|---|---|
+| Mensagem inicial | chegou ao ATD-000002 em Aguardando | entregue pela Meta cerca de 33 min depois do envio no celular; nada falhou do nosso lado | — |
+| A primeira assume | aviso na fila com `origem = AVISO_RESPONSAVEL`, chave `aviso:responsavel:2:1`; primeira resposta humana vazia | aceita → `sent` → `delivered` → `read` | "Olá! Seu atendimento agora está com Administrador da homologação." |
+| Nota interna "HMG08" e transferência | nota visível para as duas, com autora; nenhum envio com o texto dela; a primeira perde compositor, aba de nota e ações, e o servidor recusa a resposta dela (409 `NAO_E_RESPONSAVEL`) | segundo aviso, chave `aviso:responsavel:2:2`: aceita → `delivered` antes de `sent` (sem regredir) → `read` | "Olá! Seu atendimento agora está com Segunda Atendente."; a nota não apareceu |
+| A segunda, em Ausente manual, digita e responde | vê nota, histórico, evento de transferência e os dois avisos como "Aviso automático"; digitar e responder mantêm Ausente manual; primeira resposta humana vazia após os dois avisos e preenchida com o horário da resposta dela | aceita → `sent` → `delivered` → `read` | a resposta chegou |
+
+Exatamente dois avisos saíram, um por mudança de responsável, na ordem esperada e com os nomes certos,
+confirmados no celular. Os 10 eventos do webhook da rodada foram processados, sem descartes nem erros.
+
+Achado da rodada: a Meta pode demorar dezenas de minutos para entregar a primeira mensagem recebida
+depois de recadastrar o callback, mesmo com verificação e assinatura corretas. Antes de concluir que algo
+falhou, confira no proxy se chegou algum POST e, na Graph API, a assinatura do app e o
+`override_callback_uri` da WABA.
 
 ## Testes
 
