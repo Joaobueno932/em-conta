@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect, test, type Page } from '@playwright/test'
 
 import {
@@ -190,6 +192,24 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   await expect(page.getByText(/encerrou o atendimento/)).toBeVisible()
   await expect(page.getByText('Conversa encerrada · Somente leitura')).toBeVisible()
   const codigoEncerrado = /ATD-\d+/.exec((await trilha.textContent()) ?? '')![0]
+  const download = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Exportar conversa' }).click()
+  const arquivo = await download
+  expect(arquivo.suggestedFilename()).toBe(`conversa-${codigoEncerrado}.txt`)
+  expect(await readFile(await arquivo.path(), 'utf8')).toContain(
+    'Bom dia! Vou verificar sua fatura.',
+  )
+
+  await page.getByRole('link', { name: 'Voltar ao histórico geral' }).click()
+  await page.getByLabel('Buscar contato').fill(codigoEncerrado)
+  await page.getByRole('button', { name: 'Filtrar' }).click()
+  await expect(page.getByRole('row').filter({ hasText: codigoEncerrado })).toHaveCount(1)
+  await expect(page.getByRole('row')).toHaveCount(2)
+  await page.getByLabel('Buscar contato').fill('ATD-999999999999999999999')
+  await page.getByRole('button', { name: 'Filtrar' }).click()
+  await expect(page.getByText(/Nenhum resultado correspondente/)).toBeVisible()
+  await page.getByRole('link', { name: 'Voltar ao atendimento' }).click()
+  await expect(page).toHaveURL(/\/atendimento$/)
 
   // 6. Nova mensagem depois do encerramento abre outro ciclo na fila, na mesma conversa.
   await webhookDeTeste.mensagem(page.request, waId, nome, 'Esqueci de perguntar uma coisa')
@@ -200,6 +220,12 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   await expect(page.getByText('Aguardando atendimento')).toBeVisible()
   await expect(page.getByText('Esqueci de perguntar uma coisa')).toBeVisible()
   await expect(page.getByText(codigoEncerrado)).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Ver opções' }).click()
+  await page.getByRole('link', { name: 'Histórico geral' }).last().click()
+  await page.getByRole('row').filter({ hasText: codigoEncerrado }).getByRole('link').click()
+  await expect(page.getByText('Bom dia! Vou verificar sua fatura.')).toBeVisible()
+  await expect(page.getByText('Esqueci de perguntar uma coisa')).toHaveCount(0)
 })
 
 test('transferência entre dois atendentes: só o novo responsável responde e encerra', async ({
