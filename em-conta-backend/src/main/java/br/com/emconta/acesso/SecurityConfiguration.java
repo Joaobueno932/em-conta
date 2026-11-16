@@ -152,6 +152,7 @@ class SecurityConfiguration {
                             "/api/v1/atendimento/atendimentos/*/eventos",
                             "/api/v1/atendimento/atendimentos/*/midia",
                             "/api/v1/atendimento/atendimentos/*/anexos/*/conteudo",
+                            "/api/v1/atendimento/atendimentos/*/exportacao",
                             "/api/v1/atendimento/historico")
                     .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
             auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/presenca")

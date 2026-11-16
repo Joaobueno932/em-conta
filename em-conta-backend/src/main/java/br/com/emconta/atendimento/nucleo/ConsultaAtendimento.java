@@ -7,7 +7,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -24,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Consultas do atendimento: fila, detalhe, linha do tempo e histórico geral. Uma consulta por página
- * e outra para o total; busca no servidor por nome do perfil ou número (trecho).
+ * e outra para o total; busca no servidor por nome do perfil, número (trecho), associado ou protocolo.
  */
 @Component
 public class ConsultaAtendimento {
@@ -35,11 +36,22 @@ public class ConsultaAtendimento {
     private final Clock clock;
 
     private final CatalogoAssociados associados;
+    private final ZoneId fuso;
 
-    ConsultaAtendimento(JdbcClient jdbc, Clock clock, CatalogoAssociados associados) {
+    ConsultaAtendimento(
+            JdbcClient jdbc,
+            Clock clock,
+            CatalogoAssociados associados,
+            @Value("${emconta.negocio.fuso:America/Campo_Grande}") String fuso) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.associados = associados;
+        this.fuso = ZoneId.of(fuso);
+    }
+
+    /** Fuso das datas de negócio: período do histórico e horários da conversa exportada. */
+    public ZoneId fuso() {
+        return fuso;
     }
 
     public enum Visao {
@@ -104,19 +116,26 @@ public class ConsultaAtendimento {
         return mapa;
     }
 
-    /** Histórico geral: atendimentos encerrados, com busca e período (datas em UTC). */
+    /**
+     * Histórico geral: atendimentos encerrados, com busca e período de encerramento. As datas são dias do
+     * negócio ({@link #fuso()}), inclusivas nas duas pontas: um encerramento às 22h de um dia em Campo
+     * Grande pertence a esse dia, mesmo que em UTC já seja o seguinte.
+     */
     @Transactional(readOnly = true)
     public Page<Resumo> historico(String busca, LocalDate de, LocalDate ate, int pagina, int tamanho) {
+        if (de != null && ate != null && de.isAfter(ate)) {
+            throw FalhaAtendimento.campoInvalido("ate", "A data final deve ser igual ou posterior à inicial.");
+        }
         List<String> condicoes = new ArrayList<>(List.of("a.situacao = 'ENCERRADO'"));
         Map<String, Object> params = new LinkedHashMap<>();
         adicionarBusca(busca, condicoes, params);
         if (de != null) {
             condicoes.add("a.encerrado_em >= :de");
-            params.put("de", Timestamp.from(de.atStartOfDay().toInstant(ZoneOffset.UTC)));
+            params.put("de", Timestamp.from(de.atStartOfDay(fuso).toInstant()));
         }
         if (ate != null) {
             condicoes.add("a.encerrado_em < :ate");
-            params.put("ate", Timestamp.from(ate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)));
+            params.put("ate", Timestamp.from(ate.plusDays(1).atStartOfDay(fuso).toInstant()));
         }
         return pagina(
                 " where " + String.join(" and ", condicoes),
@@ -127,16 +146,28 @@ public class ConsultaAtendimento {
     }
 
     /**
-     * Busca por nome do perfil do WhatsApp, número (trecho com 4+ dígitos) ou nome do associado vinculado
-     * (PF ou PJ). O critério do associado vem da API pública do módulo de associados (subconsulta de
-     * ids, sem limite); cada atendimento aparece uma vez (filtro, não junção) e o total reflete tudo.
+     * Busca por nome do perfil do WhatsApp, número (trecho com 4+ dígitos), nome do associado vinculado
+     * (PF ou PJ) ou protocolo. O critério do associado vem da API pública do módulo de associados
+     * (subconsulta de ids, sem limite); cada atendimento aparece uma vez (filtro, não junção) e o total
+     * reflete tudo. Protocolo: {@code ATD-000123}, {@code atd123} ou só o número; com o prefixo, vale só o
+     * protocolo (os dígitos não viram trecho de telefone).
      */
     private void adicionarBusca(String busca, List<String> condicoes, Map<String, Object> params) {
         String termo = busca == null ? "" : busca.strip();
         if (termo.isEmpty()) {
             return;
         }
+        var protocolo = PROTOCOLO.matcher(termo);
+        if (protocolo.matches() && protocolo.group(1) != null) {
+            condicoes.add("a.id = :protocolo");
+            params.put("protocolo", Long.parseLong(protocolo.group(2)));
+            return;
+        }
         List<String> alternativas = new ArrayList<>(List.of("c.nome_perfil like :busca escape '!'"));
+        if (protocolo.matches()) {
+            alternativas.add("a.id = :protocolo");
+            params.put("protocolo", Long.parseLong(protocolo.group(2)));
+        }
         params.put("busca", "%" + termo.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
         String digitos = termo.replaceAll("\\D", "");
         if (digitos.length() >= 4) {
@@ -149,6 +180,9 @@ public class ConsultaAtendimento {
         });
         condicoes.add("(" + String.join(" or ", alternativas) + ")");
     }
+
+    /** Protocolo exibido como {@code ATD-%06d}: prefixo opcional (com ou sem hífen) e o número. */
+    private static final Pattern PROTOCOLO = Pattern.compile("(?i)(atd\\s*-?\\s*)?0*(\\d{1,18})");
 
     private Page<Resumo> pagina(String where, String ordem, Map<String, Object> params, int pagina, int tamanho) {
         var contagem = jdbc.sql("select count(*) from atd_atendimento a join atd_conversa v on v.id = a.conversa_id"

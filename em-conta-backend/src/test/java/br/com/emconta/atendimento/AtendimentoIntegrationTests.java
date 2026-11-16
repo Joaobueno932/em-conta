@@ -8,8 +8,10 @@ import br.com.emconta.acesso.usuarios.Perfil;
 import br.com.emconta.acesso.usuarios.Permissao;
 import br.com.emconta.acesso.usuarios.Usuario;
 import br.com.emconta.atendimento.GraphApiControlada.Modo;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -456,6 +458,87 @@ class AtendimentoIntegrationTests extends AtendimentoIntegracao {
         assertThat(historico.get("itens").get(0).get("id").asLong()).isEqualTo(atendimento);
         assertThat(historico.get("itens").get(0).get("encerradoPor").get("id").asLong())
                 .isPositive();
+    }
+
+    @Test
+    void historicoPesquisaEExportaSomenteOCicloEncerradoComPermissao() throws Exception {
+        Navegador admin = administrador();
+        String numero = numeroUnico();
+        long primeiro = assumido(admin, numero);
+        assertThat(admin.post(
+                                url(primeiro, "notas"),
+                                Map.of(
+                                        "texto",
+                                        "Observação interna do primeiro ciclo",
+                                        "chaveIdempotencia",
+                                        UUID.randomUUID().toString()))
+                        .getStatus())
+                .isEqualTo(201);
+        assertThat(admin.get(url(primeiro, "exportacao")).getStatus()).isEqualTo(404);
+        assertThat(admin.post(url(primeiro, "encerramento"), Map.of("versao", versao(primeiro)))
+                        .getStatus())
+                .isEqualTo(204);
+
+        String perfil = "Contato Histórico " + numero;
+        String retorno = mensagem(numero, perfil, wamid(), "Mensagem exclusiva do segundo ciclo", agoraEpoch());
+        enviarWebhook(retorno, assinar(retorno));
+        processar();
+        String historico = "/api/v1/atendimento/historico";
+        String fila = "/api/v1/atendimento/atendimentos?visao=AGUARDANDO&busca=" + numero;
+        long segundo = corpo(admin.get(fila)).get("itens").get(0).get("id").asLong();
+        assertThat(admin.post(url(segundo, "assuncao"), null).getStatus()).isEqualTo(204);
+        assertThat(admin.post(url(segundo, "encerramento"), Map.of("versao", versao(segundo)))
+                        .getStatus())
+                .isEqualTo(204);
+
+        String protocolo = "ATD-%06d".formatted(primeiro);
+        var dia = Instant.parse(corpo(admin.get("/api/v1/atendimento/atendimentos/" + primeiro))
+                        .get("resumo")
+                        .get("encerradoEm")
+                        .asString())
+                .atZone(ZoneId.of("America/Campo_Grande"))
+                .toLocalDate(); // dia do negócio, o mesmo do filtro de período
+        var porProtocolo = corpo(admin.get(historico + "?busca=" + protocolo + "&de=" + dia + "&ate=" + dia));
+        assertThat(porProtocolo.get("totalItens").asLong()).isEqualTo(1);
+        assertThat(porProtocolo.get("itens").get(0).get("id").asLong()).isEqualTo(primeiro);
+        assertThat(corpo(admin.get(historico + "?busca=" + protocolo + "&de=" + dia.plusDays(1)))
+                        .get("totalItens")
+                        .asLong())
+                .isZero();
+        assertThat(corpo(admin.get(historico + "?busca=" + numero + "&tamanho=1"))
+                        .get("totalPaginas")
+                        .asInt())
+                .isEqualTo(2);
+        assertThat(corpo(admin.get(historico + "?busca=" + numero + "&tamanho=1&pagina=1"))
+                        .get("itens")
+                        .get(0)
+                        .get("id")
+                        .asLong())
+                .isEqualTo(primeiro);
+
+        String exportacao = url(primeiro, "exportacao");
+        MockHttpServletResponse arquivo = admin.get(exportacao);
+        assertThat(arquivo.getStatus()).isEqualTo(200);
+        assertThat(arquivo.getHeader("Content-Disposition")).contains("attachment", protocolo + ".txt");
+        assertThat(arquivo.getContentAsString(StandardCharsets.UTF_8))
+                .contains(protocolo, "Nota interna", "Observação interna do primeiro ciclo", "encerrou o atendimento")
+                .doesNotContain("Mensagem exclusiva do segundo ciclo");
+        assertThat(mvc.perform(get(exportacao)).andReturn().getResponse().getStatus())
+                .isEqualTo(401);
+        String email = emailUnico("historico-sem-perfil");
+        criarAtivo(email);
+        Navegador semPerfil = logado(email);
+        assertThat(semPerfil.get(exportacao).getStatus()).isEqualTo(403);
+        assertThat(semPerfil.get("/api/v1/atendimento/atendimentos/" + primeiro).getStatus())
+                .isEqualTo(403);
+        assertThat(semPerfil
+                        .get(url(primeiro, "linha-do-tempo") + "?somenteEste=true")
+                        .getStatus())
+                .isEqualTo(403);
+        assertThat(semPerfil
+                        .get(url(primeiro, "anexos/1/conteudo") + "?somenteEste=true")
+                        .getStatus())
+                .isEqualTo(403);
     }
 
     @Test

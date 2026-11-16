@@ -2881,6 +2881,46 @@
         }
       }
     },
+    "/api/v1/atendimento/atendimentos/{id}/exportacao" : {
+      "get" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Conversa deste atendimento encerrado em texto (UTF-8), com mensagens, situações, eventos, notas internas e a lista de anexos, para download (atendimento:consultar)",
+        "operationId" : "exportarConversa",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "ATENDIMENTO_NAO_ENCONTRADO: inexistente ou ainda não encerrado",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "byte"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/atendimentos/{id}/eventos" : {
       "get" : {
         "tags" : [ "Atendimento" ],

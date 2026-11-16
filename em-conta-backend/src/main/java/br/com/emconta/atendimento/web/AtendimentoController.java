@@ -34,12 +34,15 @@ import br.com.emconta.atendimento.web.AtendimentoApi.VinculoRequest;
 import br.com.emconta.integracoes.WhatsAppCloud;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashSet;
@@ -48,7 +51,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -70,6 +77,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Atendimento", description = "Conversas do WhatsApp, fila e histórico")
 class AtendimentoController {
 
+    private static final Logger log = LoggerFactory.getLogger(AtendimentoController.class);
+
     private final Atendimentos atendimentos;
     private final ConsultaAtendimento consulta;
     private final Recebimento recebimento;
@@ -77,6 +86,7 @@ class AtendimentoController {
     private final WhatsAppCloud canal;
     private final Autoria autoria;
     private final Notas notas;
+    private final ExportacaoConversa exportacao;
 
     AtendimentoController(
             Atendimentos atendimentos,
@@ -85,8 +95,10 @@ class AtendimentoController {
             CatalogoAssociados associados,
             WhatsAppCloud canal,
             Autoria autoria,
-            Notas notas) {
+            Notas notas,
+            ExportacaoConversa exportacao) {
         this.notas = notas;
+        this.exportacao = exportacao;
         this.atendimentos = atendimentos;
         this.consulta = consulta;
         this.recebimento = recebimento;
@@ -188,6 +200,33 @@ class AtendimentoController {
                         : detalhe.ultimaEntradaEm().plusSeconds(24 * 3600),
                 canal.configurado(),
                 detalhe.primeiraRespostaEm());
+    }
+
+    @GetMapping(path = "/atendimentos/{id}/exportacao", produces = MediaType.ALL_VALUE)
+    @Operation(
+            operationId = "exportarConversa",
+            summary = "Conversa deste atendimento encerrado em texto (UTF-8), com mensagens, situações, eventos,"
+                    + " notas internas e a lista de anexos, para download (atendimento:consultar)")
+    @ApiResponse(
+            responseCode = "200",
+            content = @Content(mediaType = "text/plain", schema = @Schema(type = "string", format = "binary")))
+    @ApiResponse(responseCode = "404", description = "ATENDIMENTO_NAO_ENCONTRADO: inexistente ou ainda não encerrado")
+    ResponseEntity<byte[]> exportar(@PathVariable long id) {
+        long ator = autoria.usuarioAtual();
+        var arquivo = exportacao.exportar(id, ator).orElseThrow(AtendimentoController::naoEncontrado);
+        // Sem conteúdo no log: só quem exportou qual atendimento, para rastrear cópias da conversa.
+        log.info("Conversa do atendimento {} exportada pelo usuário {} ({} itens)", id, ator, arquivo.itens());
+        return ResponseEntity.ok()
+                .contentType(new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(arquivo.nome(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .body(arquivo.conteudo().getBytes(StandardCharsets.UTF_8));
     }
 
     @GetMapping("/atendimentos/{id}/linha-do-tempo")
