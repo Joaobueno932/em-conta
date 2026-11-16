@@ -7,7 +7,7 @@ etapa: presença automática ou manual, aviso ao cliente de quem passa a atendê
 [Presença, avisos e notas](#presença-avisos-e-notas)).
 
 Fora do escopo desta versão (sem botões na interface): envio em massa, respostas rápidas, chatbot/IA,
-CRM, tickets/SLA, automações, dashboards, templates, setor, protocolo, etiquetas, gravação pelo
+CRM, tickets/SLA, automações, dashboards, templates, setor, etiquetas, gravação pelo
 microfone, transcrição e OCR. Anexos: imagem, PDF, planilha XLSX, vídeo e áudio (ver [Anexos](#anexos));
 outros tipos aparecem como "não suportado", com o motivo e o que é aceito.
 
@@ -166,7 +166,8 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `POST atendimentos/{id}/encerramento` | `versao` |
 | `PUT atendimentos/{id}/associado`, `GET …/associados-sugeridos`, `GET associados?busca=` | vínculo |
 | `GET responsaveis` | destinos de transferência |
-| `GET historico?busca=&de=&ate=` | histórico geral (na tela, busca, período e página ficam na URL; o detalhe recebe a origem em `volta` e só aceita o próprio histórico) |
+| `GET historico?busca=&de=&ate=&pagina=&tamanho=` | histórico geral: encerrados, do encerramento mais recente; `de`/`ate` em dias do negócio, `de` depois de `ate` → 400 (ver [Histórico geral](#histórico-geral)) |
+| `GET atendimentos/{id}/exportacao` | conversa deste ciclo encerrado (aberto → 404) em texto (`text/plain; charset=UTF-8`, `attachment`), para download (atendimento:consultar) |
 | `GET webhook-falhas`, `POST webhook-eventos/{id}/reprocessamento` | eventos com falha |
 | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` | webhook da Meta (fora do contrato OpenAPI) |
 
@@ -403,6 +404,51 @@ atendimento a usa em `associado_id in (...)`. O banco resolve a semijunção; n�
 de associados em memória, junção de linhas (sem duplicar atendimentos) nem exposição de documento.
 Total, páginas e ordenação continuam os mesmos da consulta.
 
+### Histórico geral
+
+Aberto por **Ver opções → Histórico geral** na tela de Atendimento; o botão de voltar do cabeçalho leva
+de volta ao Atendimento. Só consulta, para quem tem `atendimento:consultar`.
+
+- **Lista**: um item por ciclo (atendimento) encerrado, do encerramento mais recente, com contato e
+  protocolo, associado, **Atendente** (responsável no encerramento), **Encerrado por** e data. Páginas
+  de 20, com faixa "1 – 20 de N"; busca, período e página ficam na URL, e o detalhe volta para a mesma
+  consulta. Página além da última (link antigo, lista que encolheu) volta à última existente, com os
+  mesmos filtros.
+- **Busca** (a mesma da fila): nome do perfil do WhatsApp, telefone (trecho de 4+ dígitos, com ou sem
+  máscara), nome do associado ou **protocolo**: `ATD-000123`, `atd123` ou só o número. Com o prefixo,
+  vale só o protocolo; só dígitos procuram também o telefone.
+- **Período**: data de encerramento, dias inclusivos no fuso do negócio (`emconta.negocio.fuso`, padrão
+  `America/Campo_Grande`): um encerramento às 22h de um dia pertence a esse dia, mesmo que em UTC já seja
+  o seguinte. Os calendários de "De" e "Até" limitam um ao outro; período invertido digitado é avisado
+  junto do campo e recusado pelo servidor (400 `DADOS_INVALIDOS`).
+  Busca e período se combinam.
+- **Lista vazia**: "Nenhum atendimento encerrado ainda." sem filtros; "Nenhum resultado
+  correspondente" com filtros.
+- **Detalhe** (`/atendimento/historico/{id}`), somente leitura: mensagens com situação, avisos
+  automáticos, eventos (assumir, transferir com motivo, encerrar), notas internas e anexos (área Mídia e
+  conteúdo pela rota autenticada) **só deste ciclo** (`somenteEste=true`). Outro protocolo do mesmo
+  contato abre o próprio ciclo; um anexo pedido pelo protocolo de outro ciclo → 404.
+- **Exportar conversa** (só ciclo encerrado; o aberto → 404 e o botão não aparece): arquivo
+  `conversa-ATD-000123.txt` (UTF-8) com cabeçalho (protocolo,
+  situação, contato e telefone, associado, atendente, quem encerrou, início, primeira resposta humana,
+  encerramento, quem exportou e quando, fuso) e a linha do tempo do ciclo em ordem, agrupada por dia:
+  mensagens com a situação de envio, avisos automáticos, eventos e notas internas (marcado como documento
+  interno). Dos anexos vão nome, tipo, tamanho e se o arquivo está indisponível; o conteúdo continua só
+  na rota autenticada. `nosniff` e `no-store`; só leitura (nada vai à fila nem à Meta); o log registra
+  quem exportou qual atendimento e quantos itens, sem conteúdo. Ciclos acima de 20.000 itens saem com o
+  trecho mais recente, avisado no arquivo.
+- **Permissões no servidor**: lista, detalhe, linha do tempo, Mídia, conteúdo de anexo e exportação
+  exigem `atendimento:consultar` na própria rota (401 sem sessão, 403 sem a permissão), inclusive por
+  link direto; na tela, a rota leva a "Acesso negado" sem consultar a API. Quem consulta lê as notas
+  internas, como na conversa.
+
+**Dependência (setor e etiquetas):** o protótipo traz filtros e coluna de Setor e Etiquetas, mas o Em
+Conta ainda não tem esses dados: não há cadastro de setores nem de etiquetas, e o atendimento não os
+registra (a especificação liga categoria e assunto aos chamados, RN-ATE-05, ainda não entregues). Os
+dois filtros e a coluna ficam de fora até existir o cadastro e a classificação do atendimento; a busca,
+o período e a paginação não dependem deles. Os demais itens de Ver opções (Mensagem em massa, Dashboard,
+tema e sons) também ficam para entregas próprias.
+
 ## Presença, avisos e notas
 
 ### Presença do atendente (V13)
@@ -635,11 +681,18 @@ falhou, confira no proxy se chegou algum POST e, na Graph API, a assinatura do a
   atribuição e fora da primeira resposta humana. `NotasIntegrationTests`: nota na linha do tempo e no
   histórico, nada na fila nem na Graph, idempotência, janela fechada, responsável, outro atendente (antes
   e depois de transferir), fila sem responsável e atendimento encerrado.
+  `HistoricoIntegrationTests`: busca por nome, telefone com máscara e protocolo, período no fuso do
+  negócio (virada de dia), filtros combinados, paginação, lista vazia, período invertido; dois ciclos do
+  mesmo contato (linha do tempo, Mídia, anexo e exportação de cada um); conteúdo, ordem e cabeçalhos da
+  exportação (ciclo aberto → 404); 401/403/200 por perfil em todas as rotas do histórico.
+  `AtendimentoIntegrationTests` repete, no fluxo completo, protocolo com período, paginação, exportação
+  só do ciclo encerrado e 401/403 na exportação, no detalhe, na linha do tempo e no anexo.
   `DigitandoIntegrationTests`: formato documentado do indicador
   (leitura da última recebida + `typing_indicator`), intervalo mínimo, resposta liberando o próximo,
   regras de resposta e permissão.
 - Frontend: `src/features/atendimento/__tests__` (Vitest; `tempo-real.spec.ts` cobre aviso → releitura,
   ícones fora de ordem, balão local sem duplicar, falha, troca de conversa e reconexão) e
-  `e2e/atendimento.spec.ts` (Playwright),
+  `e2e/atendimento.spec.ts` e `e2e/historico.spec.ts` (Playwright; jornada do histórico com busca,
+  filtros, paginação, dois ciclos, exportação e acesso negado por perfil),
   este contra a API de testes do banco isolado, também com Graph controlada local
   (`e2e/whatsapp-controlado.ts`). Nada disso é envio ou recebimento real.
