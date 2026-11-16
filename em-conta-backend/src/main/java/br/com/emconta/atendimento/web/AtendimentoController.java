@@ -8,15 +8,19 @@ import br.com.emconta.atendimento.nucleo.ConsultaAtendimento;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Cursor;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Resumo;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Visao;
+import br.com.emconta.atendimento.nucleo.Notas;
 import br.com.emconta.atendimento.nucleo.Recebimento;
 import br.com.emconta.atendimento.web.AtendimentoApi.AnexoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.AssociadoResponse;
+import br.com.emconta.atendimento.web.AtendimentoApi.AtividadeRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.CanalResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.ContagensResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.DetalheResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.EncerramentoRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.FalhaWebhookResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.ItemResponse;
+import br.com.emconta.atendimento.web.AtendimentoApi.NotaRequest;
+import br.com.emconta.atendimento.web.AtendimentoApi.NotaResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.PaginaLinhaDoTempoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.PaginaResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.PresencaRequest;
@@ -72,6 +76,7 @@ class AtendimentoController {
     private final CatalogoAssociados associados;
     private final WhatsAppCloud canal;
     private final Autoria autoria;
+    private final Notas notas;
 
     AtendimentoController(
             Atendimentos atendimentos,
@@ -79,7 +84,9 @@ class AtendimentoController {
             Recebimento recebimento,
             CatalogoAssociados associados,
             WhatsAppCloud canal,
-            Autoria autoria) {
+            Autoria autoria,
+            Notas notas) {
+        this.notas = notas;
         this.atendimentos = atendimentos;
         this.consulta = consulta;
         this.recebimento = recebimento;
@@ -95,18 +102,32 @@ class AtendimentoController {
     }
 
     @GetMapping("/presenca")
-    @Operation(operationId = "obterPresenca", summary = "Presença manual do próprio atendente (atendimento:consultar)")
+    @Operation(operationId = "obterPresenca", summary = "Presença do próprio atendente (atendimento:consultar)")
     PresencaResponse presenca() {
-        return new PresencaResponse(consulta.disponivel(autoria.usuarioAtual()));
+        return PresencaResponse.de(consulta.presenca(autoria.usuarioAtual()));
     }
 
     @PutMapping(path = "/presenca", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
             operationId = "definirPresenca",
-            summary = "Marca Disponível/Ausente; sem efeito em distribuição (atendimento:consultar)")
+            summary = "Escolha manual (Disponível/Ausente) ou volta ao automático; sem efeito em distribuição"
+                    + " (atendimento:consultar)")
     PresencaResponse definirPresenca(@Valid @RequestBody PresencaRequest corpo) {
-        atendimentos.definirPresenca(autoria.usuarioAtual(), corpo.disponivel());
-        return new PresencaResponse(corpo.disponivel());
+        long ator = autoria.usuarioAtual();
+        atendimentos.definirPresenca(ator, corpo.disponivel(), "AUTOMATICO".equals(corpo.modo()));
+        return PresencaResponse.de(consulta.presenca(ator));
+    }
+
+    @PostMapping(path = "/presenca/atividade", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(
+            operationId = "registrarAtividadePresenca",
+            summary = "Começou a escrever uma resposta: no modo automático passa a Disponível; escolha manual não"
+                    + " muda (atendimento:responder)")
+    @ApiResponse(responseCode = "409", description = "NAO_E_RESPONSAVEL")
+    PresencaResponse registrarAtividade(@Valid @RequestBody AtividadeRequest corpo) {
+        long ator = autoria.usuarioAtual();
+        atendimentos.registrarAtividade(ator, corpo.atendimentoId());
+        return PresencaResponse.de(consulta.presenca(ator));
     }
 
     @GetMapping("/atendimentos")
@@ -165,7 +186,8 @@ class AtendimentoController {
                 detalhe.ultimaEntradaEm() == null
                         ? null
                         : detalhe.ultimaEntradaEm().plusSeconds(24 * 3600),
-                canal.configurado());
+                canal.configurado(),
+                detalhe.primeiraRespostaEm());
     }
 
     @GetMapping("/atendimentos/{id}/linha-do-tempo")
@@ -220,6 +242,7 @@ class AtendimentoController {
                                 i.atualizadoEm(),
                                 // Só para quem enviou: concilia o balão local do envio com este registro.
                                 i.autorId() != null && i.autorId() == ator ? i.chaveIdempotencia() : null,
+                                i.origem(),
                                 AnexoResponse.de(i.anexo())))
                         .toList(),
                 pagina.anterior());
@@ -287,6 +310,18 @@ class AtendimentoController {
     ResponseEntity<Void> digitando(@PathVariable long id) {
         atendimentos.digitando(autoria.usuarioAtual(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(path = "/atendimentos/{id}/notas", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(
+            operationId = "registrarNotaInterna",
+            summary = "Registra uma nota interna na conversa: só a equipe vê, nada é enviado ao cliente"
+                    + " (atendimento:responder)")
+    @ApiResponse(responseCode = "201", description = "Registrada (ou a mesma, na repetição exata)")
+    @ApiResponse(responseCode = "409", description = "ATENDIMENTO_ENCERRADO ou CHAVE_IDEMPOTENCIA_REUTILIZADA")
+    ResponseEntity<NotaResponse> registrarNota(@PathVariable long id, @Valid @RequestBody NotaRequest corpo) {
+        long nota = notas.registrar(autoria.usuarioAtual(), id, corpo.texto(), corpo.chaveIdempotencia());
+        return ResponseEntity.status(HttpStatus.CREATED).body(new NotaResponse(nota));
     }
 
     @PutMapping(path = "/atendimentos/{id}/associado", consumes = MediaType.APPLICATION_JSON_VALUE)

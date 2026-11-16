@@ -166,14 +166,26 @@ public class ConsultaAtendimento {
         return new PageImpl<>(itens, PageRequest.of(pagina, tamanho), total);
     }
 
-    public record Detalhe(Resumo resumo, long versao, long conversaVersao, Instant ultimaEntradaEm, Long assumidoPor) {}
+    /**
+     * {@code primeiraRespostaEm}: a primeira resposta de uma pessoa neste atendimento (origem ATENDENTE);
+     * avisos automáticos, como o de mudança de responsável, não contam.
+     */
+    public record Detalhe(
+            Resumo resumo,
+            long versao,
+            long conversaVersao,
+            Instant ultimaEntradaEm,
+            Long assumidoPor,
+            Instant primeiraRespostaEm) {}
 
     @Transactional(readOnly = true)
     public Optional<Detalhe> detalhe(long atendimento) {
         return jdbc.sql(SELECT_RESUMO.replace(
                                 "select a.id,",
                                 "select a.versao as versao_at, v.versao as versao_conv,"
-                                        + " v.ultima_entrada_em, a.id,")
+                                        + " v.ultima_entrada_em, (select min(r.criado_em) from atd_mensagem r"
+                                        + " where r.atendimento_id = a.id and r.direcao = 'SAIDA'"
+                                        + " and r.origem = 'ATENDENTE') as primeira_resposta, a.id,")
                         + " where a.id = :id")
                 .param("id", atendimento)
                 .query((rs, n) -> new Detalhe(
@@ -181,12 +193,13 @@ public class ConsultaAtendimento {
                         rs.getLong("versao_at"),
                         rs.getLong("versao_conv"),
                         instante(rs, "ultima_entrada_em"),
-                        rs.getObject("responsavel_id", Long.class)))
+                        rs.getObject("responsavel_id", Long.class),
+                        instante(rs, "primeira_resposta")))
                 .optional();
     }
 
     /**
-     * Item da linha do tempo: mensagem ou evento. {@code cursor} é a posição do item na ordem da linha do
+     * Item da linha do tempo: mensagem, evento ou nota interna. {@code cursor} é a posição do item na ordem da linha do
      * tempo (ver {@link Cursor}); {@code ocorridoEm} é o horário exibido (o do WhatsApp, para mensagens
      * recebidas).
      */
@@ -211,6 +224,7 @@ public class ConsultaAtendimento {
             String etapaFalha,
             Instant atualizadoEm,
             String chaveIdempotencia,
+            String origem,
             AnexoResumo anexo) {
 
         ItemLinhaDoTempo comAnexo(AnexoResumo novo) {
@@ -235,6 +249,7 @@ public class ConsultaAtendimento {
                     etapaFalha,
                     atualizadoEm,
                     chaveIdempotencia,
+                    origem,
                     novo);
         }
     }
@@ -255,7 +270,7 @@ public class ConsultaAtendimento {
      */
     public record Cursor(long micros, int ordem, long id) {
 
-        private static final Pattern FORMATO = Pattern.compile("(\\d{1,18})\\.([01])\\.(\\d{1,18})");
+        private static final Pattern FORMATO = Pattern.compile("(\\d{1,18})\\.([012])\\.(\\d{1,18})");
 
         public static Optional<Cursor> ler(String texto) {
             if (texto == null) {
@@ -285,6 +300,7 @@ public class ConsultaAtendimento {
 
     private static final int ORDEM_EVENTO = 0;
     private static final int ORDEM_MENSAGEM = 1;
+    private static final int ORDEM_NOTA = 2;
 
     /**
      * Uma página da linha do tempo da conversa (todos os ciclos) ou só de um atendimento: os {@code
@@ -299,14 +315,21 @@ public class ConsultaAtendimento {
         String sql = "(select 'MENSAGEM' as tipo, id, criado_em as registro, coalesce(horario_externo, criado_em)"
                 + " as ocorrido, atendimento_id, direcao, tipo as tipo_mensagem, tipo_externo, texto, situacao,"
                 + " erro_codigo, erro_titulo, autor_usuario_id, null as evento, null as usuario_alvo_id,"
-                + " null as associado_id, null as motivo, etapa_falha, atualizado_em, chave_idempotencia from atd_mensagem"
+                + " null as associado_id, null as motivo, etapa_falha, atualizado_em, chave_idempotencia, origem"
+                + " from atd_mensagem"
                 + " where conversa_id = :c" + filtroAtendimento
                 + antes("criado_em", ORDEM_MENSAGEM, antes) + " order by criado_em desc, id desc limit :limite)"
                 + " union all"
                 + " (select 'EVENTO', id, ocorrido_em, ocorrido_em, atendimento_id, null, null, null, null, null,"
-                + " null, null, autor_usuario_id, tipo, usuario_alvo_id, associado_id, motivo, null, null, null from atd_evento"
+                + " null, null, autor_usuario_id, tipo, usuario_alvo_id, associado_id, motivo, null, null, null, null"
+                + " from atd_evento"
                 + " where conversa_id = :c" + filtroAtendimento + antes("ocorrido_em", ORDEM_EVENTO, antes)
                 + " order by ocorrido_em desc, id desc limit :limite)"
+                + " union all"
+                + " (select 'NOTA', id, criado_em, criado_em, atendimento_id, null, null, null, texto, null, null, null,"
+                + " autor_usuario_id, null, null, null, null, null, null, null, null from atd_nota"
+                + " where conversa_id = :c" + filtroAtendimento + antes("criado_em", ORDEM_NOTA, antes)
+                + " order by criado_em desc, id desc limit :limite)"
                 + " order by registro desc, tipo desc, id desc limit :limite";
         var consulta = jdbc.sql(sql).param("c", conversa).param("limite", limite);
         if (somenteAtendimento != null) {
@@ -318,12 +341,17 @@ public class ConsultaAtendimento {
                     .param("antesId", antes.id());
         }
         List<ItemLinhaDoTempo> itens = new ArrayList<>(consulta.query((rs, n) -> {
-                    boolean mensagem = "MENSAGEM".equals(rs.getString("tipo"));
+                    String tipo = rs.getString("tipo");
                     long id = rs.getLong("id");
-                    String cursor = Cursor.de(instante(rs, "registro"), mensagem ? ORDEM_MENSAGEM : ORDEM_EVENTO, id)
-                            .toString();
+                    int ordem = switch (tipo) {
+                        case "MENSAGEM" -> ORDEM_MENSAGEM;
+                        case "NOTA" -> ORDEM_NOTA;
+                        default -> ORDEM_EVENTO;
+                    };
+                    String cursor =
+                            Cursor.de(instante(rs, "registro"), ordem, id).toString();
                     return new ItemLinhaDoTempo(
-                            mensagem ? "MENSAGEM" : "EVENTO",
+                            tipo,
                             id,
                             cursor,
                             instante(rs, "ocorrido"),
@@ -343,6 +371,7 @@ public class ConsultaAtendimento {
                             rs.getString("etapa_falha"),
                             instante(rs, "atualizado_em"),
                             rs.getString("chave_idempotencia"),
+                            rs.getString("origem"),
                             null);
                 })
                 .list());
@@ -440,6 +469,7 @@ public class ConsultaAtendimento {
                         rs.getString("etapa_falha"),
                         instante(rs, "atualizado_em"),
                         null,
+                        null,
                         null))
                 .list());
         comAnexos(itens);
@@ -534,14 +564,22 @@ public class ConsultaAtendimento {
                 + ordem + " = :antesOrdem and id < :antesId))))";
     }
 
+    /**
+     * Presença da pessoa; sem registro, automática e Ausente. {@code atualizadoEm} muda a cada mudança
+     * efetiva e deixa a tela ficar com a resposta mais nova quando duas chegam fora de ordem.
+     */
+    public record Presenca(boolean disponivel, boolean automatica, Instant atualizadoEm) {}
+
     @Transactional(readOnly = true)
-    public boolean disponivel(long usuario) {
-        return jdbc.sql("select situacao from atd_presenca where usuario_id = :u")
+    public Presenca presenca(long usuario) {
+        return jdbc.sql("select situacao, modo, atualizado_em from atd_presenca where usuario_id = :u")
                 .param("u", usuario)
-                .query(String.class)
+                .query((rs, n) -> new Presenca(
+                        "DISPONIVEL".equals(rs.getString(1)),
+                        "AUTOMATICO".equals(rs.getString(2)),
+                        instante(rs, "atualizado_em")))
                 .optional()
-                .map("DISPONIVEL"::equals)
-                .orElse(false);
+                .orElse(new Presenca(false, true, null));
     }
 
     public Instant agora() {

@@ -53,7 +53,7 @@ class LinhaDoTempoIntegrationTests extends AtendimentoIntegracao {
         assertThat(recente.get("itens")).as("não carrega tudo de uma vez").hasSize(50);
         assertThat(recente.get("anterior").asString()).isNotBlank();
 
-        for (String invalido : List.of("?tamanho=0", "?tamanho=101", "?antes=abc", "?antes=1.2.3", "?antes=-1.0.1")) {
+        for (String invalido : List.of("?tamanho=0", "?tamanho=101", "?antes=abc", "?antes=1.3.3", "?antes=-1.0.1")) {
             MockHttpServletResponse resposta =
                     admin.get("/api/v1/atendimento/atendimentos/" + c.segundo() + "/linha-do-tempo" + invalido);
             assertThat(resposta.getStatus()).as(invalido).isEqualTo(400);

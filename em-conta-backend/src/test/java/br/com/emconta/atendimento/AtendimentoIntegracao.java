@@ -31,6 +31,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -43,6 +44,10 @@ import tools.jackson.databind.JsonNode;
  * aplicação é {@link RelogioControlado}: o teste pode fixar o instante sem esperar (sem sleeps).
  */
 @Import(AtendimentoIntegracao.Relogio.class)
+// Aviso ao cliente na mudança de responsável: desligado aqui, porque os testes contam as chamadas à Graph
+// controlada e as mensagens de saída; ligado em AvisoResponsavelIntegrationTests. Fica em
+// @TestPropertySource (e não no @DynamicPropertySource abaixo) para a subclasse poder sobrescrever.
+@TestPropertySource(properties = "emconta.atendimento.aviso-responsavel.habilitado=false")
 abstract class AtendimentoIntegracao extends ApiIntegracao {
 
     protected static final String SEGREDO = "app-secret-de-teste";

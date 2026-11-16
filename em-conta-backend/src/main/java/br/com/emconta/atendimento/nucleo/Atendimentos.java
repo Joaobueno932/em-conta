@@ -50,6 +50,7 @@ public class Atendimentos {
     private final WhatsAppCloud canal;
     private final Clock clock;
     private final AvisosAtendimento avisos;
+    private final boolean avisoResponsavelHabilitado;
     private final boolean digitandoHabilitado;
     /** Último pedido de "digitando…" por atendimento (nesta instância). */
     private final Map<Long, Instant> digitando = new ConcurrentHashMap<>();
@@ -61,13 +62,15 @@ public class Atendimentos {
             WhatsAppCloud canal,
             Clock clock,
             AvisosAtendimento avisos,
-            @Value("${emconta.atendimento.digitando.habilitado:true}") boolean digitandoHabilitado) {
+            @Value("${emconta.atendimento.digitando.habilitado:true}") boolean digitandoHabilitado,
+            @Value("${emconta.atendimento.aviso-responsavel.habilitado:true}") boolean avisoResponsavelHabilitado) {
         this.jdbc = jdbc;
         this.autoria = autoria;
         this.associados = associados;
         this.canal = canal;
         this.clock = clock;
         this.avisos = avisos;
+        this.avisoResponsavelHabilitado = avisoResponsavelHabilitado;
         this.digitandoHabilitado = digitandoHabilitado;
     }
 
@@ -101,6 +104,7 @@ public class Atendimentos {
                             "ATENDIMENTO_JA_ASSUMIDO", "Este atendimento já foi assumido por outra pessoa.");
         }
         evento(estado.conversaId(), atendimento, "ASSUMIDO", ator, null, null, null, agora);
+        avisarResponsavel(estado.conversaId(), atendimento, ator, estado.versao(), agora);
     }
 
     /** Transfere para outro responsável ou, com {@code destino} nulo, devolve à fila. */
@@ -140,6 +144,7 @@ public class Atendimentos {
                 .param("id", atendimento)
                 .update();
         evento(estado.conversaId(), atendimento, "TRANSFERIDO", ator, destino, null, motivoLimpo, agora);
+        avisarResponsavel(estado.conversaId(), atendimento, destino, estado.versao() + 1, agora);
     }
 
     @Transactional
@@ -220,6 +225,41 @@ public class Atendimentos {
                 .param("chave", chaveIdempotencia)
                 .query(Long.class)
                 .single();
+    }
+
+    /**
+     * Aviso ao cliente de quem passa a atendê-lo, na mesma transação da mudança de responsável (assumir ou
+     * transferir para alguém; devolver à fila não avisa). Entra na fila de envio como as respostas: o
+     * {@link Envio} confere a janela de 24 h na hora de enviar (fora dela, JANELA_EXPIRADA) e registra
+     * falha ou resultado desconhecido sem tocar no atendimento, que já foi confirmado. Um aviso por mudança
+     * efetiva: a chave {@code aviso:responsavel:<atendimento>:<versão>} é única, então reprocessar ou
+     * repetir a mesma mudança não cria outro; ações concorrentes já são barradas pela versão. O caractere
+     * {@code :} não é aceito nas chaves vindas da interface, que não podem ocupar a do aviso. Origem
+     * AVISO_RESPONSAVEL: fica fora da primeira resposta humana e não muda a ordem da fila.
+     */
+    private void avisarResponsavel(long conversa, long atendimento, long responsavel, long versao, Instant agora) {
+        if (!avisoResponsavelHabilitado || !canal.configurado()) {
+            return;
+        }
+        String nome = autoria.nomes(java.util.List.of(responsavel)).get(responsavel);
+        String texto = nome == null || nome.isBlank()
+                ? "Olá! Seu atendimento foi encaminhado para a nossa equipe."
+                : "Olá! Seu atendimento agora está com " + nome.strip() + ".";
+        try {
+            jdbc.sql("insert into atd_mensagem (correlacao, conversa_id, atendimento_id, direcao, tipo, texto,"
+                            + " situacao, criado_em, atualizado_em, chave_idempotencia, origem) values (:correlacao, :c,"
+                            + " :a, 'SAIDA', 'TEXTO', :texto, 'PENDENTE', :agora, :agora, :chave, 'AVISO_RESPONSAVEL')")
+                    .param("correlacao", UUID.randomUUID().toString())
+                    .param("c", conversa)
+                    .param("a", atendimento)
+                    .param("texto", texto)
+                    .param("agora", Timestamp.from(agora))
+                    .param("chave", "aviso:responsavel:" + atendimento + ":" + versao)
+                    .update();
+        } catch (DuplicateKeyException e) {
+            return; // esta mudança já tem aviso
+        }
+        avisos.trabalho(); // envio
     }
 
     /** Intervalo mínimo entre pedidos de "digitando…" de um atendimento (o indicador dura até 25 s). */
@@ -465,13 +505,51 @@ public class Atendimentos {
 
     // ------------------------------------------------------------------ presença
 
-    /** Presença manual do atendente (estado real informado por ele; sem efeito em distribuição). */
+    /**
+     * Escolha da própria pessoa (sem efeito em distribuição). Manual: Disponível ou Ausente, que vale até
+     * ela voltar ao automático. Automático: mantém a situação atual (Ausente, sem registro) até a próxima
+     * {@linkplain #registrarAtividade atividade de resposta}.
+     */
     @Transactional
-    public void definirPresenca(long ator, boolean disponivel) {
-        jdbc.sql("insert into atd_presenca (usuario_id, situacao, atualizado_em) values (:u, :s, :agora)"
-                        + " on duplicate key update situacao = values(situacao), atualizado_em = values(atualizado_em)")
+    public void definirPresenca(long ator, Boolean disponivel, boolean automatica) {
+        Timestamp agora = Timestamp.from(clock.instant());
+        if (automatica) {
+            jdbc.sql("insert into atd_presenca (usuario_id, situacao, modo, atualizado_em)"
+                            + " values (:u, 'AUSENTE', 'AUTOMATICO', :agora)"
+                            + " on duplicate key update modo = 'AUTOMATICO', atualizado_em = values(atualizado_em)")
+                    .param("u", ator)
+                    .param("agora", agora)
+                    .update();
+            return;
+        }
+        if (disponivel == null) {
+            throw FalhaAtendimento.campoInvalido("disponivel", "Informe Disponível ou Ausente.");
+        }
+        jdbc.sql(
+                        "insert into atd_presenca (usuario_id, situacao, modo, atualizado_em) values (:u, :s, 'MANUAL', :agora)"
+                                + " on duplicate key update situacao = values(situacao), modo = 'MANUAL',"
+                                + " atualizado_em = values(atualizado_em)")
                 .param("u", ator)
                 .param("s", disponivel ? "DISPONIVEL" : "AUSENTE")
+                .param("agora", agora)
+                .update();
+    }
+
+    /**
+     * A pessoa começou a escrever uma resposta numa conversa que pode atender (responsável atual, em
+     * atendimento). Em modo automático, passa a Disponível; com escolha manual, nada muda. A condição está
+     * no próprio comando: um pedido automático atrasado, que chegue depois de uma escolha manual, não a
+     * sobrescreve. Não altera nada no atendimento.
+     */
+    @Transactional
+    public void registrarAtividade(long ator, long atendimento) {
+        exigirPodeResponderSemJanela(ator, atendimento);
+        jdbc.sql("insert into atd_presenca (usuario_id, situacao, modo, atualizado_em)"
+                        + " values (:u, 'DISPONIVEL', 'AUTOMATICO', :agora) on duplicate key update"
+                        + " atualizado_em = if(modo = 'AUTOMATICO' and situacao <> 'DISPONIVEL',"
+                        + " values(atualizado_em), atualizado_em),"
+                        + " situacao = if(modo = 'AUTOMATICO', 'DISPONIVEL', situacao)")
+                .param("u", ator)
                 .param("agora", Timestamp.from(clock.instant()))
                 .update();
     }

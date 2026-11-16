@@ -280,7 +280,7 @@
     "/api/v1/atendimento/presenca" : {
       "get" : {
         "tags" : [ "Atendimento" ],
-        "summary" : "Presença manual do próprio atendente (atendimento:consultar)",
+        "summary" : "Presença do próprio atendente (atendimento:consultar)",
         "operationId" : "obterPresenca",
         "responses" : {
           "200" : {
@@ -297,7 +297,7 @@
       },
       "put" : {
         "tags" : [ "Atendimento" ],
-        "summary" : "Marca Disponível/Ausente; sem efeito em distribuição (atendimento:consultar)",
+        "summary" : "Escolha manual (Disponível/Ausente) ou volta ao automático; sem efeito em distribuição (atendimento:consultar)",
         "operationId" : "definirPresenca",
         "requestBody" : {
           "content" : {
@@ -1543,6 +1543,35 @@
         }
       }
     },
+    "/api/v1/atendimento/presenca/atividade" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Começou a escrever uma resposta: no modo automático passa a Disponível; escolha manual não muda (atendimento:responder)",
+        "operationId" : "registrarAtividadePresenca",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AtividadeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "description" : "NAO_E_RESPONSAVEL",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PresencaAtendente"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/atendimentos/{id}/transferencia" : {
       "post" : {
         "tags" : [ "Atendimento" ],
@@ -1573,6 +1602,54 @@
           },
           "409" : {
             "description" : "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE"
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/notas" : {
+      "post" : {
+        "tags" : [ "Atendimento" ],
+        "summary" : "Registra uma nota interna na conversa: só a equipe vê, nada é enviado ao cliente (atendimento:responder)",
+        "operationId" : "registrarNotaInterna",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NotaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Registrada (ou a mesma, na repetição exata)",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotaRegistrada"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "ATENDIMENTO_ENCERRADO ou CHAVE_IDEMPOTENCIA_REUTILIZADA",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotaRegistrada"
+                }
+              }
+            }
           }
         }
       }
@@ -3427,20 +3504,36 @@
         "type" : "object",
         "properties" : {
           "disponivel" : {
-            "type" : "boolean"
+            "type" : "boolean",
+            "description" : "Obrigatório no modo MANUAL"
+          },
+          "modo" : {
+            "type" : "string",
+            "description" : "Padrão MANUAL",
+            "enum" : [ "AUTOMATICO", "MANUAL" ],
+            "pattern" : "AUTOMATICO|MANUAL"
           }
-        },
-        "required" : [ "disponivel" ]
+        }
       },
       "PresencaAtendente" : {
         "type" : "object",
-        "description" : "Presença informada manualmente pelo atendente",
+        "description" : "Presença do atendente: escolha manual ou automática (Disponível ao responder)",
         "properties" : {
           "disponivel" : {
             "type" : "boolean"
+          },
+          "modo" : {
+            "type" : "string",
+            "description" : "MANUAL: a escolha vale até voltar ao automático; AUTOMATICO: Disponível ao começar a responder",
+            "enum" : [ "AUTOMATICO", "MANUAL" ]
+          },
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Última mudança; entre duas respostas, vale a mais nova"
           }
         },
-        "required" : [ "disponivel" ]
+        "required" : [ "disponivel", "modo" ]
       },
       "VinculoAssociadoRequest" : {
         "type" : "object",
@@ -4062,6 +4155,17 @@
         },
         "required" : [ "versao" ]
       },
+      "AtividadeRequest" : {
+        "type" : "object",
+        "description" : "Atividade de resposta numa conversa",
+        "properties" : {
+          "atendimentoId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "atendimentoId" ]
+      },
       "TransferenciaRequest" : {
         "type" : "object",
         "properties" : {
@@ -4081,6 +4185,31 @@
           }
         },
         "required" : [ "versao" ]
+      },
+      "NotaRequest" : {
+        "type" : "object",
+        "description" : "Nota interna: só a equipe vê; nada é enviado ao cliente",
+        "properties" : {
+          "texto" : {
+            "type" : "string",
+            "maxLength" : 4096,
+            "minLength" : 0
+          },
+          "chaveIdempotencia" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "chaveIdempotencia", "texto" ]
+      },
+      "NotaRegistrada" : {
+        "type" : "object",
+        "properties" : {
+          "notaId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "notaId" ]
       },
       "RespostaRequest" : {
         "type" : "object",
@@ -4767,6 +4896,11 @@
           },
           "canalConfigurado" : {
             "type" : "boolean"
+          },
+          "primeiraRespostaHumanaEm" : {
+            "type" : "string",
+            "format" : "date-time",
+            "description" : "Primeira resposta de uma pessoa neste atendimento; avisos automáticos não contam. Ausente se ainda não houve"
           }
         },
         "required" : [ "canalConfigurado", "resumo", "versao", "versaoConversa" ]
@@ -4876,11 +5010,11 @@
       },
       "ItemLinhaDoTempo" : {
         "type" : "object",
-        "description" : "Mensagem ou evento do atendimento",
+        "description" : "Mensagem, evento ou nota interna (só a equipe vê) do atendimento",
         "properties" : {
           "tipo" : {
             "type" : "string",
-            "enum" : [ "MENSAGEM", "EVENTO" ]
+            "enum" : [ "MENSAGEM", "EVENTO", "NOTA" ]
           },
           "id" : {
             "type" : "integer",
@@ -4952,6 +5086,11 @@
           "chaveIdempotencia" : {
             "type" : "string",
             "description" : "Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a operação para a tela trocar o balão local pelo registro, sem duplicar"
+          },
+          "origem" : {
+            "type" : "string",
+            "description" : "Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de responsável",
+            "enum" : [ "CONTATO", "ATENDENTE", "AVISO_RESPONSAVEL" ]
           },
           "anexo" : {
             "$ref" : "#/components/schemas/AnexoAtendimento"

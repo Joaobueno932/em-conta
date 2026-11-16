@@ -204,9 +204,9 @@ public class Recebimento {
                 texto ? m.texto() : categoria != null ? legenda(m.midia().legenda()) : null;
         try {
             jdbc.sql("insert into atd_mensagem (correlacao, conversa_id, atendimento_id, direcao, tipo, tipo_externo,"
-                            + " texto, id_externo, situacao, horario_externo, criado_em, atualizado_em)"
+                            + " texto, id_externo, situacao, horario_externo, criado_em, atualizado_em, origem)"
                             + " values (:correlacao, :conversa, :atendimento, 'ENTRADA', :tipo, :tipoExterno, :texto,"
-                            + " :idExterno, 'RECEBIDA', :horario, :agora, :agora)")
+                            + " :idExterno, 'RECEBIDA', :horario, :agora, :agora, 'CONTATO')")
                     .param("correlacao", UUID.randomUUID().toString())
                     .param("conversa", conversa)
                     .param("atendimento", atendimento)

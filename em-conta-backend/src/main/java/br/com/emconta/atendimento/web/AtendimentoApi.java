@@ -20,12 +20,51 @@ final class AtendimentoApi {
             @Schema(requiredMode = REQUIRED, description = "false = Canal não configurado; nada é enviado")
             boolean configurado) {}
 
-    @Schema(name = "PresencaAtendente", description = "Presença informada manualmente pelo atendente")
-    record PresencaResponse(@Schema(requiredMode = REQUIRED) boolean disponivel) {}
+    @Schema(
+            name = "PresencaAtendente",
+            description = "Presença do atendente: escolha manual ou automática (Disponível ao responder)")
+    record PresencaResponse(
+            @Schema(requiredMode = REQUIRED) boolean disponivel,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    allowableValues = {"AUTOMATICO", "MANUAL"},
+                    description = "MANUAL: a escolha vale até voltar ao automático; AUTOMATICO: Disponível ao"
+                            + " começar a responder")
+            String modo,
+
+            @Schema(description = "Última mudança; entre duas respostas, vale a mais nova")
+            Instant atualizadoEm) {
+
+        static PresencaResponse de(br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Presenca p) {
+            return new PresencaResponse(p.disponivel(), p.automatica() ? "AUTOMATICO" : "MANUAL", p.atualizadoEm());
+        }
+    }
 
     @Schema(name = "PresencaRequest")
     record PresencaRequest(
-            @Schema(requiredMode = REQUIRED) @NotNull Boolean disponivel) {}
+            @Schema(description = "Obrigatório no modo MANUAL")
+            Boolean disponivel,
+
+            @Schema(
+                    allowableValues = {"AUTOMATICO", "MANUAL"},
+                    description = "Padrão MANUAL")
+            @jakarta.validation.constraints.Pattern(regexp = "AUTOMATICO|MANUAL")
+            String modo) {}
+
+    @Schema(name = "NotaRequest", description = "Nota interna: só a equipe vê; nada é enviado ao cliente")
+    record NotaRequest(
+            @Schema(requiredMode = REQUIRED, maxLength = 4096) @NotNull @Size(max = 4096)
+            String texto,
+
+            @Schema(requiredMode = REQUIRED) @NotNull String chaveIdempotencia) {}
+
+    @Schema(name = "NotaRegistrada")
+    record NotaResponse(@Schema(requiredMode = REQUIRED) long notaId) {}
+
+    @Schema(name = "AtividadeRequest", description = "Atividade de resposta numa conversa")
+    record AtividadeRequest(
+            @Schema(requiredMode = REQUIRED) @NotNull Long atendimentoId) {}
 
     @Schema(name = "UsuarioAtendimento")
     record UsuarioResponse(
@@ -84,13 +123,18 @@ final class AtendimentoApi {
             @Schema(description = "Até quando texto livre é permitido (24 h após a última mensagem do cliente)")
             Instant janelaAbertaAte,
 
-            @Schema(requiredMode = REQUIRED) boolean canalConfigurado) {}
+            @Schema(requiredMode = REQUIRED) boolean canalConfigurado,
 
-    @Schema(name = "ItemLinhaDoTempo", description = "Mensagem ou evento do atendimento")
+            @Schema(
+                    description = "Primeira resposta de uma pessoa neste atendimento; avisos automáticos não"
+                            + " contam. Ausente se ainda não houve")
+            Instant primeiraRespostaHumanaEm) {}
+
+    @Schema(name = "ItemLinhaDoTempo", description = "Mensagem, evento ou nota interna (só a equipe vê) do atendimento")
     record ItemResponse(
             @Schema(
                     requiredMode = REQUIRED,
-                    allowableValues = {"MENSAGEM", "EVENTO"})
+                    allowableValues = {"MENSAGEM", "EVENTO", "NOTA"})
             String tipo,
 
             @Schema(requiredMode = REQUIRED) long id,
@@ -147,6 +191,12 @@ final class AtendimentoApi {
                     description = "Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a"
                             + " operação para a tela trocar o balão local pelo registro, sem duplicar")
             String chaveIdempotencia,
+
+            @Schema(
+                    allowableValues = {"CONTATO", "ATENDENTE", "AVISO_RESPONSAVEL"},
+                    description = "Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de"
+                            + " responsável")
+            String origem,
 
             AnexoResponse anexo) {}
 
