@@ -1004,6 +1004,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/atendimentos/{id}/exportacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Conversa deste atendimento encerrado em texto (UTF-8), com mensagens, situações, eventos, notas internas e a lista de anexos, para download (atendimento:consultar) */
+        get: operations["exportarConversa"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/atendimentos/{id}/eventos": {
         parameters: {
             query?: never;
@@ -4038,6 +4055,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SituacaoMensagem"][];
+                };
+            };
+        };
+    };
+    exportarConversa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description ATENDIMENTO_NAO_ENCONTRADO: inexistente ou ainda não encerrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };

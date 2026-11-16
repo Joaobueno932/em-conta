@@ -396,6 +396,30 @@ describe('Atendimento', () => {
     )
   })
 
+  it('histórico volta à última página disponível sem perder os filtros', async () => {
+    const { fetchFn } = apiFalsa(
+      rotas(detalhe({ situacao: 'ENCERRADO' }), TODAS, {
+        [`GET ${BASE}/historico`]: (_, url) => {
+          const pagina = Number(new URLSearchParams(url?.split('?')[1]).get('pagina'))
+          return jsonResponse({
+            itens: pagina === 0 ? [resumo({ situacao: 'ENCERRADO' })] : [],
+            pagina,
+            tamanho: 20,
+            totalItens: 1,
+            totalPaginas: 1,
+          })
+        },
+      }),
+    )
+    const { router } = await montarApp(fetchFn, '/atendimento/historico?busca=ATD-000001&pagina=5')
+
+    expect(await screen.findByRole('link', { name: 'Contato Teste' })).toBeTruthy()
+    await waitFor(() =>
+      expect(router.currentRoute.value.fullPath).toBe('/atendimento/historico?busca=ATD-000001'),
+    )
+    expect(screen.getByText('1 – 1 de 1')).toBeTruthy()
+  })
+
   it('o detalhe só volta para endereços do próprio histórico', async () => {
     for (const volta of ['https://exemplo.com/atendimento/historico', '/usuarios', '//x.com']) {
       const { fetchFn } = apiFalsa(rotas(detalhe({ situacao: 'ENCERRADO' })))

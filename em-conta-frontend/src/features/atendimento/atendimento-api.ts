@@ -176,6 +176,13 @@ export function conteudoAnexo(
   return `/api/v1/atendimento/atendimentos/${atendimento}/anexos/${anexo}/conteudo${query}`
 }
 
+/**
+ * Conversa de um atendimento em texto, para download pela sessão: mensagens, situações, eventos, notas
+ * internas e a lista de anexos (sem o conteúdo). Só deste ciclo.
+ */
+export const exportacaoConversa = (atendimento: number) =>
+  `/api/v1/atendimento/atendimentos/${atendimento}/exportacao`
+
 export function enviarAnexo(
   http: HttpClient,
   id: number,

@@ -11,6 +11,7 @@ import IconeTraco from '@/shared/components/IconeTraco.vue'
 import {
   chavesAtendimento,
   comecaDia,
+  exportacaoConversa,
   formatarDataHora,
   iniciais,
   nomeContato,
@@ -22,8 +23,11 @@ import MidiaConversa from './MidiaConversa.vue'
 import { useLinhaDoTempo } from './use-linha-do-tempo'
 
 /**
- * Detalhe de um atendimento (HG-03), somente leitura: só as mensagens, eventos e anexos deste ciclo.
- * Exportar conversa, notas e etiquetas do protótipo dependem de entregas futuras.
+ * Detalhe de um atendimento (HG-03), somente leitura: só as mensagens, eventos, notas internas e anexos
+ * deste ciclo; outro protocolo do mesmo contato abre o próprio ciclo. Encerrado o ciclo, "Exportar conversa"
+ * baixa o mesmo conteúdo em texto, pela sessão (o servidor exige `atendimento:consultar`, inclusive por link
+ * direto).
+ * Setor e etiquetas do protótipo dependem de cadastros ainda não entregues.
  */
 const props = defineProps<{ id: string }>()
 const http = useHttpClient()
@@ -104,6 +108,15 @@ async function irPara(mensagemId: number, cursor: string) {
             <span aria-current="page">Detalhes do atendimento {{ resumo.codigo }}</span>
           </nav>
         </div>
+        <a
+          v-if="resumo.situacao === 'ENCERRADO'"
+          class="botao-secundario com-icone exportar"
+          :href="exportacaoConversa(id)"
+          :download="`conversa-${resumo.codigo}.txt`"
+        >
+          <IconeTraco nome="baixar" :tamanho="18" />
+          Exportar conversa
+        </a>
       </header>
 
       <div class="colunas">
@@ -248,6 +261,7 @@ async function irPara(mensagemId: number, cursor: string) {
 <style scoped>
 .cabecalho {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 0.5rem;
   margin-bottom: 1rem;
@@ -255,6 +269,11 @@ async function irPara(mensagemId: number, cursor: string) {
 
 .cabecalho .botao-icone {
   margin-top: 0.15rem;
+}
+
+.exportar {
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .trilha {

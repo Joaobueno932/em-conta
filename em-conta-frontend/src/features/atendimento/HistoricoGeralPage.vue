@@ -17,14 +17,14 @@ import {
 } from './atendimento-api'
 
 /**
- * Histórico geral (HG-02): atendimentos encerrados, com busca e período filtrados no servidor.
- * Setor e etiquetas do protótipo dependem de entregas futuras e não aparecem.
+ * Histórico geral (HG-02), aberto por "Ver opções" na tela de Atendimento: atendimentos encerrados, com
+ * busca (nome, telefone ou protocolo) e período de encerramento filtrados no servidor, em dias do negócio.
+ * Setor e etiquetas do protótipo dependem de cadastros ainda não entregues e não aparecem.
  */
 const http = useHttpClient()
 const route = useRoute()
 const router = useRouter()
 
-const TAMANHO = 20
 const daUrl = (chave: string) => (typeof route.query[chave] === 'string' ? route.query[chave] : '')
 const data = (valor: string) => (/^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : '')
 const inicial = { busca: daUrl('busca'), de: data(daUrl('de')), ate: data(daUrl('ate')) }
@@ -33,7 +33,9 @@ const filtros = ref(inicial)
 const de = ref(inicial.de)
 const ate = ref(inicial.ate)
 const paginaDaUrl = Number(daUrl('pagina'))
-const pagina = ref(Number.isInteger(paginaDaUrl) && paginaDaUrl > 1 ? paginaDaUrl - 1 : 0)
+const pagina = ref(
+  Number.isInteger(paginaDaUrl) && paginaDaUrl > 1 && paginaDaUrl <= 100_001 ? paginaDaUrl - 1 : 0,
+)
 
 // Filtros aplicados e página ficam na URL: recarregar ou voltar do detalhe mantém a consulta.
 watch([filtros, pagina], () => {
@@ -59,10 +61,31 @@ const lista = useQuery({
   placeholderData: keepPreviousData,
 })
 
+// Página além da última (link antigo, lista que encolheu): volta à última que existe, mantendo os filtros.
+watch(
+  lista.data,
+  (dados) => {
+    if (dados && pagina.value >= dados.totalPaginas) {
+      pagina.value = Math.max(0, dados.totalPaginas - 1)
+    }
+  },
+  { immediate: true },
+)
+
+// Período invertido não vai ao servidor (que também o recusa): o aviso fica junto do campo "Até".
+const periodoInvalido = computed(() => Boolean(de.value && ate.value && de.value > ate.value))
+const tentouPeriodoInvalido = ref(false)
+
 function filtrar() {
+  tentouPeriodoInvalido.value = periodoInvalido.value
+  if (periodoInvalido.value) return
   filtros.value = { busca: termo.value.trim(), de: de.value, ate: ate.value }
   pagina.value = 0
 }
+
+const comFiltros = computed(() =>
+  Boolean(filtros.value.busca || filtros.value.de || filtros.value.ate),
+)
 
 function limpar() {
   termo.value = ''
@@ -73,8 +96,8 @@ function limpar() {
 
 const faixa = computed(() => {
   const dados = lista.data.value
-  if (!dados || dados.totalItens === 0) return ''
-  const inicio = pagina.value * TAMANHO + 1
+  if (!dados || dados.itens.length === 0) return ''
+  const inicio = dados.pagina * dados.tamanho + 1
   return `${inicio} – ${inicio + dados.itens.length - 1} de ${dados.totalItens}`
 })
 
@@ -104,7 +127,7 @@ const paginas = computed(() => {
     </header>
 
     <section class="cartao">
-      <form class="filtros" role="search" @submit.prevent="filtrar">
+      <form class="filtros" role="search" novalidate @submit.prevent="filtrar">
         <div class="campo">
           <label for="hist-busca">Buscar contato</label>
           <input
@@ -112,21 +135,38 @@ const paginas = computed(() => {
             v-model="termo"
             type="search"
             maxlength="100"
-            placeholder="Nome do contato, associado ou número"
+            placeholder="Contato, associado, telefone ou protocolo"
           />
         </div>
         <div class="campo">
           <label for="hist-de">De</label>
-          <input id="hist-de" v-model="de" type="date" />
+          <input id="hist-de" v-model="de" type="date" :max="ate || undefined" />
         </div>
         <div class="campo">
           <label for="hist-ate">Até</label>
-          <input id="hist-ate" v-model="ate" type="date" />
+          <input
+            id="hist-ate"
+            v-model="ate"
+            type="date"
+            :min="de || undefined"
+            :aria-invalid="tentouPeriodoInvalido && periodoInvalido ? 'true' : undefined"
+            :aria-describedby="
+              tentouPeriodoInvalido && periodoInvalido ? 'hist-periodo-erro' : undefined
+            "
+          />
         </div>
         <div class="acoes botoes">
           <button type="submit">Filtrar</button>
           <button type="button" class="secundario" @click="limpar">Limpar</button>
         </div>
+        <p
+          v-if="tentouPeriodoInvalido && periodoInvalido"
+          id="hist-periodo-erro"
+          class="erro-periodo"
+          role="alert"
+        >
+          A data final deve ser igual ou posterior à inicial.
+        </p>
       </form>
 
       <p v-if="lista.isPending.value" role="status">Carregando histórico…</p>
@@ -136,7 +176,11 @@ const paginas = computed(() => {
       </template>
       <template v-else-if="lista.data.value">
         <p v-if="lista.data.value.totalItens === 0" class="vazio" role="status">
-          Nenhum atendimento encontrado.
+          {{
+            comFiltros
+              ? 'Nenhum resultado correspondente. Revise a busca ou o período.'
+              : 'Nenhum atendimento encerrado ainda.'
+          }}
         </p>
         <div v-else class="tabela-rolavel" :aria-busy="lista.isFetching.value">
           <table>
@@ -240,6 +284,12 @@ const paginas = computed(() => {
 .filtros input {
   width: 100%;
   box-sizing: border-box;
+}
+
+.erro-periodo {
+  grid-column: 1 / -1;
+  margin: -0.5rem 0 0.75rem;
+  color: var(--cor-erro);
 }
 
 .botoes {
