@@ -82,9 +82,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Presença manual do próprio atendente (atendimento:consultar) */
+        /** Presença do próprio atendente (atendimento:consultar) */
         get: operations["obterPresenca"];
-        /** Marca Disponível/Ausente; sem efeito em distribuição (atendimento:consultar) */
+        /** Escolha manual (Disponível/Ausente) ou volta ao automático; sem efeito em distribuição (atendimento:consultar) */
         put: operations["definirPresenca"];
         post?: never;
         delete?: never;
@@ -491,6 +491,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/presenca/atividade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Começou a escrever uma resposta: no modo automático passa a Disponível; escolha manual não muda (atendimento:responder) */
+        post: operations["registrarAtividadePresenca"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/atendimentos/{id}/transferencia": {
         parameters: {
             query?: never;
@@ -502,6 +519,23 @@ export interface paths {
         put?: never;
         /** Transfere para outro responsável ou devolve à fila (atendimento:transferir) */
         post: operations["transferirAtendimento"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/notas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registra uma nota interna na conversa: só a equipe vê, nada é enviado ao cliente (atendimento:responder) */
+        post: operations["registrarNotaInterna"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1218,11 +1252,27 @@ export interface components {
             nome: string;
         };
         PresencaRequest: {
-            disponivel: boolean;
+            /** @description Obrigatório no modo MANUAL */
+            disponivel?: boolean;
+            /**
+             * @description Padrão MANUAL
+             * @enum {string}
+             */
+            modo?: "AUTOMATICO" | "MANUAL";
         };
-        /** @description Presença informada manualmente pelo atendente */
+        /** @description Presença do atendente: escolha manual ou automática (Disponível ao responder) */
         PresencaAtendente: {
             disponivel: boolean;
+            /**
+             * @description MANUAL: a escolha vale até voltar ao automático; AUTOMATICO: Disponível ao começar a responder
+             * @enum {string}
+             */
+            modo: "AUTOMATICO" | "MANUAL";
+            /**
+             * Format: date-time
+             * @description Última mudança; entre duas respostas, vale a mais nova
+             */
+            atualizadoEm?: string;
         };
         VinculoAssociadoRequest: {
             /** Format: int64 */
@@ -1461,6 +1511,11 @@ export interface components {
             /** Format: int64 */
             versao: number;
         };
+        /** @description Atividade de resposta numa conversa */
+        AtividadeRequest: {
+            /** Format: int64 */
+            atendimentoId: number;
+        };
         TransferenciaRequest: {
             /** Format: int64 */
             versao: number;
@@ -1470,6 +1525,15 @@ export interface components {
              */
             destinoId?: number;
             motivo?: string;
+        };
+        /** @description Nota interna: só a equipe vê; nada é enviado ao cliente */
+        NotaRequest: {
+            texto: string;
+            chaveIdempotencia: string;
+        };
+        NotaRegistrada: {
+            /** Format: int64 */
+            notaId: number;
         };
         RespostaRequest: {
             texto: string;
@@ -1749,6 +1813,11 @@ export interface components {
              */
             janelaAbertaAte?: string;
             canalConfigurado: boolean;
+            /**
+             * Format: date-time
+             * @description Primeira resposta de uma pessoa neste atendimento; avisos automáticos não contam. Ausente se ainda não houve
+             */
+            primeiraRespostaHumanaEm?: string;
         };
         /** @description Anexo listado na área Mídia */
         ItemMidia: {
@@ -1798,10 +1867,10 @@ export interface components {
             situacao: "RECEBENDO" | "PENDENTE" | "PROCESSANDO" | "FALHA_TEMPORARIA" | "DISPONIVEL" | "FALHA" | "NAO_SUPORTADO";
             erro?: string;
         };
-        /** @description Mensagem ou evento do atendimento */
+        /** @description Mensagem, evento ou nota interna (só a equipe vê) do atendimento */
         ItemLinhaDoTempo: {
             /** @enum {string} */
-            tipo: "MENSAGEM" | "EVENTO";
+            tipo: "MENSAGEM" | "EVENTO" | "NOTA";
             /** Format: int64 */
             id: number;
             /** @description Posição do item na linha do tempo; use como "antes" para a página anterior */
@@ -1839,6 +1908,11 @@ export interface components {
             atualizadoEm?: string;
             /** @description Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a operação para a tela trocar o balão local pelo registro, sem duplicar */
             chaveIdempotencia?: string;
+            /**
+             * @description Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de responsável
+             * @enum {string}
+             */
+            origem?: "CONTATO" | "ATENDENTE" | "AVISO_RESPONSAVEL";
             anexo?: components["schemas"]["AnexoAtendimento"];
         };
         /** @description Página da linha do tempo, em ordem cronológica */
@@ -3055,6 +3129,30 @@ export interface operations {
             };
         };
     };
+    registrarAtividadePresenca: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AtividadeRequest"];
+            };
+        };
+        responses: {
+            /** @description NAO_E_RESPONSAVEL */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresencaAtendente"];
+                };
+            };
+        };
+    };
     transferirAtendimento: {
         parameters: {
             query?: never;
@@ -3083,6 +3181,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    registrarNotaInterna: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotaRequest"];
+            };
+        };
+        responses: {
+            /** @description Registrada (ou a mesma, na repetição exata) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotaRegistrada"];
+                };
+            };
+            /** @description ATENDIMENTO_ENCERRADO ou CHAVE_IDEMPOTENCIA_REUTILIZADA */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotaRegistrada"];
+                };
             };
         };
     };

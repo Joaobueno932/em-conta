@@ -6,10 +6,12 @@ import { formatarHora, ROTULO_EVENTO, ROTULO_TIPO_EXTERNO, type Item } from './a
 import IndicadorSituacao from './IndicadorSituacao.vue'
 
 /**
- * Um item da linha do tempo (AT-04/HG-03): evento em pílula centralizada ou mensagem em balão (entrada
+ * Um item da linha do tempo (AT-04/HG-03): evento em pílula centralizada, nota interna da equipe (no
+ * centro, com fundo próprio e o rótulo "só a equipe vê") ou mensagem em balão (entrada
  * à esquerda, saída à direita), com anexo, legenda, horário e, na saída, o indicador da situação do
  * envio ({@link IndicadorSituacao}, com rótulo acessível). Usado na conversa e no detalhe somente
- * leitura do histórico.
+ * leitura do histórico. O aviso automático ao cliente (mudança de responsável) aparece como mensagem
+ * enviada, identificado como "Aviso automático" no lugar do autor.
  */
 defineProps<{
   item: Item
@@ -34,6 +36,17 @@ defineProps<{
       <template v-if="item.motivo">({{ item.motivo }})</template>
     </template>
   </p>
+  <div v-else-if="item.tipo === 'NOTA'" :id="`nota-${item.id}`" class="nota" role="note">
+    <p class="rotulo-nota com-icone">
+      <IconeTraco nome="informacao" :tamanho="16" />
+      Nota interna · só a equipe vê
+    </p>
+    <p class="texto">{{ item.texto }}</p>
+    <p class="meta">
+      <span v-if="item.autor">{{ item.autor.nome }} · </span>
+      <span class="hora">{{ formatarHora(item.ocorridoEm) }}</span>
+    </p>
+  </div>
   <div
     v-else
     :id="`mensagem-${item.id}`"
@@ -57,7 +70,8 @@ defineProps<{
     </template>
     <p v-else class="texto">{{ item.texto }}</p>
     <p class="meta">
-      <span v-if="item.autor">{{ item.autor.nome }} · </span>
+      <span v-if="item.origem === 'AVISO_RESPONSAVEL'" class="automatico">Aviso automático · </span>
+      <span v-else-if="item.autor">{{ item.autor.nome }} · </span>
       <span class="hora"
         >{{ formatarHora(item.ocorridoEm) }}
         <IndicadorSituacao
@@ -136,6 +150,34 @@ defineProps<{
   color: var(--cor-texto-2);
   margin-top: 4px !important;
   text-align: right;
+}
+
+/* Nota interna (só a equipe vê): no centro, com o fundo das notas e o rótulo explícito, para nunca
+   parecer mensagem trocada com o cliente. */
+.nota {
+  align-self: center;
+  width: min(75%, 40rem);
+  padding: 9px 17px 7px;
+  border: 1px dashed var(--cor-nota-borda);
+  border-radius: var(--raio-controle);
+  background: var(--cor-nota);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.nota p {
+  margin: 0;
+}
+
+.rotulo-nota {
+  margin-bottom: 4px !important;
+  color: var(--cor-texto);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.automatico {
+  font-style: italic;
 }
 
 /* Horário e indicador de situação quebram juntos (o detalhe da causa tem quebra própria). */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQuery } from '@tanstack/vue-query'
 import { computed, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -8,10 +8,11 @@ import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
 import IconeTraco from '@/shared/components/IconeTraco.vue'
 
-import { chavesAtendimento, definirPresenca, estadoCanal, obterPresenca } from './atendimento-api'
+import { chavesAtendimento, estadoCanal } from './atendimento-api'
 import ConversaAtendimento from './ConversaAtendimento.vue'
 import FilaAtendimento from './FilaAtendimento.vue'
 import PainelAssociado from './PainelAssociado.vue'
+import { usePresenca } from './use-presenca'
 
 /**
  * Atendimento via WhatsApp (AT-01..AT-06): fila (340 px), conversa e painel do associado (278 px)
@@ -20,7 +21,6 @@ import PainelAssociado from './PainelAssociado.vue'
 const http = useHttpClient()
 const route = useRoute()
 const router = useRouter()
-const queryClient = useQueryClient()
 
 // O atendimento aberto fica na URL: recarregar a página ou compartilhar o link mantém a conversa.
 const selecionado = computed(() => {
@@ -54,15 +54,24 @@ function selecionar(id: number | null) {
 }
 
 const canal = useQuery({ queryKey: chavesAtendimento.canal, queryFn: () => estadoCanal(http) })
-const presenca = useQuery({
-  queryKey: chavesAtendimento.presenca,
-  queryFn: () => obterPresenca(http),
-})
-const alterarPresenca = useMutation({
-  mutationFn: (disponivel: boolean) => definirPresenca(http, disponivel),
-  onSuccess: (p) => queryClient.setQueryData(chavesAtendimento.presenca, p),
-})
+// Presença do atendente: automática (Disponível ao começar a responder) ou escolha manual, que vale
+// até voltar ao automático. Separada do estado das conversas e sem efeito em distribuição.
+const { consulta: presenca, escolher: alterarPresenca } = usePresenca()
 const disponivel = computed(() => presenca.data.value?.disponivel)
+const valorPresenca = computed(() =>
+  presenca.data.value?.modo === 'AUTOMATICO'
+    ? 'AUTOMATICO'
+    : disponivel.value
+      ? 'DISPONIVEL'
+      : 'AUSENTE',
+)
+function escolherPresenca(valor: string) {
+  alterarPresenca.mutate(
+    valor === 'AUTOMATICO'
+      ? { modo: 'AUTOMATICO' }
+      : { modo: 'MANUAL', disponivel: valor === 'DISPONIVEL' },
+  )
+}
 </script>
 
 <template>
@@ -82,18 +91,20 @@ const disponivel = computed(() => presenca.data.value?.disponivel)
     <div class="colunas" :class="{ 'sem-painel': !selecionado || !painelAberto }">
       <FilaAtendimento ref="fila" :selecionado="selecionado" @selecionar="selecionar">
         <template #topo>
-          <!-- Presença manual simples: só informa os colegas, não muda a distribuição. -->
+          <!-- Presença: só informa os colegas, não muda a distribuição. No automático, o ponto
+               mostra a situação atual (Disponível ao começar a responder). -->
           <div v-if="presenca.data.value" class="presenca">
             <span class="ponto" :class="{ ausente: !disponivel }" aria-hidden="true"></span>
             <label for="presenca" class="visualmente-oculto">Sua presença</label>
             <select
               id="presenca"
-              :value="disponivel ? 'DISPONIVEL' : 'AUSENTE'"
+              :value="valorPresenca"
               :disabled="alterarPresenca.isPending.value"
-              @change="
-                alterarPresenca.mutate(($event.target as HTMLSelectElement).value === 'DISPONIVEL')
-              "
+              @change="escolherPresenca(($event.target as HTMLSelectElement).value)"
             >
+              <option value="AUTOMATICO">
+                Automático · {{ disponivel ? 'Disponível' : 'Ausente' }}
+              </option>
               <option value="DISPONIVEL">Disponível</option>
               <option value="AUSENTE">Ausente</option>
             </select>

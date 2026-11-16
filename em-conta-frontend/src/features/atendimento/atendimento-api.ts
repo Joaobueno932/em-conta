@@ -406,18 +406,23 @@ export function estadoCanal(http: HttpClient) {
   return http.get<components['schemas']['CanalAtendimento']>('/v1/atendimento/canal')
 }
 
+export type Presenca = components['schemas']['PresencaAtendente']
+/** Escolha manual (vale até voltar ao automático) ou volta ao automático. */
+export type EscolhaPresenca = { modo: 'MANUAL'; disponivel: boolean } | { modo: 'AUTOMATICO' }
+
 export function obterPresenca(http: HttpClient) {
-  return http.get<components['schemas']['PresencaAtendente']>('/v1/atendimento/presenca')
+  return http.get<Presenca>('/v1/atendimento/presenca')
 }
 
-export function definirPresenca(http: HttpClient, disponivel: boolean) {
-  return http.request<components['schemas']['PresencaAtendente']>(
-    'PUT',
-    '/v1/atendimento/presenca',
-    {
-      body: { disponivel },
-    },
-  )
+export function definirPresenca(http: HttpClient, escolha: EscolhaPresenca) {
+  return http.request<Presenca>('PUT', '/v1/atendimento/presenca', { body: escolha })
+}
+
+/** Começou a responder numa conversa que pode atender (no automático, passa a Disponível). */
+export function registrarAtividade(http: HttpClient, atendimentoId: number) {
+  return http.request<Presenca>('POST', '/v1/atendimento/presenca/atividade', {
+    body: { atendimentoId },
+  })
 }
 
 export function assumir(http: HttpClient, id: number) {
@@ -454,6 +459,20 @@ export function responder(http: HttpClient, id: number, texto: string, chaveIdem
  */
 export function indicarDigitando(http: HttpClient, id: number) {
   return http.request<void>('POST', `/v1/atendimento/atendimentos/${id}/digitando`)
+}
+
+/** Nota interna da equipe: só quem tem acesso ao atendimento vê; nada é enviado ao cliente. */
+export function registrarNota(
+  http: HttpClient,
+  id: number,
+  texto: string,
+  chaveIdempotencia: string,
+) {
+  return http.request<components['schemas']['NotaRegistrada']>(
+    'POST',
+    `/v1/atendimento/atendimentos/${id}/notas`,
+    { body: { texto, chaveIdempotencia } },
+  )
 }
 
 /** Intervalo entre pedidos de "digitando…" enquanto a pessoa escreve (o indicador dura até 25 s). */

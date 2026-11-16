@@ -31,6 +31,7 @@ import {
   rotuloDia,
   obterDetalhe,
   indicarDigitando,
+  registrarNota,
   INTERVALO_DIGITANDO_MS,
   responder,
   responsaveis,
@@ -40,6 +41,7 @@ import ItemLinhaDoTempo from './ItemLinhaDoTempo.vue'
 import type { RespostaRapida } from './respostas-rapidas-api'
 import SeletorRespostasRapidas from './SeletorRespostasRapidas.vue'
 import { useLinhaDoTempo } from './use-linha-do-tempo'
+import { usePresenca } from './use-presenca'
 
 /**
  * Conversa (AT-02/AT-04/AT-05): linha do tempo, assumir, responder, transferir e encerrar. Só o
@@ -51,6 +53,7 @@ const emit = defineEmits<{ fechar: []; alternarPainel: [] }>()
 const http = useHttpClient()
 const queryClient = useQueryClient()
 const { data: usuario } = useSessao()
+const presenca = usePresenca()
 
 // Cada aviso de mudança da conversa relê a linha do tempo e também o detalhe (responsável, situação,
 // janela); a consulta periódica do detalhe acompanha o intervalo da linha.
@@ -326,6 +329,26 @@ function enviar() {
 }
 const enviando = computed(() => responderMut.isPending.value || anexoMut.isPending.value)
 
+// Abas do compositor (AT-04): Mensagem (vai ao cliente) e Nota interna (só a equipe vê; o servidor a
+// guarda fora da fila de envio). Só o responsável atual vê as abas ({@link podeNota}). Cada aba tem o próprio rascunho; a chave identifica a operação como nas
+// respostas, então repetir uma nota sem resposta do servidor não a duplica.
+const modo = ref<'mensagem' | 'nota'>('mensagem')
+const textoNota = ref('')
+const notaMut = useMutation({
+  mutationFn: (conteudo: string) =>
+    registrarNota(http, props.id, conteudo, chaveDa(props.id, `nota:${conteudo}`)),
+  onSuccess: (_, conteudo) => {
+    textoNota.value = ''
+    tentativas.delete(operacao(props.id, `nota:${conteudo}`))
+  },
+  onSettled: atualizar,
+})
+function salvarNota() {
+  const conteudo = textoNota.value.trim()
+  if (!conteudo || notaMut.isPending.value) return
+  notaMut.mutate(conteudo)
+}
+
 // Respostas rápidas (AT-07): pelo botão ou digitando "/" no início de uma palavra. Escolher só preenche
 // o campo para revisão; o envio continua o mesmo (mesma chave de idempotência por texto). Com rascunho,
 // pergunta se substitui ou insere no cursor; nunca passa do limite do campo sem avisar.
@@ -399,6 +422,8 @@ function fecharBarra() {
 let ultimoDigitando = 0
 function aoDigitar() {
   verificarBarra()
+  // Começou a responder numa conversa que pode atender: no automático, a presença vira Disponível.
+  if (!motivoComposer.value && texto.value.trim()) void presenca.atividade(props.id)
   if (motivoComposer.value || arquivo.value || !texto.value.trim()) return
   const agora = Date.now()
   if (agora - ultimoDigitando < INTERVALO_DIGITANDO_MS) return
@@ -501,6 +526,15 @@ function focarBotaoPainel() {
   botaoPainel.value?.focus()
 }
 defineExpose({ irParaMensagem, focarBotaoPainel })
+
+// Nota interna: a regra das ações na conversa (só o responsável atual, em atendimento, com permissão de
+// responder), sem a janela de 24 h nem o canal, porque nada vai ao cliente. O servidor confere de novo.
+const podeNota = computed(
+  () =>
+    resumo.value?.situacao === 'EM_ATENDIMENTO' &&
+    souResponsavel.value &&
+    pode('atendimento:responder'),
+)
 
 const motivoComposer = computed(() => {
   if (!detalhe.data.value) return ''
@@ -757,139 +791,215 @@ async function carregarAnteriores() {
       </p>
       <p v-if="avisoMensagem" class="ajuda faixa" role="status">{{ avisoMensagem }}</p>
 
-      <!-- AT-03: sem poder responder, a faixa explica o motivo no lugar do compositor. -->
-      <p v-if="motivoComposer" class="aviso-compositor" role="status">
+      <!-- AT-03: sem poder responder nem anotar, a faixa explica o motivo no lugar do compositor. -->
+      <p v-if="motivoComposer && !podeNota" class="aviso-compositor" role="status">
         <IconeTraco nome="informacao" :tamanho="22" />
         {{ motivoComposer }}
       </p>
       <div v-else class="area-resposta">
-        <p class="aba" aria-hidden="true">Mensagem</p>
-        <div v-if="arquivo" class="selecionado" role="group" aria-label="Arquivo selecionado">
-          <span class="nome">{{ arquivo.arquivo.name }}</span>
-          <span class="ajuda"
-            >{{ formatoDoAnexo(arquivo.mime, arquivo.categoria).rotulo }} ·
-            {{ formatarTamanho(arquivo.arquivo.size) }}</span
-          >
+        <div class="abas" role="tablist" aria-label="O que registrar">
           <button
+            id="aba-mensagem"
             type="button"
-            class="link"
-            :disabled="anexoMut.isPending.value"
-            :aria-label="`Remover o arquivo ${arquivo.arquivo.name}`"
-            @click="removerArquivo"
+            role="tab"
+            class="aba"
+            :aria-selected="modo === 'mensagem'"
+            aria-controls="painel-mensagem"
+            @click="modo = 'mensagem'"
           >
-            Remover
+            Mensagem
+          </button>
+          <button
+            id="aba-nota"
+            type="button"
+            role="tab"
+            class="aba"
+            :aria-selected="modo === 'nota'"
+            aria-controls="painel-nota"
+            @click="modo = 'nota'"
+          >
+            Nota interna
           </button>
         </div>
-        <AlertaMensagem v-if="erroArquivo" tipo="erro">{{ erroArquivo }}</AlertaMensagem>
-        <form class="composer" @submit.prevent="enviar">
-          <input
-            ref="seletor"
-            type="file"
-            class="visualmente-oculto"
-            tabindex="-1"
-            aria-hidden="true"
-            :accept="ACEITOS"
-            @change="selecionarArquivo"
-          />
-          <label for="resposta" class="visualmente-oculto">{{
-            arquivo ? 'Legenda (opcional)' : 'Mensagem'
-          }}</label>
-          <SeletorRespostasRapidas
-            v-if="respostas"
-            id="seletor-respostas"
-            ref="seletorRespostas"
-            :termo="respostas.barra"
-            @escolher="escolherResposta"
-            @fechar="fecharRespostas"
-          />
-          <div v-if="escolha" class="escolha" role="group" aria-labelledby="escolha-titulo">
-            <p id="escolha-titulo">
-              O campo já tem um rascunho. Como usar “{{ escolha.resposta.titulo }}”?
-            </p>
-            <div class="acoes">
-              <button type="button" @click="decidir('substituir')">Substituir rascunho</button>
-              <button type="button" class="secundario" @click="decidir('inserir')">
-                Inserir no cursor
-              </button>
-              <button type="button" class="link" @click="cancelarEscolha">Cancelar</button>
-            </div>
-          </div>
-          <p v-if="erroResposta" class="ajuda ajuda--erro" role="alert">{{ erroResposta }}</p>
+        <form
+          v-if="modo === 'nota'"
+          id="painel-nota"
+          role="tabpanel"
+          aria-label="Nota para a equipe"
+          class="composer composer--nota"
+          @submit.prevent="salvarNota"
+        >
+          <label for="nota" class="visualmente-oculto">Nota interna</label>
           <textarea
-            id="resposta"
-            ref="campoTexto"
-            v-model="texto"
-            rows="1"
-            :maxlength="arquivo ? TAMANHO_MAXIMO_LEGENDA : 4096"
-            :disabled="!!motivoComposer || (!!arquivo && !aceitaLegenda)"
-            :placeholder="
-              motivoComposer ||
-              (arquivo
-                ? aceitaLegenda
-                  ? 'Legenda (opcional)'
-                  : 'O WhatsApp não aceita legenda em áudio.'
-                : 'Digite uma mensagem…')
-            "
-            :role="pelaBarra ? 'combobox' : undefined"
-            :aria-expanded="pelaBarra ? 'true' : undefined"
-            :aria-controls="pelaBarra ? 'seletor-respostas-lista' : undefined"
-            :aria-activedescendant="pelaBarra ? seletorRespostas?.opcaoAtiva : undefined"
-            @keydown="teclarNoCampo"
-            @input="aoDigitar"
-            @click="verificarBarra"
-            @blur="fecharBarra"
+            id="nota"
+            v-model="textoNota"
+            rows="2"
+            maxlength="4096"
+            placeholder="Escreva uma nota para a equipe…"
+            aria-describedby="nota-ajuda"
+            @keydown.enter.exact.prevent="salvarNota"
           ></textarea>
           <div class="ferramentas">
-            <button
-              type="button"
-              class="botao-icone sem-borda"
-              aria-label="Anexar arquivo"
-              title="Anexar arquivo (imagem, PDF, planilha XLSX, vídeo ou áudio)"
-              :disabled="!!motivoComposer || enviando"
-              @click="seletor?.click()"
-            >
-              <IconeTraco nome="anexar" :tamanho="22" />
-            </button>
-            <button
-              v-if="podeRespostas"
-              type="button"
-              class="ferramenta com-icone"
-              :aria-expanded="!!respostas && !pelaBarra"
-              :aria-describedby="arquivo ? 'respostas-indisponivel' : undefined"
-              :disabled="respostasIndisponiveis"
-              title="Inserir uma resposta rápida (ou digite / no campo)"
-              @click="respostas && !pelaBarra ? fecharRespostas() : abrirRespostas()"
-            >
-              <IconeTraco nome="raio" :tamanho="22" />
-              Respostas rápidas
-            </button>
-            <span v-if="podeRespostas && arquivo" id="respostas-indisponivel" class="ajuda">
-              Respostas rápidas ficam indisponíveis com anexo selecionado.
+            <span id="nota-ajuda" class="ajuda com-icone">
+              <IconeTraco nome="informacao" :tamanho="16" />
+              Só a equipe vê. Nada é enviado ao cliente.
             </span>
             <span class="espaco"></span>
             <button
               type="submit"
               class="botao-icone enviar"
-              :aria-label="enviando ? 'Enviando…' : 'Enviar'"
-              :title="enviando ? 'Enviando…' : 'Enviar'"
-              :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
+              :aria-label="notaMut.isPending.value ? 'Salvando nota…' : 'Salvar nota'"
+              :title="notaMut.isPending.value ? 'Salvando nota…' : 'Salvar nota'"
+              :disabled="!textoNota.trim() || notaMut.isPending.value"
             >
               <IconeTraco nome="enviar" :tamanho="26" />
             </button>
           </div>
+          <AlertaMensagem v-if="notaMut.isError.value" tipo="erro">
+            {{ describeApiError(notaMut.error.value) }} A nota foi mantida; tentar de novo não a
+            duplica.
+          </AlertaMensagem>
         </form>
-        <!-- Arquivo recusado pela validação (formato, conteúdo, tamanho): só o motivo, porque repetir não
+        <div
+          v-show="modo === 'mensagem'"
+          id="painel-mensagem"
+          role="tabpanel"
+          aria-label="Resposta ao cliente"
+        >
+          <!-- Responsável sem como responder agora (janela, canal): o motivo aqui; a nota continua. -->
+          <p v-if="motivoComposer" class="aviso-compositor aviso-compositor--aba" role="status">
+            <IconeTraco nome="informacao" :tamanho="22" />
+            {{ motivoComposer }}
+          </p>
+          <template v-else>
+            <div v-if="arquivo" class="selecionado" role="group" aria-label="Arquivo selecionado">
+              <span class="nome">{{ arquivo.arquivo.name }}</span>
+              <span class="ajuda"
+                >{{ formatoDoAnexo(arquivo.mime, arquivo.categoria).rotulo }} ·
+                {{ formatarTamanho(arquivo.arquivo.size) }}</span
+              >
+              <button
+                type="button"
+                class="link"
+                :disabled="anexoMut.isPending.value"
+                :aria-label="`Remover o arquivo ${arquivo.arquivo.name}`"
+                @click="removerArquivo"
+              >
+                Remover
+              </button>
+            </div>
+            <AlertaMensagem v-if="erroArquivo" tipo="erro">{{ erroArquivo }}</AlertaMensagem>
+            <form class="composer" @submit.prevent="enviar">
+              <input
+                ref="seletor"
+                type="file"
+                class="visualmente-oculto"
+                tabindex="-1"
+                aria-hidden="true"
+                :accept="ACEITOS"
+                @change="selecionarArquivo"
+              />
+              <label for="resposta" class="visualmente-oculto">{{
+                arquivo ? 'Legenda (opcional)' : 'Mensagem'
+              }}</label>
+              <SeletorRespostasRapidas
+                v-if="respostas"
+                id="seletor-respostas"
+                ref="seletorRespostas"
+                :termo="respostas.barra"
+                @escolher="escolherResposta"
+                @fechar="fecharRespostas"
+              />
+              <div v-if="escolha" class="escolha" role="group" aria-labelledby="escolha-titulo">
+                <p id="escolha-titulo">
+                  O campo já tem um rascunho. Como usar “{{ escolha.resposta.titulo }}”?
+                </p>
+                <div class="acoes">
+                  <button type="button" @click="decidir('substituir')">Substituir rascunho</button>
+                  <button type="button" class="secundario" @click="decidir('inserir')">
+                    Inserir no cursor
+                  </button>
+                  <button type="button" class="link" @click="cancelarEscolha">Cancelar</button>
+                </div>
+              </div>
+              <p v-if="erroResposta" class="ajuda ajuda--erro" role="alert">{{ erroResposta }}</p>
+              <textarea
+                id="resposta"
+                ref="campoTexto"
+                v-model="texto"
+                rows="1"
+                :maxlength="arquivo ? TAMANHO_MAXIMO_LEGENDA : 4096"
+                :disabled="!!motivoComposer || (!!arquivo && !aceitaLegenda)"
+                :placeholder="
+                  motivoComposer ||
+                  (arquivo
+                    ? aceitaLegenda
+                      ? 'Legenda (opcional)'
+                      : 'O WhatsApp não aceita legenda em áudio.'
+                    : 'Digite uma mensagem…')
+                "
+                :role="pelaBarra ? 'combobox' : undefined"
+                :aria-expanded="pelaBarra ? 'true' : undefined"
+                :aria-controls="pelaBarra ? 'seletor-respostas-lista' : undefined"
+                :aria-activedescendant="pelaBarra ? seletorRespostas?.opcaoAtiva : undefined"
+                @keydown="teclarNoCampo"
+                @input="aoDigitar"
+                @click="verificarBarra"
+                @blur="fecharBarra"
+              ></textarea>
+              <div class="ferramentas">
+                <button
+                  type="button"
+                  class="botao-icone sem-borda"
+                  aria-label="Anexar arquivo"
+                  title="Anexar arquivo (imagem, PDF, planilha XLSX, vídeo ou áudio)"
+                  :disabled="!!motivoComposer || enviando"
+                  @click="seletor?.click()"
+                >
+                  <IconeTraco nome="anexar" :tamanho="22" />
+                </button>
+                <button
+                  v-if="podeRespostas"
+                  type="button"
+                  class="ferramenta com-icone"
+                  :aria-expanded="!!respostas && !pelaBarra"
+                  :aria-describedby="arquivo ? 'respostas-indisponivel' : undefined"
+                  :disabled="respostasIndisponiveis"
+                  title="Inserir uma resposta rápida (ou digite / no campo)"
+                  @click="respostas && !pelaBarra ? fecharRespostas() : abrirRespostas()"
+                >
+                  <IconeTraco nome="raio" :tamanho="22" />
+                  Respostas rápidas
+                </button>
+                <span v-if="podeRespostas && arquivo" id="respostas-indisponivel" class="ajuda">
+                  Respostas rápidas ficam indisponíveis com anexo selecionado.
+                </span>
+                <span class="espaco"></span>
+                <button
+                  type="submit"
+                  class="botao-icone enviar"
+                  :aria-label="enviando ? 'Enviando…' : 'Enviar'"
+                  :title="enviando ? 'Enviando…' : 'Enviar'"
+                  :disabled="!!motivoComposer || (!arquivo && !texto.trim()) || enviando"
+                >
+                  <IconeTraco nome="enviar" :tamanho="26" />
+                </button>
+              </div>
+            </form>
+            <!-- Arquivo recusado pela validação (formato, conteúdo, tamanho): só o motivo, porque repetir não
              adianta; nas demais falhas, o arquivo fica para tentar de novo sem duplicar. -->
-        <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
-          {{ describeApiError(anexoMut.error.value) }}
-          <template v-if="codigoDoErro(anexoMut.error.value) !== 'DADOS_INVALIDOS'">
-            O arquivo foi mantido; tentar de novo não duplica a mensagem.
+            <AlertaMensagem v-if="anexoMut.isError.value" tipo="erro">
+              {{ describeApiError(anexoMut.error.value) }}
+              <template v-if="codigoDoErro(anexoMut.error.value) !== 'DADOS_INVALIDOS'">
+                O arquivo foi mantido; tentar de novo não duplica a mensagem.
+              </template>
+            </AlertaMensagem>
+            <AlertaMensagem v-if="responderMut.isError.value" tipo="erro">
+              {{ describeApiError(responderMut.error.value) }} O texto foi mantido; tentar de novo
+              não duplica a mensagem.
+            </AlertaMensagem>
           </template>
-        </AlertaMensagem>
-        <AlertaMensagem v-if="responderMut.isError.value" tipo="erro">
-          {{ describeApiError(responderMut.error.value) }} O texto foi mantido; tentar de novo não
-          duplica a mensagem.
-        </AlertaMensagem>
+        </div>
       </div>
     </template>
   </section>
@@ -1109,14 +1219,38 @@ async function carregarAnteriores() {
   overflow-y: auto;
 }
 
-.aba {
-  display: inline-block;
+/* Abas do compositor (AT-04): a selecionada em verde com sublinhado; a outra em texto neutro. */
+.abas {
+  display: flex;
+  gap: 18px;
   margin: 0 0 12px 12px;
+}
+
+.aba {
   padding: 13px 2px 9px;
-  border-bottom: 3px solid var(--cor-destaque);
-  color: var(--cor-destaque);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--cor-texto);
   font-size: 17px;
   font-weight: 500;
+}
+
+.aba[aria-selected='true'] {
+  border-bottom-color: var(--cor-destaque);
+  color: var(--cor-destaque-forte);
+}
+
+.aba:hover:not([aria-selected='true']) {
+  background: none;
+  color: var(--cor-destaque-forte);
+}
+
+/* Nota interna: o mesmo campo, com o fundo das notas para não ser confundido com a resposta. */
+.composer--nota textarea {
+  background: var(--cor-nota);
+  border-color: var(--cor-nota-borda);
 }
 
 .selecionado {
@@ -1136,6 +1270,11 @@ async function carregarAnteriores() {
 }
 
 /* AT-03: faixa no lugar da resposta quando ela não é possível. */
+/* Motivo dentro da aba Mensagem (o responsável ainda pode registrar notas). */
+.aviso-compositor--aba {
+  border-radius: var(--raio-controle);
+}
+
 .aviso-compositor {
   display: flex;
   flex-shrink: 0;

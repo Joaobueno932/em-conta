@@ -223,6 +223,17 @@ async function irPara(mensagemId: number, cursor: string) {
               <dd>{{ formatarDataHora(resumo.iniciadoEm) }}</dd>
             </div>
             <div>
+              <dt>Primeira resposta</dt>
+              <!-- Só respostas de pessoas; o aviso automático de mudança de responsável não conta. -->
+              <dd>
+                {{
+                  detalhe.data.value?.primeiraRespostaHumanaEm
+                    ? formatarDataHora(detalhe.data.value.primeiraRespostaHumanaEm)
+                    : '—'
+                }}
+              </dd>
+            </div>
+            <div>
               <dt>Encerramento</dt>
               <dd>{{ resumo.encerradoEm ? formatarDataHora(resumo.encerradoEm) : 'Em aberto' }}</dd>
             </div>
