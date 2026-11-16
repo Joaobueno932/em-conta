@@ -12,6 +12,7 @@ import {
 } from './apoio'
 import {
   ACEITA,
+  AVISO_RESPONSAVEL,
   GraphControlada,
   NUMERO_TESTE,
   SEGREDO_TESTE,
@@ -62,6 +63,9 @@ async function cadastrarPjComTelefone(page: Page, razao: string, telefone: strin
   await page.getByRole('button', { name: 'Salvar associado' }).click()
   await expect(page.getByRole('heading', { name: razao, level: 1 })).toBeVisible()
 }
+
+const avisosPara = (waId: string) => graph.envios.filter((e) => e.para === waId && e.aviso)
+const respostasPara = (waId: string) => graph.envios.filter((e) => e.para === waId && !e.aviso)
 
 async function abrirNaFila(page: Page, busca: string, rotulo: string) {
   await page.getByLabel('Buscar contato').fill(busca)
@@ -117,24 +121,33 @@ test('recebe, assume, responde, vincula associado, devolve, encerra e consulta o
   await page.getByLabel('Mensagem').fill('Bom dia! Vou verificar sua fatura.')
   await page.getByRole('button', { name: 'Enviar' }).click()
   await expect(page.getByLabel('Mensagem')).toHaveValue('')
-  await expect.poll(() => graph.envios.length, { timeout: 15_000 }).toBe(1)
-  expect(graph.envios[0]).toMatchObject({ para: waId, texto: 'Bom dia! Vou verificar sua fatura.' })
-  expect(graph.envios[0]!.caminho).toContain(`/${NUMERO_TESTE}/messages`)
+  await expect.poll(() => respostasPara(waId).length, { timeout: 15_000 }).toBe(1)
+  expect(respostasPara(waId)[0]).toMatchObject({
+    para: waId,
+    texto: 'Bom dia! Vou verificar sua fatura.',
+  })
+  expect(respostasPara(waId)[0]!.caminho).toContain(`/${NUMERO_TESTE}/messages`)
+  // Assumir avisou o cliente uma vez, pela mesma fila de envio.
+  expect(avisosPara(waId)).toHaveLength(1)
   // Digitar pediu "digitando…" uma vez, junto com a leitura da mensagem recebida (não é envio).
   expect(graph.digitando).toHaveLength(1)
   expect(graph.digitando[0]!.mensagemLida).toMatch(/^wamid\./)
   await expect(page.getByText('Bom dia! Vou verificar sua fatura.', { exact: true })).toHaveCount(1)
   // Aceita pela API não é entregue: só o status do webhook muda para "Entregue".
-  await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
+  // O aviso automático também é um balão enviado: o indicador conferido é o da resposta.
+  const balaoResposta = page.locator('.mensagem.saida', {
+    hasText: 'Bom dia! Vou verificar sua fatura.',
+  })
+  await expect(balaoResposta.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
   const entregue = await webhookDeTeste.situacao(
     page.request,
     waId,
-    graph.envios[0]!.idExterno,
+    respostasPara(waId)[0]!.idExterno,
     'delivered',
   )
   expect(entregue.status()).toBe(200)
   // Pelo aviso SSE, bem antes da consulta de segurança (30 s com avisos).
-  await expect(page.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 4_000 })
+  await expect(balaoResposta.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 4_000 })
 
   // 3. Vincular o associado sugerido pelo telefone (escolha do atendente, não automática).
   const painel = page.getByRole('complementary', { name: 'Associado' })
@@ -226,6 +239,17 @@ test('transferência entre dois atendentes: só o novo responsável responde e e
   await admin.getByRole('button', { name: 'Assumir' }).click()
   await expect(admin.getByText(/Em atendimento com/)).toBeVisible()
 
+  // Nota interna antes de transferir: fica na conversa, nunca vai ao cliente.
+  await admin.getByRole('tab', { name: 'Nota interna' }).click()
+  await admin.getByLabel('Nota interna').fill(`Cliente quer segunda via (${marca})`)
+  await admin.getByRole('button', { name: 'Salvar nota' }).click()
+  await expect(admin.getByRole('note').filter({ hasText: `segunda via (${marca})` })).toBeVisible()
+
+  // A segunda atendente acompanha a fila, com presença manual Ausente (vale até voltar ao automático).
+  await atendente.goto('/atendimento')
+  await atendente.getByLabel('Sua presença').selectOption('AUSENTE')
+  await expect(atendente.getByLabel('Sua presença')).toHaveValue('AUSENTE')
+
   await admin.getByRole('button', { name: 'Transferir' }).click()
   await admin.getByLabel('Transferir para').selectOption({ label: nomeAtendente })
   await admin.getByLabel('Motivo (opcional)').fill('Assunto financeiro')
@@ -246,13 +270,43 @@ test('transferência entre dois atendentes: só o novo responsável responde e e
   expect(direto.status()).toBe(409)
   expect(((await direto.json()) as { codigo: string }).codigo).toBe('NAO_E_RESPONSAVEL')
 
-  // O novo responsável responde e encerra.
-  await atendente.goto(`/atendimento?id=${id}`)
+  // A fila da segunda sessão traz a conversa em andamento, sem recarregar; ao abrir, a nota e o
+  // histórico estão lá.
+  await atendente.getByRole('button', { name: /^Em andamento/ }).click()
+  await expect(async () => {
+    await abrirNaFila(atendente, nomeContato, nomeContato)
+  }).toPass({ timeout: 20_000 })
+  await expect(atendente).toHaveURL(new RegExp(`id=${id}`))
   await expect(atendente.getByText(`Em atendimento com ${nomeAtendente}`)).toBeVisible()
+  await expect(
+    atendente.getByRole('note').filter({ hasText: `segunda via (${marca})` }),
+  ).toBeVisible()
+  await expect(atendente.getByText('Preciso falar com o financeiro')).toBeVisible()
+
+  // Os avisos já saíram, mas não são resposta humana: ainda não há primeira resposta.
+  const detalheDe = async () =>
+    (await (await atendente.request.get(`/api/v1/atendimento/atendimentos/${id}`)).json()) as {
+      primeiraRespostaHumanaEm?: string | null
+    }
+  await expect.poll(() => avisosPara(waId).length, { timeout: 15_000 }).toBe(2)
+  expect((await detalheDe()).primeiraRespostaHumanaEm ?? null).toBeNull()
+
+  // O novo responsável responde; digitar não muda a presença manual Ausente.
   await atendente.getByLabel('Mensagem').fill('Olá! Sou do financeiro.')
   await atendente.getByRole('button', { name: 'Enviar' }).click()
-  await expect.poll(() => graph.envios.some((e) => e.para === waId), { timeout: 15_000 }).toBe(true)
-  await expect(atendente.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => respostasPara(waId).length, { timeout: 15_000 }).toBe(1)
+  await expect(atendente.getByLabel('Sua presença')).toHaveValue('AUSENTE')
+  // Um aviso por mudança de responsável (assumir e transferir), o segundo com o nome da atendente; a
+  // nota não foi a lugar nenhum.
+  await expect.poll(() => avisosPara(waId).length, { timeout: 15_000 }).toBe(2)
+  expect(avisosPara(waId)[1]!.texto).toBe(`${AVISO_RESPONSAVEL} ${nomeAtendente}.`)
+  expect(graph.envios.some((e) => e.texto.includes(`segunda via (${marca})`))).toBe(false)
+  expect((await detalheDe()).primeiraRespostaHumanaEm).toBeTruthy()
+  await expect(
+    atendente
+      .locator('.mensagem.saida', { hasText: 'Olá! Sou do financeiro.' })
+      .getByRole('img', { name: ACEITA }),
+  ).toBeVisible({ timeout: 15_000 })
   await atendente.getByRole('button', { name: 'Encerrar', exact: true }).click()
   await atendente
     .getByRole('dialog', { name: 'Encerrar atendimento?' })

@@ -76,7 +76,7 @@ test('cadastra, usa na conversa (revisada antes de enviar) e desativa', async ({
   await expect(page.getByRole('option', { name: new RegExp(titulo) })).toBeVisible()
   await campo.press('Enter')
   await expect(campo).toHaveValue(conteudo)
-  expect(graph.envios.filter((e) => e.para === waId)).toHaveLength(0)
+  expect(graph.envios.filter((e) => e.para === waId && !e.aviso)).toHaveLength(0)
 
   // 5. Edita o texto inserido e envia pelo fluxo normal.
   await campo.press('End')
@@ -85,10 +85,14 @@ test('cadastra, usa na conversa (revisada antes de enviar) e desativa', async ({
   await page.getByRole('button', { name: 'Enviar' }).click()
   await expect(campo).toHaveValue('')
   await expect
-    .poll(() => graph.envios.filter((e) => e.para === waId).length, { timeout: 15_000 })
+    .poll(() => graph.envios.filter((e) => e.para === waId && !e.aviso).length, {
+      timeout: 15_000,
+    })
     .toBe(1)
-  expect(graph.envios.find((e) => e.para === waId)).toMatchObject({ texto: enviado })
-  await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
+  expect(graph.envios.find((e) => e.para === waId && !e.aviso)).toMatchObject({ texto: enviado })
+  await expect(
+    page.locator('.mensagem.saida', { hasText: enviado }).getByRole('img', { name: ACEITA }),
+  ).toBeVisible({ timeout: 15_000 })
 
   // 6. Desativa no catálogo: some do seletor; a mensagem enviada continua igual.
   await page.goto('/atendimento/respostas-rapidas')

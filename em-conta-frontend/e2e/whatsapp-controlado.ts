@@ -22,7 +22,12 @@ export const NUMERO_TESTE = process.env.E2E_WHATSAPP_PHONE_NUMBER_ID ?? ''
 export const ACEITA = 'Aceita pela Meta, aguardando confirmação de envio'
 const PORTA = Number(process.env.E2E_GRAPH_PORT ?? 8099)
 
+/** Início do aviso automático ao cliente quando muda o responsável (assumir ou transferir). */
+export const AVISO_RESPONSAVEL = 'Olá! Seu atendimento agora está com'
+
 export interface EnvioRecebido {
+  /** Aviso automático de mudança de responsável (não é resposta de uma pessoa). */
+  aviso: boolean
   caminho: string
   para: string
   tipo: string
@@ -115,6 +120,7 @@ export class GraphControlada {
           para: dados.to ?? '',
           tipo: dados.type ?? '',
           texto: dados.text?.body ?? '',
+          aviso: (dados.text?.body ?? '').startsWith(AVISO_RESPONSAVEL),
           legenda: (dados.image ?? dados.document ?? dados.video)?.caption,
           idMidia: midia?.id,
           idExterno,

@@ -114,18 +114,22 @@ test('recebe anexo, abre e baixa, envia anexo, acompanha a situação, consulta 
   await page.getByRole('button', { name: 'Enviar' }).click()
   await expect(page.getByRole('group', { name: 'Arquivo selecionado' })).toHaveCount(0)
   await expect
-    .poll(() => graph.envios.filter((e) => e.para === waId).length, { timeout: 15_000 })
+    .poll(() => graph.envios.filter((e) => e.para === waId && !e.aviso).length, {
+      timeout: 15_000,
+    })
     .toBe(1)
-  const envio = graph.envios.find((e) => e.para === waId)!
+  const envio = graph.envios.find((e) => e.para === waId && !e.aviso)!
   expect(envio).toMatchObject({ tipo: 'image', legenda: 'Segue o comprovante' })
   expect(envio.idMidia).toMatch(/^midia-e2e-/)
   expect(graph.uploads.some((u) => u.tipo === 'image/png')).toBe(true)
   // Upload e aceite não são entrega: só o webhook muda para "Entregue".
-  await expect(page.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
+  // O aviso automático de quem assumiu também é um balão enviado: confere o do anexo.
+  const balaoAnexo = page.locator('.mensagem.saida', { hasText: 'Segue o comprovante' })
+  await expect(balaoAnexo.getByRole('img', { name: ACEITA })).toBeVisible({ timeout: 15_000 })
   expect(
     (await webhookDeTeste.situacao(page.request, waId, envio.idExterno, 'delivered')).status(),
   ).toBe(200)
-  await expect(page.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 15_000 })
+  await expect(balaoAnexo.getByRole('img', { name: 'Entregue' })).toBeVisible({ timeout: 15_000 })
 
   // 4. Mídia: os três anexos, com filtro por tipo.
   const midia = page.locator('section.midia')
