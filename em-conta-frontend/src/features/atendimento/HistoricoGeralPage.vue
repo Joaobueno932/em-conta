@@ -14,12 +14,20 @@ import {
   historico,
   iniciais,
   nomeContato,
+  type FiltrosHistorico,
 } from './atendimento-api'
+import {
+  chavesClassificacoes,
+  listarCadastro,
+  rotuloItem,
+  separarPorSituacao,
+} from './classificacoes-api'
 
 /**
  * Histórico geral (HG-02), aberto por "Ver opções" na tela de Atendimento: atendimentos encerrados, com
- * busca (nome, telefone ou protocolo) e período de encerramento filtrados no servidor, em dias do negócio.
- * Setor e etiquetas do protótipo dependem de cadastros ainda não entregues e não aparecem.
+ * busca (nome, telefone ou protocolo), setor, etiqueta e período de encerramento (dias do negócio),
+ * combinados e filtrados no servidor. Setor e etiqueta incluem os itens desativados depois de usados e a
+ * opção "Sem setor"/"Sem etiqueta", que acha também os atendimentos de antes desses cadastros.
  */
 const http = useHttpClient()
 const route = useRoute()
@@ -27,11 +35,33 @@ const router = useRouter()
 
 const daUrl = (chave: string) => (typeof route.query[chave] === 'string' ? route.query[chave] : '')
 const data = (valor: string) => (/^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : '')
-const inicial = { busca: daUrl('busca'), de: data(daUrl('de')), ate: data(daUrl('ate')) }
+const item = (valor: string) => (/^(\d{1,18}|SEM)$/.test(valor) ? valor : '')
+const inicial: FiltrosHistorico = {
+  busca: daUrl('busca'),
+  de: data(daUrl('de')),
+  ate: data(daUrl('ate')),
+  setor: item(daUrl('setor')),
+  etiqueta: item(daUrl('etiqueta')),
+}
 const termo = ref(inicial.busca)
 const filtros = ref(inicial)
 const de = ref(inicial.de)
 const ate = ref(inicial.ate)
+const setor = ref(inicial.setor)
+const etiqueta = ref(inicial.etiqueta)
+
+// Opções dos filtros: o cadastro inteiro (o histórico guarda os já usados), com os ativos primeiro e os
+// inativos num grupo à parte, marcados "(inativo)".
+const setores = useQuery({
+  queryKey: chavesClassificacoes.lista('setores', 'TODOS'),
+  queryFn: () => listarCadastro(http, 'setores'),
+})
+const etiquetas = useQuery({
+  queryKey: chavesClassificacoes.lista('etiquetas', 'TODOS'),
+  queryFn: () => listarCadastro(http, 'etiquetas'),
+})
+const opcoesSetor = computed(() => separarPorSituacao(setores.data.value?.itens))
+const opcoesEtiqueta = computed(() => separarPorSituacao(etiquetas.data.value?.itens))
 const paginaDaUrl = Number(daUrl('pagina'))
 const pagina = ref(
   Number.isInteger(paginaDaUrl) && paginaDaUrl > 1 && paginaDaUrl <= 100_001 ? paginaDaUrl - 1 : 0,
@@ -43,21 +73,15 @@ watch([filtros, pagina], () => {
   if (filtros.value.busca) query.busca = filtros.value.busca
   if (filtros.value.de) query.de = filtros.value.de
   if (filtros.value.ate) query.ate = filtros.value.ate
+  if (filtros.value.setor) query.setor = filtros.value.setor
+  if (filtros.value.etiqueta) query.etiqueta = filtros.value.etiqueta
   if (pagina.value > 0) query.pagina = String(pagina.value + 1)
   void router.replace({ query })
 })
 
 const lista = useQuery({
-  queryKey: computed(() =>
-    chavesAtendimento.historico(
-      filtros.value.busca,
-      filtros.value.de,
-      filtros.value.ate,
-      pagina.value,
-    ),
-  ),
-  queryFn: () =>
-    historico(http, filtros.value.busca, filtros.value.de, filtros.value.ate, pagina.value),
+  queryKey: computed(() => chavesAtendimento.historico(filtros.value, pagina.value)),
+  queryFn: () => historico(http, filtros.value, pagina.value),
   placeholderData: keepPreviousData,
 })
 
@@ -79,18 +103,24 @@ const tentouPeriodoInvalido = ref(false)
 function filtrar() {
   tentouPeriodoInvalido.value = periodoInvalido.value
   if (periodoInvalido.value) return
-  filtros.value = { busca: termo.value.trim(), de: de.value, ate: ate.value }
+  filtros.value = {
+    busca: termo.value.trim(),
+    de: de.value,
+    ate: ate.value,
+    setor: setor.value,
+    etiqueta: etiqueta.value,
+  }
   pagina.value = 0
 }
 
-const comFiltros = computed(() =>
-  Boolean(filtros.value.busca || filtros.value.de || filtros.value.ate),
-)
+const comFiltros = computed(() => Object.values(filtros.value).some(Boolean))
 
 function limpar() {
   termo.value = ''
   de.value = ''
   ate.value = ''
+  setor.value = ''
+  etiqueta.value = ''
   filtrar()
 }
 
@@ -139,6 +169,36 @@ const paginas = computed(() => {
           />
         </div>
         <div class="campo">
+          <label for="hist-setor">Setor</label>
+          <select id="hist-setor" v-model="setor">
+            <option value="">Todos</option>
+            <option value="SEM">Sem setor</option>
+            <option v-for="s in opcoesSetor.ativos" :key="s.id" :value="String(s.id)">
+              {{ s.nome }}
+            </option>
+            <optgroup v-if="opcoesSetor.inativos.length" label="Inativos">
+              <option v-for="s in opcoesSetor.inativos" :key="s.id" :value="String(s.id)">
+                {{ rotuloItem(s) }}
+              </option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="hist-etiqueta">Etiquetas</label>
+          <select id="hist-etiqueta" v-model="etiqueta">
+            <option value="">Todas</option>
+            <option value="SEM">Sem etiqueta</option>
+            <option v-for="e in opcoesEtiqueta.ativos" :key="e.id" :value="String(e.id)">
+              {{ e.nome }}
+            </option>
+            <optgroup v-if="opcoesEtiqueta.inativos.length" label="Inativos">
+              <option v-for="e in opcoesEtiqueta.inativos" :key="e.id" :value="String(e.id)">
+                {{ rotuloItem(e) }}
+              </option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="campo">
           <label for="hist-de">De</label>
           <input id="hist-de" v-model="de" type="date" :max="ate || undefined" />
         </div>
@@ -178,7 +238,7 @@ const paginas = computed(() => {
         <p v-if="lista.data.value.totalItens === 0" class="vazio" role="status">
           {{
             comFiltros
-              ? 'Nenhum resultado correspondente. Revise a busca ou o período.'
+              ? 'Nenhum resultado correspondente. Revise a busca, o setor, as etiquetas ou o período.'
               : 'Nenhum atendimento encerrado ainda.'
           }}
         </p>
@@ -188,8 +248,10 @@ const paginas = computed(() => {
               <tr>
                 <th scope="col">Contato</th>
                 <th scope="col">Associado</th>
+                <th scope="col">Setor</th>
                 <th scope="col">Atendente</th>
                 <th scope="col">Encerrado por</th>
+                <th scope="col">Etiquetas</th>
                 <th scope="col">Data</th>
               </tr>
             </thead>
@@ -212,8 +274,17 @@ const paginas = computed(() => {
                   </span>
                 </td>
                 <td>{{ a.associado?.nome ?? '—' }}</td>
+                <td>{{ a.setor ? rotuloItem(a.setor) : '—' }}</td>
                 <td>{{ a.responsavel?.nome ?? '—' }}</td>
                 <td>{{ a.encerradoPor?.nome ?? '—' }}</td>
+                <td>
+                  <ul v-if="a.etiquetas.length" class="etiquetas">
+                    <li v-for="e in a.etiquetas" :key="e.id" class="etiqueta">
+                      {{ rotuloItem(e) }}
+                    </li>
+                  </ul>
+                  <span v-else class="ajuda">Sem etiqueta</span>
+                </td>
                 <td>{{ a.encerradoEm ? formatarData(a.encerradoEm) : '—' }}</td>
               </tr>
             </tbody>
@@ -276,12 +347,13 @@ const paginas = computed(() => {
 
 .filtros {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr auto;
+  grid-template-columns: 2fr repeat(4, minmax(0, 1fr)) auto;
   gap: 0.75rem;
   align-items: end;
 }
 
-.filtros input {
+.filtros input,
+.filtros select {
   width: 100%;
   box-sizing: border-box;
 }
@@ -319,6 +391,15 @@ const paginas = computed(() => {
   display: block;
 }
 
+.etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .vazio {
   text-align: center;
   color: var(--cor-texto-2);
@@ -346,6 +427,12 @@ button.numero {
 
 .girada {
   transform: rotate(180deg);
+}
+
+@media (max-width: 72rem) {
+  .filtros {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 48rem) {

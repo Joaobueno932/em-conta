@@ -242,6 +242,108 @@
         }
       }
     },
+    "/api/v1/atendimento/triagem": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Configuração da triagem inicial (atendimento:consultar)",
+        "operationId": "obterTriagem",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfiguracaoTriagem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Liga ou desliga a triagem e define o setor de cada opção (triagem:configurar)",
+        "operationId": "configurarTriagem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfiguracaoTriagemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Opção repetida ou não configurável, setor inexistente ou inativo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfiguracaoTriagem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfiguracaoTriagem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/setores/{id}": {
+      "put": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Renomeia setor; vale para os atendimentos que já o usam (setores:editar)",
+        "operationId": "editarSetor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "409": {
+            "description": "NOME_EM_USO ou CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/respostas-rapidas/{id}": {
       "get": {
         "tags": [
@@ -360,6 +462,89 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/etiquetas/{id}": {
+      "put": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Renomeia etiqueta; vale para os atendimentos que já a usam (etiquetas:editar)",
+        "operationId": "editarEtiqueta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "409": {
+            "description": "NOME_EM_USO ou CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/atendimentos/{id}/classificacao": {
+      "put": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Define setor e etiquetas deste ciclo, substituindo os atuais (atendimento:classificar)",
+        "operationId": "classificarAtendimento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Classificado"
+          },
+          "400": {
+            "description": "DADOS_INVALIDOS: item inexistente ou inativo, ou etiquetas demais"
+          },
+          "409": {
+            "description": "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE"
           }
         }
       }
@@ -1508,6 +1693,166 @@
         }
       }
     },
+    "/api/v1/atendimento/setores": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Setores do atendimento, em ordem de nome (atendimento:consultar)",
+        "operationId": "listarSetores",
+        "parameters": [
+          {
+            "name": "situacao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "TODOS",
+              "enum": [
+                "ATIVOS",
+                "INATIVOS",
+                "TODOS"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Cadastra setor (setores:cadastrar)",
+        "operationId": "criarSetor",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Cadastrado (ativo)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NOME_EM_USO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/setores/{id}/desativacao": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Desativa setor, preservando o cadastro e os atendimentos que o usam (setores:alterar-situacao)",
+        "operationId": "desativarSetor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SituacaoCadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "409": {
+            "description": "CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/setores/{id}/ativacao": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Ativa setor (setores:alterar-situacao)",
+        "operationId": "ativarSetor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SituacaoCadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "409": {
+            "description": "CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/atendimento/respostas-rapidas": {
       "get": {
         "tags": [
@@ -1737,6 +2082,166 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PresencaAtendente"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/etiquetas": {
+      "get": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Etiquetas do atendimento, em ordem de nome (atendimento:consultar)",
+        "operationId": "listarEtiquetas",
+        "parameters": [
+          {
+            "name": "situacao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "TODOS",
+              "enum": [
+                "ATIVOS",
+                "INATIVOS",
+                "TODOS"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Cadastra etiqueta (etiquetas:cadastrar)",
+        "operationId": "criarEtiqueta",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Cadastrada (ativa)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NOME_EM_USO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/etiquetas/{id}/desativacao": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Desativa etiqueta, preservando o cadastro e os atendimentos que a usam (etiquetas:alterar-situacao)",
+        "operationId": "desativarEtiqueta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SituacaoCadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "409": {
+            "description": "CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/atendimento/etiquetas/{id}/ativacao": {
+      "post": {
+        "tags": [
+          "Atendimento"
+        ],
+        "summary": "Ativa etiqueta (etiquetas:alterar-situacao)",
+        "operationId": "ativarEtiqueta",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SituacaoCadastroClassificacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "409": {
+            "description": "CONFLITO_CONCORRENTE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCadastroClassificacao"
                 }
               }
             }
@@ -2808,7 +3313,7 @@
         "tags": [
           "Atendimento"
         ],
-        "summary": "Atendimentos encerrados, com busca e período (atendimento:consultar)",
+        "summary": "Atendimentos encerrados, com busca, período, setor e etiqueta (atendimento:consultar)",
         "operationId": "historicoAtendimentos",
         "parameters": [
           {
@@ -2837,6 +3342,28 @@
             "schema": {
               "type": "string",
               "format": "date"
+            }
+          },
+          {
+            "name": "setor",
+            "in": "query",
+            "description": "Número do setor ou SEM (ciclos sem setor)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 20,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "etiqueta",
+            "in": "query",
+            "description": "Número da etiqueta ou SEM (ciclos sem etiqueta)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 20,
+              "minLength": 0
             }
           },
           {
@@ -3879,6 +4406,228 @@
           "versao"
         ]
       },
+      "ConfiguracaoTriagemRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Versão vista"
+          },
+          "ativa": {
+            "type": "boolean"
+          },
+          "opcoes": {
+            "type": "array",
+            "description": "Destino de cada opção configurável; opção ausente fica sem destino",
+            "items": {
+              "$ref": "#/components/schemas/DestinoTriagemRequest"
+            },
+            "maxItems": 10,
+            "minItems": 0
+          }
+        },
+        "required": [
+          "ativa",
+          "opcoes",
+          "versao"
+        ]
+      },
+      "DestinoTriagemRequest": {
+        "type": "object",
+        "properties": {
+          "opcao": {
+            "type": "string",
+            "enum": [
+              "FINANCEIRO",
+              "COBRANCA",
+              "COMERCIAL"
+            ]
+          },
+          "setorId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Setor ativo; vazio = fila sem setor"
+          }
+        },
+        "required": [
+          "opcao"
+        ]
+      },
+      "ConfiguracaoTriagem": {
+        "type": "object",
+        "properties": {
+          "ativa": {
+            "type": "boolean",
+            "description": "Ligada: cada ciclo novo recebe a saudação com o menu"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "saudacao": {
+            "type": "string",
+            "description": "Texto da saudação, com o menu"
+          },
+          "opcoes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpcaoTriagem"
+            }
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "atualizadoPor": {
+            "$ref": "#/components/schemas/UsuarioAtendimento"
+          }
+        },
+        "required": [
+          "ativa",
+          "opcoes",
+          "saudacao",
+          "versao"
+        ]
+      },
+      "ItemClassificacao": {
+        "type": "object",
+        "description": "Setor ou etiqueta (o nome atual do cadastro)",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean",
+            "description": "Falso quando o item foi desativado depois do vínculo"
+          }
+        },
+        "required": [
+          "ativo",
+          "id",
+          "nome"
+        ]
+      },
+      "OpcaoTriagem": {
+        "type": "object",
+        "description": "Opção do menu da triagem, na ordem exibida ao cliente",
+        "properties": {
+          "opcao": {
+            "type": "string",
+            "enum": [
+              "FINANCEIRO",
+              "COBRANCA",
+              "COMERCIAL",
+              "HUMANO"
+            ]
+          },
+          "numero": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Número que o cliente responde"
+          },
+          "rotulo": {
+            "type": "string"
+          },
+          "configuravel": {
+            "type": "boolean",
+            "description": "Falso para \"Outro assunto ou falar com um atendente\", que vai sempre para a fila sem setor"
+          },
+          "setor": {
+            "$ref": "#/components/schemas/ItemClassificacao",
+            "description": "Setor de destino; vazio = fila sem setor"
+          }
+        },
+        "required": [
+          "configuravel",
+          "numero",
+          "opcao",
+          "rotulo"
+        ]
+      },
+      "UsuarioAtendimento": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nome"
+        ]
+      },
+      "CadastroClassificacaoRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "description": "De 2 a 60 caracteres (setor) ou 2 a 40 (etiqueta); espaços repetidos viram um só",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Versão vista (obrigatória na edição)"
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "ItemCadastroClassificacao": {
+        "type": "object",
+        "description": "Setor ou etiqueta do cadastro",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "ativo": {
+            "type": "boolean"
+          },
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "criadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "criadoPor": {
+            "$ref": "#/components/schemas/UsuarioAtendimento"
+          },
+          "atualizadoEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "atualizadoPor": {
+            "$ref": "#/components/schemas/UsuarioAtendimento"
+          }
+        },
+        "required": [
+          "ativo",
+          "atualizadoEm",
+          "atualizadoPor",
+          "criadoEm",
+          "criadoPor",
+          "id",
+          "nome",
+          "versao"
+        ]
+      },
       "RespostaRapidaRequest": {
         "type": "object",
         "properties": {
@@ -3963,22 +4712,6 @@
           "versao"
         ]
       },
-      "UsuarioAtendimento": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "nome": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "nome"
-        ]
-      },
       "PresencaRequest": {
         "type": "object",
         "properties": {
@@ -4021,6 +4754,33 @@
         "required": [
           "disponivel",
           "modo"
+        ]
+      },
+      "ClassificacaoRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "setorId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Setor do ciclo; vazio para nenhum"
+          },
+          "etiquetaIds": {
+            "type": "array",
+            "description": "Etiquetas do ciclo (substituem as atuais); vazio para nenhuma",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "maxItems": 50,
+            "minItems": 0
+          }
+        },
+        "required": [
+          "versao"
         ]
       },
       "VinculoAssociadoRequest": {
@@ -4752,6 +5512,18 @@
           "token"
         ]
       },
+      "SituacaoCadastroClassificacaoRequest": {
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "versao"
+        ]
+      },
       "SituacaoRespostaRapidaRequest": {
         "type": "object",
         "properties": {
@@ -5449,6 +6221,20 @@
           "tentativas"
         ]
       },
+      "ListaCadastroClassificacao": {
+        "type": "object",
+        "properties": {
+          "itens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemCadastroClassificacao"
+            }
+          }
+        },
+        "required": [
+          "itens"
+        ]
+      },
       "PaginaRespostasRapidas": {
         "type": "object",
         "properties": {
@@ -5553,11 +6339,28 @@
           },
           "encerradoPor": {
             "$ref": "#/components/schemas/UsuarioAtendimento"
+          },
+          "setor": {
+            "$ref": "#/components/schemas/ItemClassificacao",
+            "description": "Setor deste ciclo; vazio quando não foi definido"
+          },
+          "etiquetas": {
+            "type": "array",
+            "description": "Etiquetas deste ciclo, em ordem de nome",
+            "items": {
+              "$ref": "#/components/schemas/ItemClassificacao"
+            }
+          },
+          "emTriagem": {
+            "type": "boolean",
+            "description": "Triagem automática aguardando a resposta do cliente ao menu (ver triagem)"
           }
         },
         "required": [
           "codigo",
           "contatoNumero",
+          "emTriagem",
+          "etiquetas",
           "id",
           "iniciadoEm",
           "situacao"
@@ -5879,7 +6682,8 @@
               "LIDA",
               "FALHA",
               "DESCONHECIDA",
-              "JANELA_EXPIRADA"
+              "JANELA_EXPIRADA",
+              "CANCELADA"
             ]
           },
           "erroCodigo": {
@@ -5923,11 +6727,12 @@
           },
           "origem": {
             "type": "string",
-            "description": "Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de responsável",
+            "description": "Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de responsável e TRIAGEM, as mensagens automáticas da triagem inicial",
             "enum": [
               "CONTATO",
               "ATENDENTE",
-              "AVISO_RESPONSAVEL"
+              "AVISO_RESPONSAVEL",
+              "TRIAGEM"
             ]
           },
           "anexo": {

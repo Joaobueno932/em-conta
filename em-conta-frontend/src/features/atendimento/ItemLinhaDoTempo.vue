@@ -10,8 +10,9 @@ import IndicadorSituacao from './IndicadorSituacao.vue'
  * centro, com fundo próprio e o rótulo "só a equipe vê") ou mensagem em balão (entrada
  * à esquerda, saída à direita), com anexo, legenda, horário e, na saída, o indicador da situação do
  * envio ({@link IndicadorSituacao}, com rótulo acessível). Usado na conversa e no detalhe somente
- * leitura do histórico. O aviso automático ao cliente (mudança de responsável) aparece como mensagem
- * enviada, identificado como "Aviso automático" no lugar do autor.
+ * leitura do histórico. O aviso automático ao cliente (mudança de responsável) e as mensagens da triagem
+ * inicial aparecem como mensagens enviadas, com "Aviso automático" ou "Triagem automática" no lugar do
+ * autor; os eventos da triagem não têm autor.
  */
 defineProps<{
   item: Item
@@ -29,11 +30,17 @@ defineProps<{
     <template v-if="item.evento === 'ATENDIMENTO_INICIADO'">{{
       ROTULO_EVENTO[item.evento]
     }}</template>
+    <template v-else-if="item.evento?.startsWith('TRIAGEM_')"
+      >{{ ROTULO_EVENTO[item.evento] ?? item.evento
+      }}<template v-if="item.texto"> — {{ item.texto }}</template></template
+    >
     <template v-else>
       {{ item.autor?.nome }} {{ ROTULO_EVENTO[item.evento ?? ''] ?? item.evento }}
       <template v-if="item.usuarioAlvo">para {{ item.usuarioAlvo.nome }}</template>
       <template v-if="item.associado">{{ item.associado.nome }}</template>
       <template v-if="item.motivo">({{ item.motivo }})</template>
+      <!-- Retrato gravado no evento (ex.: setor e etiquetas da classificação, com os nomes da época). -->
+      <template v-if="item.texto">— {{ item.texto }}</template>
     </template>
   </p>
   <div v-else-if="item.tipo === 'NOTA'" :id="`nota-${item.id}`" class="nota" role="note">
@@ -71,6 +78,7 @@ defineProps<{
     <p v-else class="texto">{{ item.texto }}</p>
     <p class="meta">
       <span v-if="item.origem === 'AVISO_RESPONSAVEL'" class="automatico">Aviso automático · </span>
+      <span v-else-if="item.origem === 'TRIAGEM'" class="automatico">Triagem automática · </span>
       <span v-else-if="item.autor">{{ item.autor.nome }} · </span>
       <span class="hora"
         >{{ formatarHora(item.ocorridoEm) }}

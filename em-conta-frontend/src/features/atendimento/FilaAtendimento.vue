@@ -16,7 +16,9 @@ import {
   INTERVALO_MS,
   listarFila,
   nomeContato,
+  type Resumo,
 } from './atendimento-api'
+import { rotuloItem } from './classificacoes-api'
 
 /**
  * Fila de conversas (AT-01/AT-03): visões, busca no servidor e paginação. Nesta página só há
@@ -27,12 +29,28 @@ type VisaoFila = 'EM_ANDAMENTO' | 'AGUARDANDO'
 const props = defineProps<{ selecionado: number | null }>()
 const emit = defineEmits<{ selecionar: [id: number] }>()
 
-// "Ver opções" (AT-02/AT-06): menu que abre para cima no rodapé da fila. Nesta versão só tem o
-// Histórico geral e as Mensagens rápidas (com permissão); as demais opções do protótipo dependem de
-// entregas futuras.
+// "Ver opções" (AT-02/AT-06): menu que abre para cima no rodapé da fila. Nesta versão tem o
+// Histórico geral, as Mensagens rápidas, os cadastros de Setores e etiquetas e a Triagem do WhatsApp (com
+// permissão); as demais opções do protótipo dependem de entregas futuras.
 const opcoes = ref(false)
 const { data: usuario } = useSessao()
 const podeRespostas = computed(() => temPermissao(usuario.value, 'respostas-rapidas:consultar'))
+const podeCadastros = computed(() =>
+  ['setores', 'etiquetas'].some((c) =>
+    ['cadastrar', 'editar', 'alterar-situacao'].some((a) =>
+      temPermissao(usuario.value, `${c}:${a}`),
+    ),
+  ),
+)
+/**
+ * Linha abaixo do nome: setor do ciclo (da triagem ou do responsável), responsável e, enquanto o cliente
+ * não respondeu ao menu da triagem, "Em triagem".
+ */
+const linhaSecundaria = (a: Resumo) =>
+  [a.setor ? rotuloItem(a.setor) : null, a.responsavel?.nome, a.emTriagem ? 'Em triagem' : null]
+    .filter(Boolean)
+    .join(' · ')
+const podeTriagem = computed(() => temPermissao(usuario.value, 'triagem:configurar'))
 const rodape = ref<HTMLElement | null>(null)
 const botaoOpcoes = ref<HTMLButtonElement | null>(null)
 function fecharOpcoes(devolverFoco = false) {
@@ -166,7 +184,7 @@ defineExpose({ mostrarVisao: trocar })
                 <span class="nome-texto" :title="a.associado?.nome ?? nomeContato(a)">{{
                   a.associado?.nome ?? nomeContato(a)
                 }}</span>
-                <span v-if="a.responsavel" class="responsavel">{{ a.responsavel.nome }}</span>
+                <span v-if="linhaSecundaria(a)" class="responsavel">{{ linhaSecundaria(a) }}</span>
               </span>
               <span class="data">Desde {{ formatarData(a.iniciadoEm) }}</span>
             </button>
@@ -216,6 +234,18 @@ defineExpose({ mostrarVisao: trocar })
           <RouterLink :to="{ name: 'atendimento-respostas-rapidas' }" class="com-icone">
             <IconeTraco nome="raio" :tamanho="20" />
             Mensagens rápidas
+          </RouterLink>
+        </li>
+        <li v-if="podeCadastros">
+          <RouterLink :to="{ name: 'atendimento-setores-etiquetas' }" class="com-icone">
+            <IconeTraco nome="predio" :tamanho="20" />
+            Setores e etiquetas
+          </RouterLink>
+        </li>
+        <li v-if="podeTriagem">
+          <RouterLink :to="{ name: 'atendimento-triagem' }" class="com-icone">
+            <IconeTraco nome="conversa" :tamanho="20" />
+            Triagem do WhatsApp
           </RouterLink>
         </li>
       </ul>

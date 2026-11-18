@@ -12,6 +12,7 @@ import IconeTraco from '@/shared/components/IconeTraco.vue'
 import {
   buscarAssociados,
   chavesAtendimento,
+  classificar,
   formatarData,
   iniciais,
   obterDetalhe,
@@ -19,11 +20,19 @@ import {
   vincularAssociado,
   type AssociadoAtendimento,
 } from './atendimento-api'
+import {
+  chavesClassificacoes,
+  listarCadastro,
+  MAXIMO_ETIQUETAS,
+  rotuloItem,
+} from './classificacoes-api'
 import MidiaConversa from './MidiaConversa.vue'
 
 /**
  * Painel do associado (AT-06). Telefone igual não vincula sozinho: as sugestões só aparecem para o
- * atendente escolher. Trocar ou remover um vínculo exige motivo e fica no histórico.
+ * atendente escolher. Trocar ou remover um vínculo exige motivo e fica no histórico. Na seção
+ * Atendimento, setor e etiquetas deste ciclo; só o responsável atual (com atendimento:classificar)
+ * os altera, em andamento, escolhendo itens ativos (os que o ciclo já tem podem ficar).
  */
 const props = defineProps<{ id: number }>()
 const emit = defineEmits<{ fechar: []; abrirMensagem: [mensagemId: number, cursor: string] }>()
@@ -82,6 +91,58 @@ const vincular = useMutation({
   onSettled: () => queryClient.invalidateQueries({ queryKey: chavesAtendimento.todos }),
 })
 const conflito = computed(() => codigoDoErro(vincular.error.value) === 'CONFLITO_CONCORRENTE')
+
+// ---------------------------------------------------------------- setor e etiquetas
+const resumo = computed(() => detalhe.data.value?.resumo)
+const podeClassificar = computed(
+  () =>
+    temPermissao(usuario.value, 'atendimento:classificar') &&
+    resumo.value?.situacao === 'EM_ATENDIMENTO' &&
+    resumo.value.responsavel?.id === usuario.value?.id,
+)
+const classificando = ref(false)
+const setorEscolhido = ref('')
+const etiquetasEscolhidas = ref<number[]>([])
+const setores = useQuery({
+  queryKey: chavesClassificacoes.lista('setores', 'TODOS'),
+  queryFn: () => listarCadastro(http, 'setores'),
+  enabled: classificando,
+})
+const etiquetas = useQuery({
+  queryKey: chavesClassificacoes.lista('etiquetas', 'TODOS'),
+  queryFn: () => listarCadastro(http, 'etiquetas'),
+  enabled: classificando,
+})
+// Escolhas: os ativos e, mesmo inativos, os que o ciclo já tem.
+const opcoesSetor = computed(() =>
+  (setores.data.value?.itens ?? []).filter((i) => i.ativo || i.id === resumo.value?.setor?.id),
+)
+const opcoesEtiqueta = computed(() =>
+  (etiquetas.data.value?.itens ?? []).filter(
+    (i) => i.ativo || resumo.value?.etiquetas.some((e) => e.id === i.id),
+  ),
+)
+
+function abrirClassificacao() {
+  setorEscolhido.value = resumo.value?.setor ? String(resumo.value.setor.id) : ''
+  etiquetasEscolhidas.value = resumo.value?.etiquetas.map((e) => e.id) ?? []
+  salvarClassificacao.reset()
+  classificando.value = true
+}
+
+const salvarClassificacao = useMutation({
+  mutationFn: () =>
+    classificar(http, props.id, {
+      versao: detalhe.data.value!.versao,
+      setorId: setorEscolhido.value ? Number(setorEscolhido.value) : undefined,
+      etiquetaIds: etiquetasEscolhidas.value,
+    }),
+  onSuccess: () => (classificando.value = false),
+  onSettled: () => queryClient.invalidateQueries({ queryKey: chavesAtendimento.todos }),
+})
+const conflitoClassificacao = computed(
+  () => codigoDoErro(salvarClassificacao.error.value) === 'CONFLITO_CONCORRENTE',
+)
 
 function confirmar(associadoId?: number) {
   if (exigeMotivo.value && !motivo.value.trim()) return
@@ -238,10 +299,93 @@ function confirmar(associadoId?: number) {
             <dd>{{ detalhe.data.value.resumo.responsavel?.nome ?? '—' }}</dd>
           </div>
           <div>
+            <dt class="com-icone"><IconeTraco nome="predio" />Setor</dt>
+            <dd>
+              {{
+                detalhe.data.value.resumo.setor ? rotuloItem(detalhe.data.value.resumo.setor) : '—'
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt class="com-icone"><IconeTraco nome="informacao" />Etiquetas</dt>
+            <dd>
+              <ul v-if="detalhe.data.value.resumo.etiquetas.length" class="etiquetas">
+                <li v-for="e in detalhe.data.value.resumo.etiquetas" :key="e.id" class="etiqueta">
+                  {{ rotuloItem(e) }}
+                </li>
+              </ul>
+              <span v-else class="ajuda">Sem etiqueta</span>
+            </dd>
+          </div>
+          <div>
             <dt class="com-icone"><IconeTraco nome="historico" />Desde</dt>
             <dd>{{ formatarData(detalhe.data.value.resumo.iniciadoEm) }}</dd>
           </div>
         </dl>
+        <div v-show="secoes.atendimento">
+          <button
+            v-if="podeClassificar && !classificando"
+            type="button"
+            class="link"
+            @click="abrirClassificacao"
+          >
+            Classificar
+          </button>
+          <form
+            v-if="podeClassificar && classificando"
+            class="classificacao"
+            aria-label="Setor e etiquetas do atendimento"
+            @submit.prevent="salvarClassificacao.mutate()"
+          >
+            <AlertaMensagem v-if="conflitoClassificacao" tipo="aviso">
+              O atendimento foi alterado por outra pessoa. Confira a classificação atual e tente de
+              novo.
+            </AlertaMensagem>
+            <AlertaMensagem v-else-if="salvarClassificacao.isError.value" tipo="erro">
+              {{ describeApiError(salvarClassificacao.error.value) }}
+            </AlertaMensagem>
+            <div class="campo">
+              <label for="classificacao-setor">Setor</label>
+              <select id="classificacao-setor" v-model="setorEscolhido">
+                <option value="">Nenhum</option>
+                <option v-for="s in opcoesSetor" :key="s.id" :value="String(s.id)">
+                  {{ rotuloItem(s) }}
+                </option>
+              </select>
+            </div>
+            <fieldset>
+              <legend>Etiquetas</legend>
+              <p v-if="etiquetas.isSuccess.value && !opcoesEtiqueta.length" class="ajuda">
+                Nenhuma etiqueta ativa cadastrada.
+              </p>
+              <ul class="opcoes">
+                <li v-for="e in opcoesEtiqueta" :key="e.id">
+                  <label>
+                    <input
+                      v-model="etiquetasEscolhidas"
+                      type="checkbox"
+                      :value="e.id"
+                      :disabled="
+                        !etiquetasEscolhidas.includes(e.id) &&
+                        etiquetasEscolhidas.length >= MAXIMO_ETIQUETAS
+                      "
+                    />
+                    {{ rotuloItem(e) }}
+                  </label>
+                </li>
+              </ul>
+              <p class="ajuda">Até {{ MAXIMO_ETIQUETAS }} etiquetas.</p>
+            </fieldset>
+            <div class="acoes">
+              <button type="submit" :disabled="salvarClassificacao.isPending.value">
+                Salvar classificação
+              </button>
+              <button type="button" class="secundario" @click="classificando = false">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
 
       <MidiaConversa
@@ -394,6 +538,29 @@ button.alternar {
   margin: 0;
   font-size: 15px;
   overflow-wrap: anywhere;
+}
+
+.etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.classificacao {
+  margin-top: 0.5rem;
+}
+
+.classificacao select {
+  width: 100%;
+}
+
+.classificacao fieldset {
+  margin: 0.5rem 0;
+  padding: 0;
+  border: none;
 }
 
 .edicao input[type='search'],

@@ -9,6 +9,8 @@ import AtendimentoDetalhePage from '@/features/atendimento/AtendimentoDetalhePag
 import AtendimentoPage from '@/features/atendimento/AtendimentoPage.vue'
 import HistoricoGeralPage from '@/features/atendimento/HistoricoGeralPage.vue'
 import RespostasRapidasPage from '@/features/atendimento/RespostasRapidasPage.vue'
+import SetoresEtiquetasPage from '@/features/atendimento/SetoresEtiquetasPage.vue'
+import TriagemPage from '@/features/atendimento/TriagemPage.vue'
 import AcessoNegadoPage from '@/features/auth/AcessoNegadoPage.vue'
 import FazendaFormPage from '@/features/usinas/FazendaFormPage.vue'
 import FazendasPage from '@/features/usinas/FazendasPage.vue'
@@ -156,6 +158,18 @@ export const routes: RouteRecordRaw[] = [
         name: 'atendimento-respostas-rapidas',
         component: RespostasRapidasPage,
         meta: { permissao: 'respostas-rapidas:consultar' },
+      },
+      {
+        path: 'atendimento/setores-etiquetas',
+        name: 'atendimento-setores-etiquetas',
+        component: SetoresEtiquetasPage,
+        meta: { permissao: 'atendimento:consultar' },
+      },
+      {
+        path: 'atendimento/triagem',
+        name: 'atendimento-triagem',
+        component: TriagemPage,
+        meta: { permissao: 'atendimento:consultar' },
       },
       { path: 'acesso-negado', name: 'acesso-negado', component: AcessoNegadoPage },
     ],

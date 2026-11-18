@@ -7,6 +7,8 @@ export type Detalhe = components['schemas']['AtendimentoDetalhe']
 export type Item = components['schemas']['ItemLinhaDoTempo']
 export type AssociadoAtendimento = components['schemas']['AssociadoAtendimento']
 export type UsuarioAtendimento = components['schemas']['UsuarioAtendimento']
+/** Setor ou etiqueta gravado num atendimento (nome atual do cadastro; `ativo` falso se desativado depois). */
+export type ItemClassificacao = components['schemas']['ItemClassificacao']
 export type Visao = 'AGUARDANDO' | 'EM_ANDAMENTO' | 'MEUS' | 'ENCERRADOS'
 
 /**
@@ -31,8 +33,17 @@ export const chavesAtendimento = {
   linha: (id: number, somenteEste: boolean) => ['atendimento', 'linha', id, somenteEste] as const,
   midia: (id: number, somenteEste: boolean, categoria: string) =>
     ['atendimento', 'midia', id, somenteEste, categoria] as const,
-  historico: (busca: string, de: string, ate: string, pagina: number) =>
-    ['atendimento', 'historico', busca, de, ate, pagina] as const,
+  historico: (filtros: FiltrosHistorico, pagina: number) =>
+    [
+      'atendimento',
+      'historico',
+      filtros.busca,
+      filtros.de,
+      filtros.ate,
+      filtros.setor,
+      filtros.etiqueta,
+      pagina,
+    ] as const,
   canal: ['atendimento', 'canal'] as const,
   presenca: ['atendimento', 'presenca'] as const,
   responsaveis: ['atendimento', 'responsaveis'] as const,
@@ -52,6 +63,7 @@ export const ROTULO_SITUACAO_MENSAGEM: Record<string, string> = {
   FALHA: 'Falha no envio',
   DESCONHECIDA: 'Envio não confirmado',
   JANELA_EXPIRADA: 'Não enviada',
+  CANCELADA: 'Não enviada',
 }
 
 /** Explicação de cada situação sem envio confirmado, mostrada no detalhe do indicador. */
@@ -59,6 +71,9 @@ export const DETALHE_SITUACAO_MENSAGEM: Record<string, string> = {
   DESCONHECIDA: 'Resultado desconhecido: confirme com o cliente antes de reenviar.',
   JANELA_EXPIRADA:
     'Não enviada: a janela de 24 horas expirou antes do envio. Nada foi enviado ao WhatsApp; o contato precisa mandar uma nova mensagem.',
+  // Saudação ou repetição do menu da triagem que ainda aguardava envio quando a triagem terminou.
+  CANCELADA:
+    'Não enviada: a triagem terminou antes do envio (atendimento assumido ou opção já escolhida). Nada foi enviado ao WhatsApp.',
 }
 
 export const ROTULO_EVENTO: Record<string, string> = {
@@ -70,6 +85,11 @@ export const ROTULO_EVENTO: Record<string, string> = {
   ASSOCIADO_VINCULADO: 'vinculou o associado',
   ASSOCIADO_ALTERADO: 'alterou o associado vinculado',
   ASSOCIADO_DESVINCULADO: 'removeu o vínculo com o associado',
+  CLASSIFICADO: 'classificou o atendimento',
+  // Triagem automática (sem autor): o texto do evento diz a opção e o destino.
+  TRIAGEM_CLASSIFICADA: 'Triagem automática classificou o atendimento',
+  TRIAGEM_ENCAMINHADA: 'Triagem automática encaminhou para atendimento humano',
+  TRIAGEM_INTERROMPIDA: 'Triagem automática encerrada',
 }
 
 /** Tipos de mensagem do WhatsApp sem suporte nesta versão, pelo nome em português. */
@@ -395,17 +415,25 @@ export function formatarTamanho(bytes: number | undefined) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-export function historico(
-  http: HttpClient,
-  busca: string,
-  de: string,
-  ate: string,
-  pagina: number,
-) {
+/**
+ * Filtros do Histórico geral. `setor` e `etiqueta`: o número do item, `SEM` (ciclos sem setor ou sem
+ * etiqueta) ou vazio (todos).
+ */
+export interface FiltrosHistorico {
+  busca: string
+  de: string
+  ate: string
+  setor: string
+  etiqueta: string
+}
+
+export function historico(http: HttpClient, filtros: FiltrosHistorico, pagina: number) {
   const params = new URLSearchParams({ pagina: String(pagina), tamanho: '20' })
-  if (busca.trim()) params.set('busca', busca.trim())
-  if (de) params.set('de', de)
-  if (ate) params.set('ate', ate)
+  if (filtros.busca.trim()) params.set('busca', filtros.busca.trim())
+  if (filtros.de) params.set('de', filtros.de)
+  if (filtros.ate) params.set('ate', filtros.ate)
+  if (filtros.setor) params.set('setor', filtros.setor)
+  if (filtros.etiqueta) params.set('etiqueta', filtros.etiqueta)
   return http.get<Pagina>(`/v1/atendimento/historico?${params}`)
 }
 
@@ -442,6 +470,17 @@ export function transferir(
   dados: { versao: number; destinoId?: number; motivo?: string },
 ) {
   return http.request<void>('POST', `/v1/atendimento/atendimentos/${id}/transferencia`, {
+    body: dados,
+  })
+}
+
+/** Define setor e etiquetas deste ciclo, substituindo os atuais (só o responsável, em andamento). */
+export function classificar(
+  http: HttpClient,
+  id: number,
+  dados: { versao: number; setorId?: number; etiquetaIds: number[] },
+) {
+  return http.request<void>('PUT', `/v1/atendimento/atendimentos/${id}/classificacao`, {
     body: dados,
   })
 }

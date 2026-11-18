@@ -34,6 +34,8 @@ const APARENCIA: Record<string, Pick<Visual, 'icone' | 'tom'>> = {
   LIDA: { icone: 'tique-duplo', tom: 'lida' },
   FALHA: { icone: 'exclamacao', tom: 'falha' },
   JANELA_EXPIRADA: { icone: 'exclamacao', tom: 'falha' },
+  // Cancelada de propósito (triagem encerrada antes do envio): não é falha.
+  CANCELADA: { icone: 'fechar', tom: 'neutro' },
   DESCONHECIDA: { icone: 'interrogacao', tom: 'incerto' },
 }
 

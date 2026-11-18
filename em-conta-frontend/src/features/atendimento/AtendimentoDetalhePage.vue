@@ -18,6 +18,7 @@ import {
   obterDetalhe,
   rotuloDia,
 } from './atendimento-api'
+import { rotuloItem } from './classificacoes-api'
 import ItemLinhaDoTempo from './ItemLinhaDoTempo.vue'
 import MidiaConversa from './MidiaConversa.vue'
 import { useLinhaDoTempo } from './use-linha-do-tempo'
@@ -224,6 +225,10 @@ async function irPara(mensagemId: number, cursor: string) {
               <dd>{{ resumo.codigo }}</dd>
             </div>
             <div>
+              <dt>Setor</dt>
+              <dd>{{ resumo.setor ? rotuloItem(resumo.setor) : '—' }}</dd>
+            </div>
+            <div>
               <dt>Atendente</dt>
               <dd>{{ resumo.responsavel?.nome ?? '—' }}</dd>
             </div>
@@ -249,6 +254,16 @@ async function irPara(mensagemId: number, cursor: string) {
             <div>
               <dt>Encerramento</dt>
               <dd>{{ resumo.encerradoEm ? formatarDataHora(resumo.encerradoEm) : 'Em aberto' }}</dd>
+            </div>
+            <div>
+              <dt>Etiquetas</dt>
+              <dd>
+                {{
+                  resumo.etiquetas.length
+                    ? resumo.etiquetas.map(rotuloItem).join(', ')
+                    : 'Sem etiqueta'
+                }}
+              </dd>
             </div>
           </dl>
           <MidiaConversa :atendimento="id" somente-este @abrir-mensagem="irPara" />

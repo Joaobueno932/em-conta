@@ -57,6 +57,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/triagem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Configuração da triagem inicial (atendimento:consultar) */
+        get: operations["obterTriagem"];
+        /** Liga ou desliga a triagem e define o setor de cada opção (triagem:configurar) */
+        put: operations["configurarTriagem"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/setores/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Renomeia setor; vale para os atendimentos que já o usam (setores:editar) */
+        put: operations["editarSetor"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/respostas-rapidas/{id}": {
         parameters: {
             query?: never;
@@ -86,6 +121,40 @@ export interface paths {
         get: operations["obterPresenca"];
         /** Escolha manual (Disponível/Ausente) ou volta ao automático; sem efeito em distribuição (atendimento:consultar) */
         put: operations["definirPresenca"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/etiquetas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Renomeia etiqueta; vale para os atendimentos que já a usam (etiquetas:editar) */
+        put: operations["editarEtiqueta"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/atendimentos/{id}/classificacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Define setor e etiquetas deste ciclo, substituindo os atuais (atendimento:classificar) */
+        put: operations["classificarAtendimento"];
         post?: never;
         delete?: never;
         options?: never;
@@ -439,6 +508,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/atendimento/setores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Setores do atendimento, em ordem de nome (atendimento:consultar) */
+        get: operations["listarSetores"];
+        put?: never;
+        /** Cadastra setor (setores:cadastrar) */
+        post: operations["criarSetor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/setores/{id}/desativacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desativa setor, preservando o cadastro e os atendimentos que o usam (setores:alterar-situacao) */
+        post: operations["desativarSetor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/setores/{id}/ativacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ativa setor (setores:alterar-situacao) */
+        post: operations["ativarSetor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atendimento/respostas-rapidas": {
         parameters: {
             query?: never;
@@ -502,6 +623,58 @@ export interface paths {
         put?: never;
         /** Começou a escrever uma resposta: no modo automático passa a Disponível; escolha manual não muda (atendimento:responder) */
         post: operations["registrarAtividadePresenca"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/etiquetas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Etiquetas do atendimento, em ordem de nome (atendimento:consultar) */
+        get: operations["listarEtiquetas"];
+        put?: never;
+        /** Cadastra etiqueta (etiquetas:cadastrar) */
+        post: operations["criarEtiqueta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/etiquetas/{id}/desativacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desativa etiqueta, preservando o cadastro e os atendimentos que a usam (etiquetas:alterar-situacao) */
+        post: operations["desativarEtiqueta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/atendimento/etiquetas/{id}/ativacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ativa etiqueta (etiquetas:alterar-situacao) */
+        post: operations["ativarEtiqueta"];
         delete?: never;
         options?: never;
         head?: never;
@@ -892,7 +1065,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Atendimentos encerrados, com busca e período (atendimento:consultar) */
+        /** Atendimentos encerrados, com busca, período, setor e etiqueta (atendimento:consultar) */
         get: operations["historicoAtendimentos"];
         put?: never;
         post?: never;
@@ -1234,6 +1407,89 @@ export interface components {
             /** Format: int64 */
             versao: number;
         };
+        ConfiguracaoTriagemRequest: {
+            /**
+             * Format: int64
+             * @description Versão vista
+             */
+            versao: number;
+            ativa: boolean;
+            /** @description Destino de cada opção configurável; opção ausente fica sem destino */
+            opcoes: components["schemas"]["DestinoTriagemRequest"][];
+        };
+        DestinoTriagemRequest: {
+            /** @enum {string} */
+            opcao: "FINANCEIRO" | "COBRANCA" | "COMERCIAL";
+            /**
+             * Format: int64
+             * @description Setor ativo; vazio = fila sem setor
+             */
+            setorId?: number;
+        };
+        ConfiguracaoTriagem: {
+            /** @description Ligada: cada ciclo novo recebe a saudação com o menu */
+            ativa: boolean;
+            /** Format: int64 */
+            versao: number;
+            /** @description Texto da saudação, com o menu */
+            saudacao: string;
+            opcoes: components["schemas"]["OpcaoTriagem"][];
+            /** Format: date-time */
+            atualizadoEm?: string;
+            atualizadoPor?: components["schemas"]["UsuarioAtendimento"];
+        };
+        /** @description Setor ou etiqueta (o nome atual do cadastro) */
+        ItemClassificacao: {
+            /** Format: int64 */
+            id: number;
+            nome: string;
+            /** @description Falso quando o item foi desativado depois do vínculo */
+            ativo: boolean;
+        };
+        /** @description Opção do menu da triagem, na ordem exibida ao cliente */
+        OpcaoTriagem: {
+            /** @enum {string} */
+            opcao: "FINANCEIRO" | "COBRANCA" | "COMERCIAL" | "HUMANO";
+            /**
+             * Format: int32
+             * @description Número que o cliente responde
+             */
+            numero: number;
+            rotulo: string;
+            /** @description Falso para "Outro assunto ou falar com um atendente", que vai sempre para a fila sem setor */
+            configuravel: boolean;
+            /** @description Setor de destino; vazio = fila sem setor */
+            setor?: components["schemas"]["ItemClassificacao"];
+        };
+        UsuarioAtendimento: {
+            /** Format: int64 */
+            id: number;
+            nome: string;
+        };
+        CadastroClassificacaoRequest: {
+            /** @description De 2 a 60 caracteres (setor) ou 2 a 40 (etiqueta); espaços repetidos viram um só */
+            nome: string;
+            /**
+             * Format: int64
+             * @description Versão vista (obrigatória na edição)
+             */
+            versao?: number;
+        };
+        /** @description Setor ou etiqueta do cadastro */
+        ItemCadastroClassificacao: {
+            /** Format: int64 */
+            id: number;
+            nome: string;
+            ativo: boolean;
+            /** Format: int64 */
+            versao: number;
+            /** Format: date-time */
+            criadoEm: string;
+            criadoPor: components["schemas"]["UsuarioAtendimento"];
+            /** Format: date-time */
+            atualizadoEm: string;
+            atualizadoPor: components["schemas"]["UsuarioAtendimento"];
+        };
         RespostaRapidaRequest: {
             titulo: string;
             /** @description Letras minúsculas sem acento, números e hífen (2 a 30); a barra inicial é ignorada */
@@ -1263,11 +1519,6 @@ export interface components {
             atualizadoEm: string;
             atualizadoPor: components["schemas"]["UsuarioAtendimento"];
         };
-        UsuarioAtendimento: {
-            /** Format: int64 */
-            id: number;
-            nome: string;
-        };
         PresencaRequest: {
             /** @description Obrigatório no modo MANUAL */
             disponivel?: boolean;
@@ -1290,6 +1541,17 @@ export interface components {
              * @description Última mudança; entre duas respostas, vale a mais nova
              */
             atualizadoEm?: string;
+        };
+        ClassificacaoRequest: {
+            /** Format: int64 */
+            versao: number;
+            /**
+             * Format: int64
+             * @description Setor do ciclo; vazio para nenhum
+             */
+            setorId?: number;
+            /** @description Etiquetas do ciclo (substituem as atuais); vazio para nenhuma */
+            etiquetaIds?: number[];
         };
         VinculoAssociadoRequest: {
             /** Format: int64 */
@@ -1524,6 +1786,10 @@ export interface components {
             /** Format: password */
             senha: string;
         };
+        SituacaoCadastroClassificacaoRequest: {
+            /** Format: int64 */
+            versao: number;
+        };
         SituacaoRespostaRapidaRequest: {
             /** Format: int64 */
             versao: number;
@@ -1754,6 +2020,9 @@ export interface components {
             tentativas: number;
             erro?: string;
         };
+        ListaCadastroClassificacao: {
+            itens: components["schemas"]["ItemCadastroClassificacao"][];
+        };
         PaginaRespostasRapidas: {
             itens: components["schemas"]["RespostaRapida"][];
             /** Format: int32 */
@@ -1791,6 +2060,12 @@ export interface components {
             /** Format: date-time */
             encerradoEm?: string;
             encerradoPor?: components["schemas"]["UsuarioAtendimento"];
+            /** @description Setor deste ciclo; vazio quando não foi definido */
+            setor?: components["schemas"]["ItemClassificacao"];
+            /** @description Etiquetas deste ciclo, em ordem de nome */
+            etiquetas: components["schemas"]["ItemClassificacao"][];
+            /** @description Triagem automática aguardando a resposta do cliente ao menu (ver triagem) */
+            emTriagem: boolean;
         };
         ContagensFila: {
             /** Format: int64 */
@@ -1904,7 +2179,7 @@ export interface components {
             tipoExterno?: string;
             texto?: string;
             /** @enum {string} */
-            situacao?: "RECEBIDA" | "PENDENTE" | "ENVIANDO" | "ACEITA" | "ENVIADA" | "ENTREGUE" | "LIDA" | "FALHA" | "DESCONHECIDA" | "JANELA_EXPIRADA";
+            situacao?: "RECEBIDA" | "PENDENTE" | "ENVIANDO" | "ACEITA" | "ENVIADA" | "ENTREGUE" | "LIDA" | "FALHA" | "DESCONHECIDA" | "JANELA_EXPIRADA" | "CANCELADA";
             /** Format: int32 */
             erroCodigo?: number;
             erroTitulo?: string;
@@ -1926,10 +2201,10 @@ export interface components {
             /** @description Chave de idempotência do envio, só nas mensagens de quem consulta: identifica a operação para a tela trocar o balão local pelo registro, sem duplicar */
             chaveIdempotencia?: string;
             /**
-             * @description Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de responsável
+             * @description Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de responsável e TRIAGEM, as mensagens automáticas da triagem inicial
              * @enum {string}
              */
-            origem?: "CONTATO" | "ATENDENTE" | "AVISO_RESPONSAVEL";
+            origem?: "CONTATO" | "ATENDENTE" | "AVISO_RESPONSAVEL" | "TRIAGEM";
             anexo?: components["schemas"]["AnexoAtendimento"];
         };
         /** @description Página da linha do tempo, em ordem cronológica */
@@ -2165,6 +2440,85 @@ export interface operations {
             };
         };
     };
+    obterTriagem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfiguracaoTriagem"];
+                };
+            };
+        };
+    };
+    configurarTriagem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfiguracaoTriagemRequest"];
+            };
+        };
+        responses: {
+            /** @description Opção repetida ou não configurável, setor inexistente ou inativo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfiguracaoTriagem"];
+                };
+            };
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfiguracaoTriagem"];
+                };
+            };
+        };
+    };
+    editarSetor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description NOME_EM_USO ou CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
     obterRespostaRapida: {
         parameters: {
             query?: never;
@@ -2254,6 +2608,70 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PresencaAtendente"];
                 };
+            };
+        };
+    };
+    editarEtiqueta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description NOME_EM_USO ou CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    classificarAtendimento: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description Classificado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DADOS_INVALIDOS: item inexistente ou inativo, ou etiquetas demais */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3034,6 +3452,113 @@ export interface operations {
             };
         };
     };
+    listarSetores: {
+        parameters: {
+            query?: {
+                situacao?: "ATIVOS" | "INATIVOS" | "TODOS";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    criarSetor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description Cadastrado (ativo) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+            /** @description NOME_EM_USO */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    desativarSetor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SituacaoCadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    ativarSetor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SituacaoCadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
     listarRespostasRapidas: {
         parameters: {
             query?: {
@@ -3166,6 +3691,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PresencaAtendente"];
+                };
+            };
+        };
+    };
+    listarEtiquetas: {
+        parameters: {
+            query?: {
+                situacao?: "ATIVOS" | "INATIVOS" | "TODOS";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    criarEtiqueta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description Cadastrada (ativa) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+            /** @description NOME_EM_USO */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    desativarEtiqueta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SituacaoCadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
+                };
+            };
+        };
+    };
+    ativarEtiqueta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SituacaoCadastroClassificacaoRequest"];
+            };
+        };
+        responses: {
+            /** @description CONFLITO_CONCORRENTE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCadastroClassificacao"];
                 };
             };
         };
@@ -3892,6 +4524,10 @@ export interface operations {
                 busca?: string;
                 de?: string;
                 ate?: string;
+                /** @description Número do setor ou SEM (ciclos sem setor) */
+                setor?: string;
+                /** @description Número da etiqueta ou SEM (ciclos sem etiqueta) */
+                etiqueta?: string;
                 pagina?: number;
                 tamanho?: number;
             };
