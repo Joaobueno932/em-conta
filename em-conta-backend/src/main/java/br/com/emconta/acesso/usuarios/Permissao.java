@@ -42,6 +42,20 @@ public enum Permissao {
     ATENDIMENTO_VINCULAR_ASSOCIADO("atendimento:vincular-associado"),
     /** Consultar e reprocessar eventos do webhook em falha. */
     ATENDIMENTO_REPROCESSAR("atendimento:reprocessar"),
+    /** Definir setor e etiquetas do atendimento em andamento (só o responsável atual). */
+    ATENDIMENTO_CLASSIFICAR("atendimento:classificar"),
+    /** Cadastro de setores do atendimento (a consulta acompanha {@code atendimento:consultar}). */
+    SETORES_CADASTRAR("setores:cadastrar"),
+    SETORES_EDITAR("setores:editar"),
+    /** Ativar e desativar setores. */
+    SETORES_ALTERAR_SITUACAO("setores:alterar-situacao"),
+    /** Cadastro de etiquetas do atendimento (a consulta acompanha {@code atendimento:consultar}). */
+    ETIQUETAS_CADASTRAR("etiquetas:cadastrar"),
+    ETIQUETAS_EDITAR("etiquetas:editar"),
+    /** Ativar e desativar etiquetas. */
+    ETIQUETAS_ALTERAR_SITUACAO("etiquetas:alterar-situacao"),
+    /** Ligar ou desligar a triagem inicial pelo WhatsApp e escolher o setor de cada opção do menu. */
+    TRIAGEM_CONFIGURAR("triagem:configurar"),
     /** Catálogo de respostas rápidas: consultar (inclui o seletor da conversa). */
     RESPOSTAS_RAPIDAS_CONSULTAR("respostas-rapidas:consultar"),
     RESPOSTAS_RAPIDAS_CADASTRAR("respostas-rapidas:cadastrar"),

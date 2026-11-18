@@ -3,6 +3,9 @@ package br.com.emconta.atendimento.web;
 import br.com.emconta.acesso.Autoria;
 import br.com.emconta.associados.CatalogoAssociados;
 import br.com.emconta.associados.CatalogoAssociados.ResumoAssociado;
+import br.com.emconta.atendimento.nucleo.Classificacoes;
+import br.com.emconta.atendimento.nucleo.Classificacoes.Cadastro;
+import br.com.emconta.atendimento.nucleo.Classificacoes.Item;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.AnexoResumo;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Cursor;
@@ -23,11 +26,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
  * Conversa de um atendimento encerrado em texto (UTF-8), para guardar ou anexar a um processo interno: cabeçalho
- * com protocolo, contato, associado, responsável e encerramento, e depois a linha do tempo só deste
+ * com protocolo, contato, associado, responsável, encerramento, setor e etiquetas, e depois a linha do tempo só deste
  * ciclo, em ordem cronológica, com o que a tela do detalhe mostra a quem tem {@code atendimento:consultar}:
  * mensagens com a situação de envio, avisos automáticos, eventos (assumir, transferir, encerrar), notas
  * internas e anexos. Dos anexos vão nome, tipo e tamanho; o conteúdo continua só na rota autenticada.
@@ -50,17 +54,23 @@ class ExportacaoConversa {
             Map.entry("LIDA", "lida"),
             Map.entry("FALHA", "falha no envio"),
             Map.entry("DESCONHECIDA", "envio não confirmado"),
-            Map.entry("JANELA_EXPIRADA", "não enviada: janela de 24 horas expirada"));
+            Map.entry("JANELA_EXPIRADA", "não enviada: janela de 24 horas expirada"),
+            Map.entry("CANCELADA", "não enviada: a triagem terminou antes do envio"));
 
-    private static final Map<String, String> EVENTO = Map.of(
-            "ATENDIMENTO_INICIADO", "Novo atendimento na fila",
-            "ASSUMIDO", "assumiu o atendimento",
-            "TRANSFERIDO", "transferiu o atendimento",
-            "DEVOLVIDO_A_FILA", "devolveu o atendimento à fila",
-            "ENCERRADO", "encerrou o atendimento",
-            "ASSOCIADO_VINCULADO", "vinculou o associado",
-            "ASSOCIADO_ALTERADO", "alterou o associado vinculado",
-            "ASSOCIADO_DESVINCULADO", "removeu o vínculo com o associado");
+    private static final Map<String, String> EVENTO = Map.ofEntries(
+            Map.entry("ATENDIMENTO_INICIADO", "Novo atendimento na fila"),
+            Map.entry("ASSUMIDO", "assumiu o atendimento"),
+            Map.entry("TRANSFERIDO", "transferiu o atendimento"),
+            Map.entry("DEVOLVIDO_A_FILA", "devolveu o atendimento à fila"),
+            Map.entry("ENCERRADO", "encerrou o atendimento"),
+            Map.entry("ASSOCIADO_VINCULADO", "vinculou o associado"),
+            Map.entry("ASSOCIADO_ALTERADO", "alterou o associado vinculado"),
+            Map.entry("ASSOCIADO_DESVINCULADO", "removeu o vínculo com o associado"),
+            Map.entry("CLASSIFICADO", "classificou o atendimento"),
+            // Triagem automática: sem autor; o detalhe diz a opção e o destino.
+            Map.entry("TRIAGEM_CLASSIFICADA", "Triagem automática classificou o atendimento"),
+            Map.entry("TRIAGEM_ENCAMINHADA", "Triagem automática encaminhou para atendimento humano"),
+            Map.entry("TRIAGEM_INTERROMPIDA", "Triagem automática encerrada"));
 
     private static final Map<String, String> CATEGORIA =
             Map.of("IMAGEM", "Imagem", "DOCUMENTO", "Documento", "AUDIO", "Áudio", "VIDEO", "Vídeo");
@@ -68,12 +78,19 @@ class ExportacaoConversa {
     private final ConsultaAtendimento consulta;
     private final Autoria autoria;
     private final CatalogoAssociados associados;
+    private final Classificacoes classificacoes;
     private final Clock clock;
 
-    ExportacaoConversa(ConsultaAtendimento consulta, Autoria autoria, CatalogoAssociados associados, Clock clock) {
+    ExportacaoConversa(
+            ConsultaAtendimento consulta,
+            Autoria autoria,
+            CatalogoAssociados associados,
+            Classificacoes classificacoes,
+            Clock clock) {
         this.consulta = consulta;
         this.autoria = autoria;
         this.associados = associados;
+        this.classificacoes = classificacoes;
         this.clock = clock;
     }
 
@@ -139,6 +156,23 @@ class ExportacaoConversa {
         linha(s, "Associado", associado == null ? "—" : associado.nome() + " (" + associado.documentoMascarado() + ")");
         linha(s, "Atendente", nome(r.responsavelId(), nomes));
         linha(s, "Encerrado por", nome(r.encerradoPor(), nomes));
+        // Nomes atuais do cadastro; o evento de cada classificação, abaixo, guarda os daquele momento.
+        linha(
+                s,
+                "Setor",
+                r.setorId() == null
+                        ? "—"
+                        : classificacoes
+                                .obter(Cadastro.SETOR, r.setorId())
+                                .map(ExportacaoConversa::nomeItem)
+                                .orElse("—"));
+        List<Item> etiquetas = classificacoes.etiquetasDe(List.of(r.id())).getOrDefault(r.id(), List.of());
+        linha(
+                s,
+                "Etiquetas",
+                etiquetas.isEmpty()
+                        ? "—"
+                        : etiquetas.stream().map(ExportacaoConversa::nomeItem).collect(Collectors.joining(", ")));
         linha(s, "Início", dataHora.format(r.iniciadoEm()));
         linha(
                 s,
@@ -186,6 +220,8 @@ class ExportacaoConversa {
             s.append(contato);
         } else if ("AVISO_RESPONSAVEL".equals(i.origem())) {
             s.append("Aviso automático");
+        } else if ("TRIAGEM".equals(i.origem())) {
+            s.append("Triagem automática");
         } else {
             s.append(nome(i.autorId(), nomes));
         }
@@ -221,6 +257,9 @@ class ExportacaoConversa {
         if ("ATENDIMENTO_INICIADO".equals(i.evento())) {
             return rotulo;
         }
+        if (i.evento() != null && i.evento().startsWith("TRIAGEM_")) {
+            return i.texto() == null ? rotulo : rotulo + ": " + texto(i.texto());
+        }
         StringBuilder s =
                 new StringBuilder(nome(i.autorId(), nomes)).append(' ').append(rotulo);
         if (i.usuarioAlvoId() != null) s.append(" para ").append(nome(i.usuarioAlvoId(), nomes));
@@ -229,7 +268,12 @@ class ExportacaoConversa {
         }
         if (i.motivo() != null && !i.motivo().isBlank())
             s.append(" (motivo: ").append(texto(i.motivo())).append(')');
+        if (i.texto() != null && !i.texto().isBlank()) s.append(": ").append(texto(i.texto()));
         return s.toString();
+    }
+
+    private static String nomeItem(Item item) {
+        return item.ativo() ? item.nome() : item.nome() + " (inativo)";
     }
 
     private static void linha(StringBuilder s, String rotulo, String valor) {

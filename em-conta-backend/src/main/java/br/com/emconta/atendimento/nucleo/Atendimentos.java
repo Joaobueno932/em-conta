@@ -7,11 +7,17 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -27,7 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>transferência direta, sem aceite, para usuário ativo que pode responder; motivo opcional; também
  *       é possível devolver à fila;
  *   <li>mensagem do cliente após o encerramento abre um novo atendimento AGUARDANDO (no recebimento);
- *   <li>vínculo com associado é explícito; trocar de associado exige motivo.
+ *   <li>vínculo com associado é explícito; trocar de associado exige motivo;
+ *   <li>setor e etiquetas são do ciclo (atendimento) e só o responsável atual os define, em andamento;
+ *       o ciclo encerrado guarda a classificação que tinha, e um ciclo novo começa sem nenhuma.
  * </ul>
  *
  * <p>Concorrência: as transições usam UPDATE condicional (situação e versão), então duas pessoas não
@@ -50,6 +58,8 @@ public class Atendimentos {
     private final WhatsAppCloud canal;
     private final Clock clock;
     private final AvisosAtendimento avisos;
+    private final Classificacoes classificacoes;
+    private final Triagem triagem;
     private final boolean avisoResponsavelHabilitado;
     private final boolean digitandoHabilitado;
     /** Último pedido de "digitando…" por atendimento (nesta instância). */
@@ -62,6 +72,8 @@ public class Atendimentos {
             WhatsAppCloud canal,
             Clock clock,
             AvisosAtendimento avisos,
+            Classificacoes classificacoes,
+            Triagem triagem,
             @Value("${emconta.atendimento.digitando.habilitado:true}") boolean digitandoHabilitado,
             @Value("${emconta.atendimento.aviso-responsavel.habilitado:true}") boolean avisoResponsavelHabilitado) {
         this.jdbc = jdbc;
@@ -70,6 +82,8 @@ public class Atendimentos {
         this.canal = canal;
         this.clock = clock;
         this.avisos = avisos;
+        this.classificacoes = classificacoes;
+        this.triagem = triagem;
         this.avisoResponsavelHabilitado = avisoResponsavelHabilitado;
         this.digitandoHabilitado = digitandoHabilitado;
     }
@@ -87,9 +101,22 @@ public class Atendimentos {
                         FalhaAtendimento.naoEncontrado("ATENDIMENTO_NAO_ENCONTRADO", "Atendimento não encontrado."));
     }
 
+    /**
+     * Assume um atendimento da fila. A conversa é travada antes do atendimento, na mesma ordem do
+     * recebimento: uma resposta do cliente ao menu da triagem e a assunção nunca se cruzam, e a que chegar
+     * primeiro decide. Quem assume encerra a triagem que ainda aguardava a resposta.
+     */
     @Transactional
     public void assumir(long ator, long atendimento) {
         Instant agora = clock.instant();
+        jdbc.sql("select conversa_id from atd_atendimento where id = :id")
+                .param("id", atendimento)
+                .query(Long.class)
+                .optional()
+                .ifPresent(conversa -> jdbc.sql("select id from atd_conversa where id = :c for update")
+                        .param("c", conversa)
+                        .query(Long.class)
+                        .list());
         int alterados = jdbc.sql("update atd_atendimento set situacao = 'EM_ATENDIMENTO', responsavel_id = :ator,"
                         + " assumido_em = :agora, versao = versao + 1 where id = :id and situacao = 'AGUARDANDO'")
                 .param("ator", ator)
@@ -104,6 +131,7 @@ public class Atendimentos {
                             "ATENDIMENTO_JA_ASSUMIDO", "Este atendimento já foi assumido por outra pessoa.");
         }
         evento(estado.conversaId(), atendimento, "ASSUMIDO", ator, null, null, null, agora);
+        triagem.interromper(estado.conversaId(), atendimento, agora);
         avisarResponsavel(estado.conversaId(), atendimento, ator, estado.versao(), agora);
     }
 
@@ -159,6 +187,81 @@ public class Atendimentos {
                 .param("id", atendimento)
                 .update();
         evento(estado.conversaId(), atendimento, "ENCERRADO", ator, null, null, null, agora);
+    }
+
+    /**
+     * Define o setor (ou nenhum, com {@code setor} nulo) e as etiquetas do atendimento, substituindo a
+     * classificação anterior deste ciclo. Mesmas regras de transferir e encerrar: em andamento, pelo
+     * responsável atual e sobre a versão vista. Só itens ativos podem ser escolhidos; os que o ciclo já tem
+     * podem ser mantidos mesmo que tenham sido desativados depois. Pedir a classificação que já vale não
+     * altera nada. A mudança registra o evento CLASSIFICADO com os nomes daquele momento.
+     */
+    @Transactional
+    public void classificar(long ator, long atendimento, long versao, Long setor, Collection<Long> etiquetas) {
+        Estado estado = travar(atendimento);
+        exigirResponsavel(ator, estado, versao, "classificar");
+        Set<Long> pedidas = new LinkedHashSet<>(etiquetas == null ? List.of() : etiquetas);
+        if (pedidas.contains(null)) {
+            throw FalhaAtendimento.campoInvalido("etiquetaIds", "Etiqueta inválida.");
+        }
+        if (pedidas.size() > Classificacoes.MAXIMO_ETIQUETAS) {
+            throw FalhaAtendimento.campoInvalido(
+                    "etiquetaIds", "Escolha no máximo " + Classificacoes.MAXIMO_ETIQUETAS + " etiquetas.");
+        }
+        Object setorLido = jdbc.sql("select setor_id from atd_atendimento where id = :id")
+                .param("id", atendimento)
+                .query()
+                .singleRow()
+                .get("setor_id");
+        Long setorAtual = setorLido == null ? null : ((Number) setorLido).longValue();
+        Set<Long> atuais = new LinkedHashSet<>(
+                jdbc.sql("select etiqueta_id from atd_atendimento_etiqueta where atendimento_id = :id")
+                        .param("id", atendimento)
+                        .query(Long.class)
+                        .list());
+        var setorEscolhido = setor == null
+                ? List.<Classificacoes.Item>of()
+                : classificacoes.exigirEscolhas(
+                        Classificacoes.Cadastro.SETOR,
+                        List.of(setor),
+                        setorAtual == null ? List.of() : List.of(setorAtual),
+                        "setorId");
+        var etiquetasEscolhidas =
+                classificacoes.exigirEscolhas(Classificacoes.Cadastro.ETIQUETA, pedidas, atuais, "etiquetaIds");
+        if (java.util.Objects.equals(setorAtual, setor) && atuais.equals(pedidas)) {
+            return;
+        }
+        jdbc.sql("update atd_atendimento set setor_id = :setor, versao = versao + 1 where id = :id")
+                .param("setor", setor)
+                .param("id", atendimento)
+                .update();
+        List<Long> remover = new ArrayList<>(atuais);
+        remover.removeAll(pedidas);
+        if (!remover.isEmpty()) {
+            jdbc.sql("delete from atd_atendimento_etiqueta where atendimento_id = :id and etiqueta_id in (:ids)")
+                    .param("id", atendimento)
+                    .param("ids", remover)
+                    .update();
+        }
+        for (Long etiqueta : pedidas) {
+            if (!atuais.contains(etiqueta)) {
+                jdbc.sql("insert into atd_atendimento_etiqueta (atendimento_id, etiqueta_id) values (:id, :e)")
+                        .param("id", atendimento)
+                        .param("e", etiqueta)
+                        .update();
+            }
+        }
+        String retrato = "Setor: "
+                + (setorEscolhido.isEmpty()
+                        ? "nenhum"
+                        : setorEscolhido.getFirst().nome())
+                + " · Etiquetas: "
+                + (etiquetasEscolhidas.isEmpty()
+                        ? "nenhuma"
+                        : etiquetasEscolhidas.stream()
+                                .map(Classificacoes.Item::nome)
+                                .collect(Collectors.joining(", ")));
+        evento(estado.conversaId(), atendimento, "CLASSIFICADO", ator, null, null, null, retrato, clock.instant());
     }
 
     /**
@@ -488,9 +591,23 @@ public class Atendimentos {
             Long associado,
             String motivo,
             Instant agora) {
+        evento(conversa, atendimento, tipo, autor, alvo, associado, motivo, null, agora);
+    }
+
+    private void evento(
+            long conversa,
+            Long atendimento,
+            String tipo,
+            Long autor,
+            Long alvo,
+            Long associado,
+            String motivo,
+            String detalhe,
+            Instant agora) {
         jdbc.sql(
                         "insert into atd_evento (conversa_id, atendimento_id, tipo, autor_usuario_id, usuario_alvo_id, associado_id,"
-                                + " motivo, ocorrido_em) values (:c, :a, :tipo, :autor, :alvo, :associado, :motivo, :agora)")
+                                + " motivo, detalhe, ocorrido_em) values (:c, :a, :tipo, :autor, :alvo, :associado, :motivo,"
+                                + " :detalhe, :agora)")
                 .param("c", conversa)
                 .param("a", atendimento)
                 .param("tipo", tipo)
@@ -498,6 +615,7 @@ public class Atendimentos {
                 .param("alvo", alvo)
                 .param("associado", associado)
                 .param("motivo", motivo)
+                .param("detalhe", detalhe)
                 .param("agora", Timestamp.from(agora))
                 .update();
         avisos.conversa(conversa);

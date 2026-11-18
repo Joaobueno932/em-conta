@@ -78,6 +78,14 @@ final class AtendimentoApi {
             @Schema(requiredMode = REQUIRED) String nome,
             @Schema(requiredMode = REQUIRED) String documentoMascarado) {}
 
+    @Schema(name = "ItemClassificacao", description = "Setor ou etiqueta (o nome atual do cadastro)")
+    record ItemClassificacaoResponse(
+            @Schema(requiredMode = REQUIRED) long id,
+            @Schema(requiredMode = REQUIRED) String nome,
+
+            @Schema(requiredMode = REQUIRED, description = "Falso quando o item foi desativado depois do vínculo")
+            boolean ativo) {}
+
     @Schema(name = "AtendimentoResumo")
     record ResumoResponse(
             @Schema(requiredMode = REQUIRED) long id,
@@ -97,7 +105,18 @@ final class AtendimentoApi {
             @Schema(requiredMode = REQUIRED) Instant iniciadoEm,
             Instant ultimaMensagemEm,
             Instant encerradoEm,
-            UsuarioResponse encerradoPor) {}
+            UsuarioResponse encerradoPor,
+
+            @Schema(description = "Setor deste ciclo; vazio quando não foi definido")
+            ItemClassificacaoResponse setor,
+
+            @Schema(requiredMode = REQUIRED, description = "Etiquetas deste ciclo, em ordem de nome")
+            List<ItemClassificacaoResponse> etiquetas,
+
+            @Schema(
+                    requiredMode = REQUIRED,
+                    description = "Triagem automática aguardando a resposta do cliente ao menu (ver triagem)")
+            boolean emTriagem) {}
 
     @Schema(name = "ContagensFila")
     record ContagensResponse(
@@ -167,7 +186,8 @@ final class AtendimentoApi {
                         "LIDA",
                         "FALHA",
                         "DESCONHECIDA",
-                        "JANELA_EXPIRADA"
+                        "JANELA_EXPIRADA",
+                        "CANCELADA"
                     })
             String situacao,
 
@@ -193,9 +213,9 @@ final class AtendimentoApi {
             String chaveIdempotencia,
 
             @Schema(
-                    allowableValues = {"CONTATO", "ATENDENTE", "AVISO_RESPONSAVEL"},
+                    allowableValues = {"CONTATO", "ATENDENTE", "AVISO_RESPONSAVEL", "TRIAGEM"},
                     description = "Quem gerou a mensagem; AVISO_RESPONSAVEL é o aviso automático de mudança de"
-                            + " responsável")
+                            + " responsável e TRIAGEM, as mensagens automáticas da triagem inicial")
             String origem,
 
             AnexoResponse anexo) {}
@@ -305,6 +325,16 @@ final class AtendimentoApi {
             Long destinoId,
 
             @Size(max = 1000) String motivo) {}
+
+    @Schema(name = "ClassificacaoRequest")
+    record ClassificacaoRequest(
+            @Schema(requiredMode = REQUIRED) @NotNull Long versao,
+
+            @Schema(description = "Setor do ciclo; vazio para nenhum")
+            Long setorId,
+
+            @Schema(description = "Etiquetas do ciclo (substituem as atuais); vazio para nenhuma") @Size(max = 50)
+            List<Long> etiquetaIds) {}
 
     @Schema(name = "EncerramentoRequest")
     record EncerramentoRequest(

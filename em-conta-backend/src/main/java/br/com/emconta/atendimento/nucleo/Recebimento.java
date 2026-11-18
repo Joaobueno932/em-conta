@@ -53,17 +53,20 @@ public class Recebimento {
     private final Clock clock;
     private final TransactionTemplate transacao;
     private final AvisosAtendimento avisos;
+    private final Triagem triagem;
 
     Recebimento(
             JdbcClient jdbc,
             WhatsAppCloud canal,
             Clock clock,
             PlatformTransactionManager transacoes,
-            AvisosAtendimento avisos) {
+            AvisosAtendimento avisos,
+            Triagem triagem) {
         this.jdbc = jdbc;
         this.canal = canal;
         this.clock = clock;
         this.avisos = avisos;
+        this.triagem = triagem;
         this.transacao = new TransactionTemplate(transacoes);
         this.transacao.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -196,7 +199,8 @@ public class Recebimento {
         }
         long contato = contato(m.waId(), m.nomePerfil(), agora);
         long conversa = conversa(contato, agora);
-        long atendimento = atendimentoAberto(conversa, agora);
+        Ciclo ciclo = atendimentoAberto(conversa, agora);
+        long atendimento = ciclo.id();
         boolean texto = "text".equals(m.tipo()) && m.texto() != null;
         FormatosAnexo.Categoria categoria = categoria(m);
         String tipoMensagem = texto ? "TEXTO" : categoria != null ? categoria.name() : "NAO_SUPORTADO";
@@ -232,6 +236,12 @@ public class Recebimento {
                 .param("agora", Timestamp.from(agora))
                 .param("id", conversa)
                 .update();
+        // Triagem inicial: o ciclo novo recebe a saudação; nos demais, a mensagem pode ser a resposta ao menu.
+        if (ciclo.novo()) {
+            triagem.iniciar(conversa, atendimento, agora);
+        } else {
+            triagem.receber(conversa, atendimento, texto ? m.texto() : null, agora);
+        }
     }
 
     private static FormatosAnexo.Categoria categoria(MensagemRecebida m) {
@@ -324,19 +334,22 @@ public class Recebimento {
                 .single();
     }
 
+    /** Ciclo da mensagem; {@code novo} se foi aberto por ela. */
+    private record Ciclo(long id, boolean novo) {}
+
     /**
      * Ciclo aberto da conversa ou, se não houver (nunca houve ou o último foi encerrado), um novo ciclo
      * AGUARDANDO sem responsável: regra aprovada para mensagens após o encerramento. A conversa já está
      * travada por {@link #conversa}, e o índice único garante um só ciclo aberto.
      */
-    private long atendimentoAberto(long conversa, Instant agora) {
+    private Ciclo atendimentoAberto(long conversa, Instant agora) {
         Optional<Long> aberto = jdbc.sql(
                         "select id from atd_atendimento where conversa_id = :c and situacao <> 'ENCERRADO'")
                 .param("c", conversa)
                 .query(Long.class)
                 .optional();
         if (aberto.isPresent()) {
-            return aberto.get();
+            return new Ciclo(aberto.get(), false);
         }
         jdbc.sql("insert into atd_atendimento (conversa_id, situacao, iniciado_em) values (:c, 'AGUARDANDO', :agora)")
                 .param("c", conversa)
@@ -352,7 +365,7 @@ public class Recebimento {
                 .param("a", id)
                 .param("agora", Timestamp.from(agora))
                 .update();
-        return id;
+        return new Ciclo(id, true);
     }
 
     // ------------------------------------------------------------------ situações de envio
@@ -406,6 +419,9 @@ public class Recebimento {
                 .param("agora", Timestamp.from(agora))
                 .param("id", id)
                 .update();
+        if ("FALHA".equals(nova)) {
+            triagem.envioFalhou(id, agora);
+        }
         avisos.conversa(((Number) mensagem.get().get("conversa_id")).longValue());
     }
 

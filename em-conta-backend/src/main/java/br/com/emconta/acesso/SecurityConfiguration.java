@@ -153,8 +153,35 @@ class SecurityConfiguration {
                             "/api/v1/atendimento/atendimentos/*/midia",
                             "/api/v1/atendimento/atendimentos/*/anexos/*/conteudo",
                             "/api/v1/atendimento/atendimentos/*/exportacao",
-                            "/api/v1/atendimento/historico")
+                            "/api/v1/atendimento/historico",
+                            "/api/v1/atendimento/setores",
+                            "/api/v1/atendimento/etiquetas",
+                            "/api/v1/atendimento/triagem")
                     .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/triagem")
+                    .hasAuthority(Permissao.TRIAGEM_CONFIGURAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/atendimentos/*/classificacao")
+                    .hasAuthority(Permissao.ATENDIMENTO_CLASSIFICAR.autoridade());
+
+            // Cadastros de setores e etiquetas (a lista acompanha atendimento:consultar, acima).
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/setores")
+                    .hasAuthority(Permissao.SETORES_CADASTRAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/setores/*")
+                    .hasAuthority(Permissao.SETORES_EDITAR.autoridade());
+            auth.requestMatchers(
+                            HttpMethod.POST,
+                            "/api/v1/atendimento/setores/*/ativacao",
+                            "/api/v1/atendimento/setores/*/desativacao")
+                    .hasAuthority(Permissao.SETORES_ALTERAR_SITUACAO.autoridade());
+            auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/etiquetas")
+                    .hasAuthority(Permissao.ETIQUETAS_CADASTRAR.autoridade());
+            auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/etiquetas/*")
+                    .hasAuthority(Permissao.ETIQUETAS_EDITAR.autoridade());
+            auth.requestMatchers(
+                            HttpMethod.POST,
+                            "/api/v1/atendimento/etiquetas/*/ativacao",
+                            "/api/v1/atendimento/etiquetas/*/desativacao")
+                    .hasAuthority(Permissao.ETIQUETAS_ALTERAR_SITUACAO.autoridade());
             auth.requestMatchers(HttpMethod.PUT, "/api/v1/atendimento/presenca")
                     .hasAuthority(Permissao.ATENDIMENTO_CONSULTAR.autoridade());
             auth.requestMatchers(HttpMethod.POST, "/api/v1/atendimento/atendimentos/*/assuncao")

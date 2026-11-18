@@ -60,6 +60,7 @@ public class Envio {
     private final Clock clock;
     private final TransactionTemplate transacao;
     private final AvisosAtendimento avisos;
+    private final Triagem triagem;
 
     Envio(
             JdbcClient jdbc,
@@ -67,8 +68,10 @@ public class Envio {
             ArmazenamentoObjetos armazenamento,
             Clock clock,
             PlatformTransactionManager transacoes,
-            AvisosAtendimento avisos) {
+            AvisosAtendimento avisos,
+            Triagem triagem) {
         this.avisos = avisos;
+        this.triagem = triagem;
         this.jdbc = jdbc;
         this.canal = canal;
         this.armazenamento = armazenamento;
@@ -84,7 +87,8 @@ public class Envio {
             String para,
             String texto,
             int tentativas,
-            boolean janelaExpirada,
+            /** Encerrada na própria reserva, sem chamada à Cloud API (JANELA_EXPIRADA ou CANCELADA). */
+            boolean semEnvio,
             AnexoSaida anexo) {}
 
     /** Anexo de uma mensagem de saída: arquivo no armazenamento e, depois do upload, o id na Meta. */
@@ -103,8 +107,8 @@ public class Envio {
                 break;
             }
             processadas++;
-            if (reserva.get().janelaExpirada()) {
-                continue; // já registrada como JANELA_EXPIRADA, sem chamada à Cloud API
+            if (reserva.get().semEnvio()) {
+                continue; // já registrada como JANELA_EXPIRADA ou CANCELADA, sem chamada à Cloud API
             }
             Reserva r = reserva.get();
             if (r.anexo() == null) {
@@ -158,7 +162,12 @@ public class Envio {
             long id = ((Number) linha.get().get("id")).longValue();
             long conversa = ((Number) linha.get().get("conversa_id")).longValue();
             int tentativas = ((Number) linha.get().get("tentativas")).intValue() + 1;
-            avisos.conversa(conversa); // ENVIANDO ou JANELA_EXPIRADA
+            avisos.conversa(conversa); // ENVIANDO, JANELA_EXPIRADA ou CANCELADA
+            // Saudação ou repetição do menu de uma triagem que já terminou (alguém assumiu ou o cliente já
+            // escolheu): não sai. Com a mensagem travada, a assunção não a cancela ao mesmo tempo.
+            if (triagem.cancelarMenuObsoleto(id, agora)) {
+                return new Reserva(id, conversa, null, null, null, tentativas - 1, true, null);
+            }
             // A janela é conferida de novo a cada tentativa, com a última entrada atual do contato (uma
             // mensagem nova dele renova a janela das respostas ainda pendentes).
             Instant entrada = jdbc.sql("select ultima_entrada_em from atd_conversa where id = :id")
@@ -176,6 +185,7 @@ public class Envio {
                         .param("id", id)
                         .update();
                 historico(id, "JANELA_EXPIRADA", null, JANELA_EXPIRADA, agora);
+                triagem.envioFalhou(id, agora);
                 return new Reserva(id, conversa, null, null, null, tentativas - 1, true, null);
             }
             jdbc.sql(
@@ -354,6 +364,7 @@ public class Envio {
                             .param("id", reserva.id())
                             .update();
                     historico(reserva.id(), "FALHA", recusada.codigo(), recusada.titulo(), agora);
+                    triagem.envioFalhou(reserva.id(), agora);
                 }
                 case Desconhecido desconhecido -> {
                     jdbc.sql("update atd_mensagem set situacao = 'DESCONHECIDA', erro_titulo = :motivo,"

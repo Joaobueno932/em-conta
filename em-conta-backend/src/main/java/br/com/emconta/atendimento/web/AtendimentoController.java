@@ -4,8 +4,11 @@ import br.com.emconta.acesso.Autoria;
 import br.com.emconta.associados.CatalogoAssociados;
 import br.com.emconta.associados.CatalogoAssociados.ResumoAssociado;
 import br.com.emconta.atendimento.nucleo.Atendimentos;
+import br.com.emconta.atendimento.nucleo.Classificacoes;
+import br.com.emconta.atendimento.nucleo.Classificacoes.Cadastro;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Cursor;
+import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.FiltroClassificacao;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Resumo;
 import br.com.emconta.atendimento.nucleo.ConsultaAtendimento.Visao;
 import br.com.emconta.atendimento.nucleo.Notas;
@@ -14,10 +17,12 @@ import br.com.emconta.atendimento.web.AtendimentoApi.AnexoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.AssociadoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.AtividadeRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.CanalResponse;
+import br.com.emconta.atendimento.web.AtendimentoApi.ClassificacaoRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.ContagensResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.DetalheResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.EncerramentoRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.FalhaWebhookResponse;
+import br.com.emconta.atendimento.web.AtendimentoApi.ItemClassificacaoResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.ItemResponse;
 import br.com.emconta.atendimento.web.AtendimentoApi.NotaRequest;
 import br.com.emconta.atendimento.web.AtendimentoApi.NotaResponse;
@@ -48,6 +53,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -87,6 +93,7 @@ class AtendimentoController {
     private final Autoria autoria;
     private final Notas notas;
     private final ExportacaoConversa exportacao;
+    private final Classificacoes classificacoes;
 
     AtendimentoController(
             Atendimentos atendimentos,
@@ -96,8 +103,10 @@ class AtendimentoController {
             WhatsAppCloud canal,
             Autoria autoria,
             Notas notas,
-            ExportacaoConversa exportacao) {
+            ExportacaoConversa exportacao,
+            Classificacoes classificacoes) {
         this.notas = notas;
+        this.classificacoes = classificacoes;
         this.exportacao = exportacao;
         this.atendimentos = atendimentos;
         this.consulta = consulta;
@@ -168,14 +177,29 @@ class AtendimentoController {
     @GetMapping("/historico")
     @Operation(
             operationId = "historicoAtendimentos",
-            summary = "Atendimentos encerrados, com busca e período (atendimento:consultar)")
+            summary = "Atendimentos encerrados, com busca, período, setor e etiqueta (atendimento:consultar)")
     PaginaResponse historico(
             @RequestParam(required = false) @Size(max = 100) String busca,
             @RequestParam(required = false) LocalDate de,
             @RequestParam(required = false) LocalDate ate,
+            @Parameter(description = "Número do setor ou SEM (ciclos sem setor)")
+                    @RequestParam(required = false)
+                    @Size(max = 20)
+                    String setor,
+            @Parameter(description = "Número da etiqueta ou SEM (ciclos sem etiqueta)")
+                    @RequestParam(required = false)
+                    @Size(max = 20)
+                    String etiqueta,
             @RequestParam(defaultValue = "0") @Min(0) @Max(100_000) int pagina,
             @RequestParam(defaultValue = "20") @Min(1) @Max(ConsultaAtendimento.TAMANHO_MAXIMO_PAGINA) int tamanho) {
-        Page<Resumo> page = consulta.historico(busca, de, ate, pagina, tamanho);
+        Page<Resumo> page = consulta.historico(
+                busca,
+                de,
+                ate,
+                FiltroClassificacao.ler("setor", setor),
+                FiltroClassificacao.ler("etiqueta", etiqueta),
+                pagina,
+                tamanho);
         Map<Visao, Long> contagens = consulta.contagens(autoria.usuarioAtual());
         return new PaginaResponse(
                 resumos(page.getContent()),
@@ -293,6 +317,23 @@ class AtendimentoController {
     @ApiResponse(responseCode = "409", description = "ATENDIMENTO_JA_ASSUMIDO ou ATENDIMENTO_ENCERRADO")
     ResponseEntity<Void> assumir(@PathVariable long id) {
         atendimentos.assumir(autoria.usuarioAtual(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping(path = "/atendimentos/{id}/classificacao", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(
+            operationId = "classificarAtendimento",
+            summary = "Define setor e etiquetas deste ciclo, substituindo os atuais (atendimento:classificar)")
+    @ApiResponse(responseCode = "204", description = "Classificado")
+    @ApiResponse(
+            responseCode = "400",
+            description = "DADOS_INVALIDOS: item inexistente ou inativo, ou etiquetas demais")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "NAO_E_RESPONSAVEL, ATENDIMENTO_SEM_RESPONSAVEL, ATENDIMENTO_ENCERRADO ou CONFLITO_CONCORRENTE")
+    ResponseEntity<Void> classificar(@PathVariable long id, @Valid @RequestBody ClassificacaoRequest corpo) {
+        atendimentos.classificar(autoria.usuarioAtual(), id, corpo.versao(), corpo.setorId(), corpo.etiquetaIds());
         return ResponseEntity.noContent().build();
     }
 
@@ -439,6 +480,11 @@ class AtendimentoController {
         });
         Map<Long, String> nomes = autoria.nomes(usuarios);
         Map<Long, ResumoAssociado> porId = indexar(associados.porIds(ids));
+        Map<Long, Classificacoes.Item> setores = classificacoes.porIds(
+                Cadastro.SETOR,
+                lista.stream().map(Resumo::setorId).filter(Objects::nonNull).collect(Collectors.toSet()));
+        Map<Long, List<Classificacoes.Item>> etiquetas =
+                classificacoes.etiquetasDe(lista.stream().map(Resumo::id).toList());
         return lista.stream()
                 .map(r -> new ResumoResponse(
                         r.id(),
@@ -451,8 +497,17 @@ class AtendimentoController {
                         r.iniciadoEm(),
                         r.ultimaMensagemEm(),
                         r.encerradoEm(),
-                        usuario(r.encerradoPor(), nomes)))
+                        usuario(r.encerradoPor(), nomes),
+                        r.setorId() == null ? null : item(setores.get(r.setorId())),
+                        etiquetas.getOrDefault(r.id(), List.of()).stream()
+                                .map(AtendimentoController::item)
+                                .toList(),
+                        r.emTriagem()))
                 .toList();
+    }
+
+    private static ItemClassificacaoResponse item(Classificacoes.Item item) {
+        return item == null ? null : new ItemClassificacaoResponse(item.id(), item.nome(), item.ativo());
     }
 
     private static Map<Long, ResumoAssociado> indexar(Collection<ResumoAssociado> lista) {

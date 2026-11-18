@@ -72,10 +72,14 @@ public class ConsultaAtendimento {
             Instant iniciadoEm,
             Instant ultimaMensagemEm,
             Instant encerradoEm,
-            Long encerradoPor) {}
+            Long encerradoPor,
+            Long setorId,
+            boolean emTriagem) {}
 
     private static final String SELECT_RESUMO = "select a.id, a.situacao, a.conversa_id, c.wa_id, c.nome_perfil,"
-            + " v.associado_id, a.responsavel_id, a.iniciado_em, v.ultima_mensagem_em, a.encerrado_em, a.encerrado_por"
+            + " v.associado_id, a.responsavel_id, a.iniciado_em, v.ultima_mensagem_em, a.encerrado_em, a.encerrado_por,"
+            + " a.setor_id, exists(select 1 from atd_triagem t where t.atendimento_id = a.id"
+            + " and t.situacao = 'AGUARDANDO_RESPOSTA') as em_triagem"
             + " from atd_atendimento a join atd_conversa v on v.id = a.conversa_id join atd_contato c on c.id = v.contato_id";
 
     @Transactional(readOnly = true)
@@ -117,12 +121,41 @@ public class ConsultaAtendimento {
     }
 
     /**
-     * Histórico geral: atendimentos encerrados, com busca e período de encerramento. As datas são dias do
-     * negócio ({@link #fuso()}), inclusivas nas duas pontas: um encerramento às 22h de um dia em Campo
-     * Grande pertence a esse dia, mesmo que em UTC já seja o seguinte.
+     * Filtro do Histórico geral por setor ou etiqueta: um item do cadastro ({@code id}) ou "sem" ({@code id}
+     * nulo: ciclo sem setor, ou sem nenhuma etiqueta). Na API, o número do item ou {@code SEM}.
+     */
+    public record FiltroClassificacao(Long id) {
+
+        private static final Pattern FORMATO = Pattern.compile("(?i)sem|\\d{1,18}");
+
+        /** Nulo quando não há filtro (valor ausente ou em branco). */
+        public static FiltroClassificacao ler(String campo, String valor) {
+            String limpo = valor == null ? "" : valor.strip();
+            if (limpo.isEmpty()) {
+                return null;
+            }
+            if (!FORMATO.matcher(limpo).matches()) {
+                throw FalhaAtendimento.campoInvalido(campo, "Use o número do item ou SEM.");
+            }
+            return new FiltroClassificacao(limpo.equalsIgnoreCase("sem") ? null : Long.parseLong(limpo));
+        }
+    }
+
+    /**
+     * Histórico geral: atendimentos encerrados, com busca, período de encerramento, setor e etiqueta,
+     * combinados entre si. As datas são dias do negócio ({@link #fuso()}), inclusivas nas duas pontas: um
+     * encerramento às 22h de um dia em Campo Grande pertence a esse dia, mesmo que em UTC já seja o
+     * seguinte. Setor e etiqueta valem para itens ativos ou inativos (a classificação gravada no ciclo).
      */
     @Transactional(readOnly = true)
-    public Page<Resumo> historico(String busca, LocalDate de, LocalDate ate, int pagina, int tamanho) {
+    public Page<Resumo> historico(
+            String busca,
+            LocalDate de,
+            LocalDate ate,
+            FiltroClassificacao setor,
+            FiltroClassificacao etiqueta,
+            int pagina,
+            int tamanho) {
         if (de != null && ate != null && de.isAfter(ate)) {
             throw FalhaAtendimento.campoInvalido("ate", "A data final deve ser igual ou posterior à inicial.");
         }
@@ -136,6 +169,23 @@ public class ConsultaAtendimento {
         if (ate != null) {
             condicoes.add("a.encerrado_em < :ate");
             params.put("ate", Timestamp.from(ate.plusDays(1).atStartOfDay(fuso).toInstant()));
+        }
+        if (setor != null) {
+            if (setor.id() == null) {
+                condicoes.add("a.setor_id is null");
+            } else {
+                condicoes.add("a.setor_id = :setor");
+                params.put("setor", setor.id());
+            }
+        }
+        if (etiqueta != null) {
+            if (etiqueta.id() == null) {
+                condicoes.add("not exists (select 1 from atd_atendimento_etiqueta ae where ae.atendimento_id = a.id)");
+            } else {
+                condicoes.add("exists (select 1 from atd_atendimento_etiqueta ae where ae.atendimento_id = a.id"
+                        + " and ae.etiqueta_id = :etiqueta)");
+                params.put("etiqueta", etiqueta.id());
+            }
         }
         return pagina(
                 " where " + String.join(" and ", condicoes),
@@ -354,7 +404,7 @@ public class ConsultaAtendimento {
                 + " where conversa_id = :c" + filtroAtendimento
                 + antes("criado_em", ORDEM_MENSAGEM, antes) + " order by criado_em desc, id desc limit :limite)"
                 + " union all"
-                + " (select 'EVENTO', id, ocorrido_em, ocorrido_em, atendimento_id, null, null, null, null, null,"
+                + " (select 'EVENTO', id, ocorrido_em, ocorrido_em, atendimento_id, null, null, null, detalhe, null,"
                 + " null, null, autor_usuario_id, tipo, usuario_alvo_id, associado_id, motivo, null, null, null, null"
                 + " from atd_evento"
                 + " where conversa_id = :c" + filtroAtendimento + antes("ocorrido_em", ORDEM_EVENTO, antes)
@@ -632,7 +682,9 @@ public class ConsultaAtendimento {
                 instante(rs, "iniciado_em"),
                 instante(rs, "ultima_mensagem_em"),
                 instante(rs, "encerrado_em"),
-                rs.getObject("encerrado_por", Long.class));
+                rs.getObject("encerrado_por", Long.class),
+                rs.getObject("setor_id", Long.class),
+                rs.getBoolean("em_triagem"));
     }
 
     private static Instant instante(ResultSet rs, String coluna) throws SQLException {
