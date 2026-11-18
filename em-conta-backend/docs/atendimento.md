@@ -6,9 +6,11 @@ mensagem depois do encerramento abre outro atendimento (`AGUARDANDO`) na mesma c
 etapa: presença automática ou manual, aviso ao cliente de quem passa a atendê-lo e notas internas (ver
 [Presença, avisos e notas](#presença-avisos-e-notas)).
 
-Fora do escopo desta versão (sem botões na interface): envio em massa, respostas rápidas, chatbot/IA,
-CRM, tickets/SLA, automações, dashboards, templates, setor, etiquetas, gravação pelo
-microfone, transcrição e OCR. Anexos: imagem, PDF, planilha XLSX, vídeo e áudio (ver [Anexos](#anexos));
+Fora do escopo desta versão (sem botões na interface): envio em massa, respostas rápidas, IA,
+CRM, tickets/SLA, automações, dashboards, templates, gravação pelo microfone, transcrição e OCR.
+Setores e etiquetas classificam cada ciclo (ver [Setores e etiquetas](#setores-e-etiquetas-v16)); a
+[triagem inicial](#triagem-inicial-v17), quando ligada, define o setor pelo menu do WhatsApp antes de
+alguém assumir. Anexos: imagem, PDF, planilha XLSX, vídeo e áudio (ver [Anexos](#anexos));
 outros tipos aparecem como "não suportado", com o motivo e o que é aceito.
 
 ## Provedor
@@ -45,16 +47,21 @@ fictício.
 
 O número oficial continua no GDASH e **não** deve ser usado aqui.
 
-## Modelo (V6 a V15)
+## Modelo (V6 a V17)
 
 | Tabela | Conteúdo |
 |---|---|
 | `atd_contato` | contato do WhatsApp (`wa_id` único, nome do perfil) |
 | `atd_conversa` | uma por contato; associado vinculado, última entrada (janela de 24 h), `versao` |
-| `atd_atendimento` | ciclo `AGUARDANDO → EM_ATENDIMENTO → ENCERRADO`, responsável, `versao`; índice único garante um só ciclo aberto por conversa |
-| `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação (V7 acrescenta `JANELA_EXPIRADA`), erro, tentativas; V14 acrescenta a `origem` (CONTATO, ATENDENTE ou AVISO_RESPONSAVEL) |
+| `atd_atendimento` | ciclo `AGUARDANDO → EM_ATENDIMENTO → ENCERRADO`, responsável, `versao`; índice único garante um só ciclo aberto por conversa; V16 acrescenta o `setor_id` do ciclo (nulo nos ciclos anteriores e enquanto não for definido) |
+| `atd_mensagem` | entrada/saída; `id_externo`, `correlacao` e `chave_idempotencia` únicos; situação (V7 acrescenta `JANELA_EXPIRADA`; V18, `CANCELADA`), erro, tentativas; V14 acrescenta a `origem` (CONTATO, ATENDENTE ou AVISO_RESPONSAVEL); V17, a origem `TRIAGEM` |
 | `atd_mensagem_situacao` | histórico de status de cada mensagem |
-| `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo) |
+| `atd_evento` | assumido, transferido, devolvido, encerrado, associado vinculado/alterado/removido (autor, alvo, motivo); V16 acrescenta `CLASSIFICADO` e o `detalhe`, retrato textual com os nomes daquele momento; V17, `TRIAGEM_CLASSIFICADA`, `TRIAGEM_ENCAMINHADA` e `TRIAGEM_INTERROMPIDA` (sem autor) |
+| `atd_setor`, `atd_etiqueta` | V16: cadastros (nome único sem diferenciar maiúsculas nem acentos, ativo, `versao`, autor e datas) |
+| `atd_atendimento_etiqueta` | V16: etiquetas de cada ciclo |
+| `atd_classificacao_historico` | V16: histórico dos dois cadastros (criado, renomeado com o nome anterior, ativado, desativado; autor e instante) |
+| `atd_triagem_configuracao`, `atd_triagem_opcao` | V17: configuração única da triagem (ligada ou não, `versao`, quem alterou) e o setor de destino de cada opção configurável |
+| `atd_triagem` | V17: triagem de cada ciclo aberto com ela ligada (situação, respostas inválidas, opção escolhida, motivo do desfecho, início e fim) |
 | `atd_webhook_evento` | caixa de entrada do webhook (corpo autenticado e recortado ao escopo do canal, hash único, situação, tentativas) |
 | `atd_anexo` | V8: anexo da mensagem (categoria — V11 acrescenta `VIDEO` —, MIME, nome higienizado, tamanho, SHA-256, chave opaca do objeto, id da mídia na Meta, situação, erro, tentativas); `atd_mensagem.etapa_falha` diz se a falha foi no UPLOAD ou no ENVIO |
 | `atd_objeto_pendente` | V9: diário durável de objetos do armazenamento que podem ter ficado sem dono no recebimento (`GRAVANDO` antes de gravar, `REMOVER` quando excedente), com tentativas, próxima tentativa e erro; `atd_anexo.reserva` guarda o token da reserva vigente |
@@ -93,13 +100,16 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
   - erro definitivo (ex.: 131026) → `FALHA` com código e título;
   - tempo esgotado ou conexão interrompida depois do envio → `DESCONHECIDA`, **sem reenvio
     automático** (a mensagem pode ter saído); a interface pede para confirmar com o contato;
-  - reserva `ENVIANDO` com mais de 2 min (queda da aplicação) → `DESCONHECIDA`.
+  - reserva `ENVIANDO` com mais de 2 min (queda da aplicação) → `DESCONHECIDA`;
+  - saudação ou repetição do menu de uma triagem que já terminou → `CANCELADA`, sem chamada à Graph
+    API e sem nova tentativa (ver [Triagem inicial](#triagem-inicial-v17)).
 - **Status**: `sent`/`delivered`/`read`/`failed` chegam pelo webhook, casados por `wamid` ou pela
   correlação. Fora de ordem não regride (ordem ACEITA < ENVIADA < ENTREGUE < LIDA; `failed` só vale
   antes de ENTREGUE). Todo status fica em `atd_mensagem_situacao`.
 - **Concorrência**: assumir é um `UPDATE` condicional (dois atendentes ao mesmo tempo → um recebe 409
   `ATENDIMENTO_JA_ASSUMIDO`); transferir, encerrar e vincular usam `versao` (409
-  `CONFLITO_CONCORRENTE`).
+  `CONFLITO_CONCORRENTE`). Assumir trava a conversa antes do atendimento, na mesma ordem do
+  recebimento: a resposta do cliente ao menu da triagem e a assunção não se cruzam.
 - **Atualização da tela**: a conversa aberta recebe avisos de mudança por SSE e relê na hora (ver
   [Atualização em tempo real](#atualização-em-tempo-real)); a consulta periódica fica como rede de
   segurança (30 s com avisos, 5 s sem eles e nas demais telas).
@@ -107,7 +117,8 @@ O número oficial continua no GDASH e **não** deve ser usado aqui.
   tooltip; o mesmo na conversa e no detalhe do histórico): relógio para `PENDENTE`, `ENVIANDO` e
   `ACEITA` (aceite é só da requisição, ainda sem confirmação de envio), um tique cinza para `ENVIADA`,
   dois cinza para `ENTREGUE`, dois azuis (`--cor-lida`) para `LIDA`, exclamação vermelha para `FALHA` e
-  `JANELA_EXPIRADA` e, para `DESCONHECIDA`, "Envio não confirmado" com ícone próprio. Falha e
+  `JANELA_EXPIRADA`, um "x" neutro para `CANCELADA` (não é falha: a triagem terminou antes do envio) e,
+  para `DESCONHECIDA`, "Envio não confirmado" com ícone próprio. Falha, cancelamento e
   resultado desconhecido abrem a causa num detalhe (clique, toque ou teclado; Esc fecha). Mostra só a
   situação atual: a ordem acima e a mescla da linha do tempo (`maisNovo`) impedem a regressão.
 - **Digitando / gravando áudio** (documentação oficial conferida em 09/11/2026: [Typing
@@ -164,9 +175,12 @@ Base `/api/v1/atendimento`; permissões em [seguranca.md](seguranca.md#autoriza�
 | `POST atendimentos/{id}/digitando` | "digitando…" no WhatsApp do cliente, com a leitura da última recebida (204; até 1 pedido a cada 20 s) |
 | `POST atendimentos/{id}/transferencia` | `versao`, `destinoId?`, `motivo?` |
 | `POST atendimentos/{id}/encerramento` | `versao` |
+| `PUT atendimentos/{id}/classificacao` | `versao`, `setorId?`, `etiquetaIds` (substituem os atuais) → 204; só o responsável atual, em andamento (atendimento:classificar) |
+| `GET setores`, `GET etiquetas` (`?situacao=ATIVOS\|INATIVOS\|TODOS`) e as rotas de cadastro | ver [Setores e etiquetas](#setores-e-etiquetas-v16) |
+| `GET triagem`, `PUT triagem` | configuração da triagem inicial (ver [Triagem inicial](#triagem-inicial-v17)) |
 | `PUT atendimentos/{id}/associado`, `GET …/associados-sugeridos`, `GET associados?busca=` | vínculo |
 | `GET responsaveis` | destinos de transferência |
-| `GET historico?busca=&de=&ate=&pagina=&tamanho=` | histórico geral: encerrados, do encerramento mais recente; `de`/`ate` em dias do negócio, `de` depois de `ate` → 400 (ver [Histórico geral](#histórico-geral)) |
+| `GET historico?busca=&de=&ate=&setor=&etiqueta=&pagina=&tamanho=` | histórico geral: encerrados, do encerramento mais recente; `de`/`ate` em dias do negócio, `de` depois de `ate` → 400; `setor`/`etiqueta` com o número do item ou `SEM` (ver [Histórico geral](#histórico-geral)) |
 | `GET atendimentos/{id}/exportacao` | conversa deste ciclo encerrado (aberto → 404) em texto (`text/plain; charset=UTF-8`, `attachment`), para download (atendimento:consultar) |
 | `GET webhook-falhas`, `POST webhook-eventos/{id}/reprocessamento` | eventos com falha |
 | `GET`/`POST /api/v1/integracoes/whatsapp/webhook` | webhook da Meta (fora do contrato OpenAPI) |
@@ -410,9 +424,9 @@ Aberto por **Ver opções → Histórico geral** na tela de Atendimento; o botã
 de volta ao Atendimento. Só consulta, para quem tem `atendimento:consultar`.
 
 - **Lista**: um item por ciclo (atendimento) encerrado, do encerramento mais recente, com contato e
-  protocolo, associado, **Atendente** (responsável no encerramento), **Encerrado por** e data. Páginas
-  de 20, com faixa "1 – 20 de N"; busca, período e página ficam na URL, e o detalhe volta para a mesma
-  consulta. Página além da última (link antigo, lista que encolheu) volta à última existente, com os
+  protocolo, associado, **Setor**, **Atendente** (responsável no encerramento), **Encerrado por**,
+  **Etiquetas** ("Sem etiqueta" quando não há) e data. Páginas de 20, com faixa "1 – 20 de N"; busca,
+  setor, etiqueta, período e página ficam na URL, e o detalhe volta para a mesma consulta. Página além da última (link antigo, lista que encolheu) volta à última existente, com os
   mesmos filtros.
 - **Busca** (a mesma da fila): nome do perfil do WhatsApp, telefone (trecho de 4+ dígitos, com ou sem
   máscara), nome do associado ou **protocolo**: `ATD-000123`, `atd123` ou só o número. Com o prefixo,
@@ -421,16 +435,22 @@ de volta ao Atendimento. Só consulta, para quem tem `atendimento:consultar`.
   `America/Campo_Grande`): um encerramento às 22h de um dia pertence a esse dia, mesmo que em UTC já seja
   o seguinte. Os calendários de "De" e "Até" limitam um ao outro; período invertido digitado é avisado
   junto do campo e recusado pelo servidor (400 `DADOS_INVALIDOS`).
-  Busca e período se combinam.
+- **Setor e etiqueta**: um setor ("Todos", "Sem setor" ou um item) e uma etiqueta ("Todas", "Sem
+  etiqueta" ou um item), com todos os itens do cadastro: os ativos primeiro e, num grupo "Inativos" à
+  parte, os desativados depois de usados (marcados "(inativo)"). "Sem setor"/"Sem etiqueta" acham também os atendimentos de antes desses
+  cadastros. Na API, o número do item ou `SEM`; outro valor → 400.
+  Busca, setor, etiqueta e período se combinam, e a paginação vale sobre o resultado filtrado.
 - **Lista vazia**: "Nenhum atendimento encerrado ainda." sem filtros; "Nenhum resultado
-  correspondente" com filtros.
+  correspondente" com qualquer filtro (busca, setor, etiqueta ou período).
 - **Detalhe** (`/atendimento/historico/{id}`), somente leitura: mensagens com situação, avisos
-  automáticos, eventos (assumir, transferir com motivo, encerrar), notas internas e anexos (área Mídia e
+  automáticos, eventos (assumir, transferir com motivo, classificar, encerrar), notas internas, setor e
+  etiquetas do ciclo e anexos (área Mídia e
   conteúdo pela rota autenticada) **só deste ciclo** (`somenteEste=true`). Outro protocolo do mesmo
   contato abre o próprio ciclo; um anexo pedido pelo protocolo de outro ciclo → 404.
 - **Exportar conversa** (só ciclo encerrado; o aberto → 404 e o botão não aparece): arquivo
   `conversa-ATD-000123.txt` (UTF-8) com cabeçalho (protocolo,
-  situação, contato e telefone, associado, atendente, quem encerrou, início, primeira resposta humana,
+  situação, contato e telefone, associado, atendente, quem encerrou, setor, etiquetas, início, primeira
+  resposta humana,
   encerramento, quem exportou e quando, fuso) e a linha do tempo do ciclo em ordem, agrupada por dia:
   mensagens com a situação de envio, avisos automáticos, eventos e notas internas (marcado como documento
   interno). Dos anexos vão nome, tipo, tamanho e se o arquivo está indisponível; o conteúdo continua só
@@ -442,12 +462,8 @@ de volta ao Atendimento. Só consulta, para quem tem `atendimento:consultar`.
   link direto; na tela, a rota leva a "Acesso negado" sem consultar a API. Quem consulta lê as notas
   internas, como na conversa.
 
-**Dependência (setor e etiquetas):** o protótipo traz filtros e coluna de Setor e Etiquetas, mas o Em
-Conta ainda não tem esses dados: não há cadastro de setores nem de etiquetas, e o atendimento não os
-registra (a especificação liga categoria e assunto aos chamados, RN-ATE-05, ainda não entregues). Os
-dois filtros e a coluna ficam de fora até existir o cadastro e a classificação do atendimento; a busca,
-o período e a paginação não dependem deles. Os demais itens de Ver opções (Mensagem em massa, Dashboard,
-tema e sons) também ficam para entregas próprias.
+Os demais itens de Ver opções do protótipo (Mensagem em massa, Dashboard, tema e sons) ficam para
+entregas próprias.
 
 ## Presença, avisos e notas
 
@@ -504,6 +520,171 @@ centro, com fundo próprio e o rótulo "Nota interna · só a equipe vê", para 
   mesma chave com outro texto → 409.
 - Na linha do tempo, o cursor das notas tem ordem `2` (`<microssegundos>.2.<id>`), depois de evento
   (`0`) e mensagem (`1`) no mesmo instante. Cada nota avisa as telas abertas (SSE) como as mensagens.
+
+## Setores e etiquetas (V16)
+
+A especificação funcional não trata setor nem etiqueta; o protótipo os mostra no painel da conversa
+(seção Atendimento: Setor, Responsável, Protocolo, Etiquetas), no Histórico geral (filtros e coluna), no
+detalhe ("Sobre o atendimento") e na ficha do associado (um setor por protocolo). Daí as regras abaixo.
+
+**Onde fica.** A classificação é **do ciclo** (atendimento), não do contato nem da conversa: um setor
+opcional e de 0 a 10 etiquetas. Os ciclos anteriores a esta versão ficam sem setor e sem etiquetas e
+continuam consultáveis (e achados por "Sem setor"/"Sem etiqueta").
+
+**Quem classifica.** Só o **responsável atual**, com o atendimento **em andamento**, sobre a `versao`
+vista e com a permissão `atendimento:classificar` — as mesmas regras de transferir e encerrar
+(`NAO_E_RESPONSAVEL`, `ATENDIMENTO_SEM_RESPONSAVEL`, `ATENDIMENTO_ENCERRADO`, `CONFLITO_CONCORRENTE`).
+O pedido substitui a classificação do ciclo; repetir a que já vale não altera nada. A mudança aumenta a
+`versao` do atendimento e registra o evento `CLASSIFICADO` na linha do tempo, com o retrato
+"Setor: … · Etiquetas: …" nos nomes daquele momento.
+
+**Ciclos.** Transferir mantém a classificação e quem a recebe pode alterá-la; devolver à fila mantém o
+setor (o ciclo aguarda com ele), mas sem responsável ninguém o altera. O ciclo **encerrado guarda a
+classificação que tinha** e não pode mais ser alterado. Um **novo ciclo do mesmo contato começa sem
+setor e sem etiquetas**; classificar o ciclo atual não toca nos anteriores.
+
+**Cadastros.** Nome obrigatório de 2 a 60 caracteres (setor) ou 2 a 40 (etiqueta), espaços repetidos
+viram um só; único sem diferenciar maiúsculas nem acentos, inclusive entre os inativos (restrição única
+no banco): repetido → 409 `NOME_EM_USO` no campo `nome`. Renomear, ativar e desativar exigem a `versao`
+vista (409 `CONFLITO_CONCORRENTE`). Não há exclusão.
+
+- **Desativar** tira o item das escolhas novas (escolher um inativo → 400 no campo `setorId` ou
+  `etiquetaIds`), mas preserva o cadastro e os vínculos: os ciclos que já o usam continuam com ele, ele
+  aparece "(inativo)" na lista, no painel, no detalhe e na exportação, e o filtro do histórico continua
+  achando esses ciclos. Um ciclo em andamento pode manter o item inativo que já tem.
+- **Renomear** vale para todos os ciclos que usam o item (é uma correção do cadastro); o evento de cada
+  classificação continua com o nome da época, e o histórico do cadastro guarda o nome anterior.
+
+| Método e caminho (`/api/v1/atendimento`) | Uso |
+| --- | --- |
+| `GET setores?situacao=`, `GET etiquetas?situacao=` | cadastro inteiro em ordem de nome; `ATIVOS`, `INATIVOS` ou `TODOS` (padrão) (atendimento:consultar) |
+| `POST setores`, `POST etiquetas` | `nome` → 201 |
+| `PUT setores/{id}`, `PUT etiquetas/{id}` | `nome` + `versao` |
+| `POST setores/{id}/ativacao`, `…/desativacao` (idem para etiquetas) | `versao` |
+| `PUT atendimentos/{id}/classificacao` | `versao`, `setorId?`, `etiquetaIds` → 204 |
+
+Permissões em [seguranca.md](seguranca.md#autorização): `setores:cadastrar`, `setores:editar`,
+`setores:alterar-situacao`, os mesmos três para `etiquetas:` e `atendimento:classificar`; só o
+`ADMINISTRADOR` as recebe por enquanto.
+
+**Telas.** Cadastros em **Ver opções → Setores e etiquetas** (`/atendimento/setores-etiquetas`; o item
+do menu aparece para quem pode gerenciar algum dos dois): lista por situação, novo, renomear,
+ativar/desativar, erro junto do campo; ações sem permissão não aparecem. Na conversa, a seção
+**Atendimento** do painel mostra Setor e Etiquetas e, para o responsável com a permissão, **Classificar**
+(setor e até 10 etiquetas entre os ativos e os que o ciclo já tem). O cabeçalho da conversa continua
+com o protocolo, como no layout aprovado.
+
+**Lacunas (sem regra definida; não implementado):**
+
+- Perfis de negócio: a matriz de permissões ainda não foi aprovada; as permissões novas são do
+  Administrador.
+- Classificação na fila por um supervisor, sem assumir: o setor na chegada vem da
+  [triagem inicial](#triagem-inicial-v17); fora dela, só o responsável classifica.
+- Correção da classificação de um ciclo encerrado (quem pode e com que registro).
+- Setor do atendente, distribuição e fila por setor, volume por setor/etiqueta no Dashboard e envio em
+  massa por fila.
+- Relação com categoria e assunto dos chamados (RN-ATE-05/07), ainda não entregues.
+
+## Triagem inicial (V17)
+
+Menu numerado enviado pelo WhatsApp ao abrir um ciclo, para o atendimento chegar à fila com o setor
+definido. A especificação funcional deixa a automação de atendimento para depois do R1 (RN-ATE-10:
+atendimento humano) e não detalha a triagem; o protótipo só mostra o setor do atendimento. As regras
+abaixo são desta entrega. Cadastro de oportunidade, emissão de segunda via e interpretação por IA ficam
+para etapas próprias: "Quero conhecer o Em Conta" só encaminha ao setor comercial configurado.
+
+**Saudação.** Com a triagem ligada e o canal configurado, cada ciclo novo (inclusive o que se abre
+depois de um encerramento) recebe **uma** saudação, pela fila de envio:
+
+```
+Olá! Você está no atendimento do Em Conta. Para direcionar sua conversa, responda com o número de uma das opções:
+
+1 - Financeiro
+2 - Cobrança ou segunda via
+3 - Quero conhecer o Em Conta
+4 - Outro assunto ou falar com um atendente
+```
+
+A mensagem que abriu o ciclo não é resposta ao menu. O ciclo fica em **Aguardando** o tempo todo, com
+"Em triagem" na fila enquanto o cliente não responde; a triagem nunca impede alguém de assumir.
+
+**Resposta.** Vale o número da opção, sozinho ou com pontuação ("1", "1.", "1)", "opção 1", 1️⃣).
+Qualquer outra coisa (texto, número fora do menu, mídia) é inválida: na primeira, o menu é repetido uma
+vez ("Não identifiquei a opção…"); na segunda, o ciclo segue na fila sem setor.
+
+| Desfecho | Quando | Setor | Evento (sem autor) | Ao cliente |
+| --- | --- | --- | --- | --- |
+| `CLASSIFICADA` | opção 1, 2 ou 3 com setor ativo configurado | o da opção | `TRIAGEM_CLASSIFICADA` "Opção N (rótulo) · Setor: nome" | "Obrigado! Sua conversa foi encaminhada…" |
+| `ENCAMINHADA` | opção 4 | nenhum | `TRIAGEM_ENCAMINHADA` "Opção 4 (…) · fila sem setor" | idem |
+| `ENCAMINHADA` | opção sem setor configurado ou com o setor desativado | nenhum | `TRIAGEM_ENCAMINHADA` "…: sem setor configurado" / "…: setor X inativo" | idem |
+| `ENCAMINHADA` | segunda resposta inválida | nenhum | `TRIAGEM_ENCAMINHADA` "Resposta inválida após nova tentativa" | "Não consegui identificar a opção…" |
+| `ENCAMINHADA` | uma mensagem da triagem falhou de vez (recusa, janela de 24 h ou `failed` da Meta) | nenhum | `TRIAGEM_ENCAMINHADA` "Falha no envio da triagem" | nada |
+| `INTERROMPIDA` | alguém assumiu antes da resposta | o que já tinha (nenhum) | `TRIAGEM_INTERROMPIDA` | nada (o aviso de responsável segue a regra dele) |
+
+- Classificar pela triagem grava o setor do ciclo e aumenta a `versao`, como a classificação manual. O
+  responsável corrige depois pelo painel (**Classificar**), com as permissões de sempre. Etiquetas não
+  são definidas pela triagem.
+- Depois do desfecho, as mensagens seguem o fluxo normal: "1" vira uma mensagem como outra qualquer.
+- **Repetição**: mensagem repetida (mesmo `wamid`) é descartada antes da triagem; cada mensagem
+  automática tem a chave única `triagem:<atendimento>:<etapa>` (`saudacao`, `nova-tentativa`,
+  `encaminhamento`), então reprocessar um evento não envia de novo nem classifica duas vezes.
+- **Concorrência**: o recebimento trava a conversa e depois o atendimento; assumir trava na mesma ordem.
+  Resposta e assunção ao mesmo tempo: a primeira decide (classificada e depois assumida, ou interrompida
+  e a resposta tratada como mensagem comum), com um único evento de triagem.
+- **Primeira resposta humana**: mensagens de origem `TRIAGEM` não contam (só `ATENDENTE`), como o aviso
+  de responsável. Avisos de responsável, notas internas e ciclos encerrados não mudam.
+- **Menu pendente ao assumir** (V18): a assunção, na mesma transação, encerra a triagem e marca como
+  `CANCELADA` a saudação e a repetição do menu que ainda aguardam envio, inclusive as que esperam nova
+  tentativa depois de um erro temporário. Nada vai à Meta, a linha continua na conversa com o motivo
+  ("Não enviada: a triagem terminou antes do envio…"), entra no histórico de situações e mantém a chave
+  única: reprocessar a fila ou reentregar o evento não recria nem envia a mensagem. A confirmação do
+  encaminhamento (enviada depois de uma resposta válida) não é cancelada. O aviso de responsável segue a
+  regra dele: um por mudança efetiva.
+- **Reserva do envio**: com a mensagem travada, o `Envio` confere de novo; a saudação ou a repetição do
+  menu só sai enquanto a triagem aguarda a resposta. Se ela já terminou por qualquer motivo (alguém
+  assumiu, o cliente respondeu antes de a saudação sair, falha), a mensagem vira `CANCELADA` sem chamada
+  à Meta.
+- **Chamada já em andamento**: a reserva (`PENDENTE → ENVIANDO`) é confirmada antes da chamada à Meta,
+  feita fora de transação. Se a reserva vence a assunção, a assunção espera a trava da reserva, encontra
+  `ENVIANDO` e não a cancela: a mensagem pode chegar ao cliente depois de alguém assumir, junto com o
+  aviso de responsável, e o resultado (aceita, falha ou desconhecido, e os status do webhook) é registrado
+  como o de qualquer envio. A Cloud API não permite cancelar uma mensagem já aceita. Uma resposta do
+  cliente a esse menu tardio é tratada como mensagem comum, porque a triagem já terminou. Se a assunção
+  vence, a reserva pula a mensagem travada (`SKIP LOCKED`) e, depois da confirmação, a encontra
+  `CANCELADA`.
+
+**Configuração** (Ver opções → **Triagem do WhatsApp**, `/atendimento/triagem`; o item aparece para
+quem tem `triagem:configurar`, só o Administrador por enquanto). Começa **desligada** depois da migração:
+nada muda até alguém ligar. Para cada uma das opções 1 a 3, um setor ativo ou "Fila sem setor"; duas
+opções podem ter o mesmo setor; a opção 4 vai sempre para a fila sem setor. Manter um setor que foi
+desativado depois não é escolha nova; escolher outro inativo → 400 no campo `opcoes.<OPCAO>`. Salvar
+exige a `versao` vista (409 `CONFLITO_CONCORRENTE`). Quem só tem `atendimento:consultar` vê a
+configuração sem os controles.
+
+| Método e caminho (`/api/v1/atendimento`) | Uso |
+| --- | --- |
+| `GET triagem` | ligada ou não, `versao`, saudação, as quatro opções com o setor de cada uma e quem alterou (atendimento:consultar) |
+| `PUT triagem` | `versao`, `ativa`, `opcoes: [{opcao, setorId?}]` (opção ausente fica sem destino) → a configuração (triagem:configurar) |
+
+Na fila, a linha abaixo do nome mostra o setor, o responsável e "Em triagem"; na conversa e na
+exportação, as mensagens aparecem como "Triagem automática" e os eventos com a opção e o destino.
+
+**Testar localmente** (API isolada na 8090 e Graph controlada; nenhum envio real):
+
+1. `e2e/triagem.spec.ts` (Playwright, ver [Testes](#testes)) liga a triagem pela tela, simula as
+   mensagens do contato pelo webhook assinado, confere a saudação na Graph controlada, o setor na fila
+   Aguardando, a assunção antes da resposta, a opção 4 e o setor no Histórico geral depois do
+   encerramento, e desliga a triagem no fim.
+2. À mão, com a API isolada e o frontend de revisão: cadastre os setores, ligue a triagem em **Triagem
+   do WhatsApp**, mande uma mensagem de um número de teste pelo webhook assinado (ver
+   `e2e/whatsapp-controlado.ts`, `webhookDeTeste.mensagem`) e depois a resposta ("1" a "4"); acompanhe
+   em **Aguardando**. Ao terminar, desligue a triagem para não afetar as outras jornadas.
+3. Homologação com a Meta (conta e número de teste) fica para uma rodada própria; nada aqui abre túnel.
+
+**Lacunas (sem regra definida; não implementado):** horário de atendimento e mensagem fora do horário;
+textos da saudação e do menu configuráveis; tempo máximo sem resposta ao menu (hoje o ciclo espera em
+Aguardando, com "Em triagem", até alguém assumir ou o cliente responder); triagem por botões ou lista interativa da Meta; etiquetas pela
+triagem; histórico de alterações da configuração (hoje só quem alterou por último).
 
 ## Respostas rápidas (V10)
 
@@ -687,12 +868,33 @@ falhou, confira no proxy se chegou algum POST e, na Graph API, a assinatura do a
   exportação (ciclo aberto → 404); 401/403/200 por perfil em todas as rotas do histórico.
   `AtendimentoIntegrationTests` repete, no fluxo completo, protocolo com período, paginação, exportação
   só do ciclo encerrado e 401/403 na exportação, no detalhe, na linha do tempo e no anexo.
+  `ClassificacoesIntegrationTests`: cadastros (nome normalizado e único sem acento nem maiúsculas,
+  limites, versão, histórico com o nome anterior, ativar/desativar), cada permissão liberando só a sua
+  ação também em chamada direta, classificação só pelo responsável em andamento (versão, item
+  inexistente ou inativo, limite de etiquetas, inativo já vinculado mantido, transferência e devolução à
+  fila), ciclo encerrado preservado e novo ciclo do mesmo contato sem classificação, e filtros do
+  histórico combinados com busca, protocolo, período e paginação, inclusive "SEM", lista vazia, ciclos sem
+  classificação e itens desativados ou renomeados depois.
+  `TriagemIntegrationTests`: saudação única por ciclo, cada opção (inclusive "2.", "opção 4" e 3️⃣),
+  duas opções com o mesmo setor, sem setor configurado, setor desativado depois, resposta inválida
+  repetida, falha no envio da saudação, eventos repetidos (mesmo corpo e mesmo `wamid`), assunção durante
+  a triagem, resposta e assunção ao mesmo tempo (seis rodadas, um único desfecho), dois ciclos do mesmo
+  contato com o encerrado preservado e achado no histórico pelo setor, primeira resposta humana,
+  correção manual pelo responsável e a configuração por permissão, versão e opções válidas.
+  `TriagemEnvioIntegrationTests` (aviso de responsável ligado): assunção antes do envio da saudação,
+  repetição do menu pendente, saudação à espera de nova tentativa, saudação obsoleta na reserva (cliente
+  respondeu antes), reprocessamento da fila e reentrega do evento, chamada já em andamento (fica
+  `ENVIANDO` e recebe o status do webhook) e assunção e envio ao mesmo tempo (oito rodadas: enviada ou
+  cancelada, nunca as duas), sempre com um único aviso de responsável.
   `DigitandoIntegrationTests`: formato documentado do indicador
   (leitura da última recebida + `typing_indicator`), intervalo mínimo, resposta liberando o próximo,
   regras de resposta e permissão.
 - Frontend: `src/features/atendimento/__tests__` (Vitest; `tempo-real.spec.ts` cobre aviso → releitura,
   ícones fora de ordem, balão local sem duplicar, falha, troca de conversa e reconexão) e
-  `e2e/atendimento.spec.ts` e `e2e/historico.spec.ts` (Playwright; jornada do histórico com busca,
-  filtros, paginação, dois ciclos, exportação e acesso negado por perfil),
+  `e2e/atendimento.spec.ts`, `e2e/historico.spec.ts` (Playwright; jornada do histórico com busca,
+  filtros, paginação, dois ciclos, exportação e acesso negado por perfil) e `e2e/classificacoes.spec.ts`
+  (cadastro, classificação pelo painel, dois ciclos e filtros de setor e etiqueta no histórico) e
+  `e2e/triagem.spec.ts` (configuração pela tela, saudação, setor na fila antes de assumir, assunção
+  durante a triagem, atendimento humano e o setor no histórico depois do encerramento),
   este contra a API de testes do banco isolado, também com Graph controlada local
   (`e2e/whatsapp-controlado.ts`). Nada disso é envio ou recebimento real.

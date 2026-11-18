@@ -109,6 +109,16 @@ $env:E2E_WHATSAPP_PHONE_NUMBER_ID = "e2e-numero-ficticio"
 # $env:E2E_GRAPH_PORT = "8099"                                # padrão
 ```
 
+**Banco isolado organizado entre execuções** (`e2e/ambiente.ts`, preparação global do Playwright): a
+triagem inicial é uma configuração única do banco, e a revisão manual pode deixá-la ligada; antes das
+jornadas ela é desligada e, no fim, volta como estava. `e2e/triagem.spec.ts` liga a sua própria
+configuração e devolve a que encontrou. Setores e etiquetas criados pelas jornadas (`classificacoes`,
+`triagem`) têm o prefixo `E2E` e ficam sempre ligados a um ciclo de teste; no fim de cada jornada, mesmo
+se ela falhar, os que ainda estão ativos são desativados. Assim, as escolhas novas (painel, triagem,
+cadastro em "Ativos") só mostram os itens da revisão, e os itens E2E continuam nos ciclos e no filtro do
+Histórico geral, no grupo "Inativos", como evidência dos cenários. Use nomes sem o prefixo `E2E` para os
+itens de revisão manual.
+
 Sem essas variáveis, as jornadas de acesso e de associados são puladas e só o teste da página técnica roda. Os
 tokens dos convites e das recuperações são lidos dos e-mails no Mailpit; não existe endpoint que
 os revele.

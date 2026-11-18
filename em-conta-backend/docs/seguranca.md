@@ -243,13 +243,21 @@ envia autoridades: o `Ator` de cada operação é montado das permissões calcul
 | `vinculos-usina:consultar` | `GET /api/v1/usinas/{id}/vinculos`, `GET /api/v1/associados/{id}/vinculos-usina` |
 | `vinculos-usina:criar` | `GET /api/v1/vinculos-usina/ucs-candidatas`, `POST /api/v1/usinas/{id}/vinculos` |
 | `vinculos-usina:encerrar` | `POST /api/v1/usinas/{id}/vinculos/{vinculoId}/encerramento` |
-| `atendimento:consultar` | `GET /api/v1/atendimento/canal`, `GET`/`PUT …/presenca`, `GET …/atendimentos`, `GET …/atendimentos/{id}`, `GET …/atendimentos/{id}/linha-do-tempo` e `…/linha-do-tempo/situacoes`, `GET …/atendimentos/{id}/midia`, `GET …/atendimentos/{id}/anexos/{anexo}/conteudo` (só anexo da conversa do atendimento), `GET …/atendimentos/{id}/exportacao`, `GET …/historico` |
+| `atendimento:consultar` | `GET /api/v1/atendimento/canal`, `GET`/`PUT …/presenca`, `GET …/atendimentos`, `GET …/atendimentos/{id}`, `GET …/atendimentos/{id}/linha-do-tempo` e `…/linha-do-tempo/situacoes`, `GET …/atendimentos/{id}/midia`, `GET …/atendimentos/{id}/anexos/{anexo}/conteudo` (só anexo da conversa do atendimento), `GET …/atendimentos/{id}/exportacao`, `GET …/historico`, `GET /api/v1/atendimento/setores`, `GET …/etiquetas` e `GET …/triagem` |
 | `atendimento:assumir` | `POST /api/v1/atendimento/atendimentos/{id}/assuncao` |
 | `atendimento:responder` | `POST /api/v1/atendimento/atendimentos/{id}/mensagens`, `POST …/{id}/anexos` (multipart, com CSRF) e `POST …/{id}/anexos/{anexo}/nova-tentativa` (só o responsável; destino de transferência precisa desta permissão) |
 | `atendimento:transferir` | `POST …/atendimentos/{id}/transferencia` (só o responsável atual, em andamento), `GET /api/v1/atendimento/responsaveis` |
 | `atendimento:encerrar` | `POST …/atendimentos/{id}/encerramento` (só o responsável atual, em andamento) |
 | `atendimento:vincular-associado` | `PUT …/atendimentos/{id}/associado`, `GET …/atendimentos/{id}/associados-sugeridos`, `GET /api/v1/atendimento/associados` |
 | `atendimento:reprocessar` | `GET /api/v1/atendimento/webhook-falhas`, `POST …/webhook-eventos/{id}/reprocessamento` |
+| `atendimento:classificar` | `PUT …/atendimentos/{id}/classificacao` (só o responsável atual, em andamento; exige `versao`) |
+| `setores:cadastrar` | `POST /api/v1/atendimento/setores` |
+| `setores:editar` | `PUT …/setores/{id}` (exige `versao`) |
+| `setores:alterar-situacao` | `POST …/setores/{id}/ativacao` e `…/desativacao` (exigem `versao`) |
+| `etiquetas:cadastrar` | `POST /api/v1/atendimento/etiquetas` |
+| `etiquetas:editar` | `PUT …/etiquetas/{id}` (exige `versao`) |
+| `etiquetas:alterar-situacao` | `POST …/etiquetas/{id}/ativacao` e `…/desativacao` (exigem `versao`) |
+| `triagem:configurar` | `PUT /api/v1/atendimento/triagem`: liga ou desliga a triagem inicial e escolhe o setor de cada opção (exige `versao`) |
 | `respostas-rapidas:consultar` | `GET /api/v1/atendimento/respostas-rapidas` e `GET …/respostas-rapidas/{id}` |
 | `respostas-rapidas:cadastrar` | `POST /api/v1/atendimento/respostas-rapidas` |
 | `respostas-rapidas:editar` | `PUT …/respostas-rapidas/{id}` (exige `versao`) |
