@@ -11,6 +11,7 @@ const OUTRA = { id: 30, nome: 'Outra Pessoa' }
 const encerrado = {
   id: 1,
   codigo: 'ATD-000001',
+  etiquetas: [],
   situacao: 'ENCERRADO',
   contatoNumero: '5567999990000',
   contatoNome: 'Contato Teste',

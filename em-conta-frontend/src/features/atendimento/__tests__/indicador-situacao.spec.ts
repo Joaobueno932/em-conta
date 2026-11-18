@@ -83,6 +83,15 @@ describe('indicador da situação de uma mensagem enviada', () => {
     expect(screen.getByText(/janela de 24 horas expirou antes do envio/)).toBeTruthy()
   })
 
+  it('mensagem da triagem cancelada é "Não enviada" com o motivo, sem aparência de falha', async () => {
+    indicador('CANCELADA')
+    const botao = screen.getByRole('button', { name: /Não enviada/ })
+    expect(botao.classList.contains('falha')).toBe(false)
+    expect(botao.classList.contains('neutro')).toBe(true)
+    await fireEvent.click(botao)
+    expect(screen.getByText(/a triagem terminou antes do envio/)).toBeTruthy()
+  })
+
   it('resultado desconhecido aparece escrito e com indicador próprio, diferente da falha', async () => {
     indicador('DESCONHECIDA')
     const botao = screen.getByRole('button', { name: /Envio não confirmado/ })

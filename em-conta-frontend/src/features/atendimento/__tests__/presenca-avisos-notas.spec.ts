@@ -14,6 +14,7 @@ function detalhe(extra: Record<string, unknown> = {}) {
     resumo: {
       id: 1,
       codigo: 'ATD-000001',
+      etiquetas: [],
       situacao: 'EM_ATENDIMENTO',
       contatoNumero: '5567999990000',
       contatoNome: 'Contato Teste',

@@ -177,9 +177,11 @@ test('histórico geral: busca, filtros, paginação, dois ciclos, exportação e
     const linha = linhas.filter({ hasText: protocolo(id) })
     await expect(linha).toHaveCount(1)
     await expect(linha).toContainText(nomeA)
-    // Colunas: Contato, Associado, Atendente, Encerrado por, Data.
-    await expect(linha.locator('td').nth(2)).toHaveText(eu)
+    // Colunas: Contato, Associado, Setor, Atendente, Encerrado por, Etiquetas, Data (sem classificação).
+    await expect(linha.locator('td').nth(2)).toHaveText('—')
     await expect(linha.locator('td').nth(3)).toHaveText(eu)
+    await expect(linha.locator('td').nth(4)).toHaveText(eu)
+    await expect(linha.locator('td').nth(5)).toHaveText('Sem etiqueta')
   }
 
   // Protocolo + período de hoje (combinados); amanhã, lista vazia; período invertido é avisado.

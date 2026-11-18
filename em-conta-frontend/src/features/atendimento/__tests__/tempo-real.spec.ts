@@ -42,6 +42,7 @@ function detalhe(id: number) {
     resumo: {
       id,
       codigo: `ATD-00000${id}`,
+      etiquetas: [],
       situacao: 'EM_ATENDIMENTO',
       contatoNumero: '5567999990000',
       contatoNome: `Contato ${id}`,

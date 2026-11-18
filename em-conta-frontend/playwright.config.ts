@@ -8,6 +8,8 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
+  // Triagem desligada durante as jornadas e restaurada no fim (ver e2e/ambiente.ts).
+  globalSetup: './e2e/ambiente.ts',
   timeout: 30 * 1000,
   expect: { timeout: 10000 },
   forbidOnly: !!process.env.CI,

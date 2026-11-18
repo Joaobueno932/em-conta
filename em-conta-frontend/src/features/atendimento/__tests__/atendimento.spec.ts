@@ -22,6 +22,7 @@ function resumo(sobrescrever: Record<string, unknown> = {}) {
   return {
     id: 1,
     codigo: 'ATD-000001',
+    etiquetas: [],
     situacao: 'AGUARDANDO',
     contatoNumero: '5567999990000',
     contatoNome: 'Contato Teste',

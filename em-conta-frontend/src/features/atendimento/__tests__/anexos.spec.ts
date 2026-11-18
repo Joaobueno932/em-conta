@@ -24,6 +24,7 @@ function detalhe(situacao = 'EM_ATENDIMENTO') {
     resumo: {
       id: 1,
       codigo: 'ATD-000001',
+      etiquetas: [],
       situacao,
       contatoNumero: '5567999990000',
       contatoNome: 'Contato Teste',
