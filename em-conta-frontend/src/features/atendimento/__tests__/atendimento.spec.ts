@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/vue'
+import { fireEvent, screen, waitFor, within } from '@testing-library/vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { apiFalsa, csrf, montarApp, problema, usuarioAtual, type Rotas } from '@/test/api-falsa'
@@ -128,7 +128,7 @@ describe('Atendimento', () => {
     expect(confirmar).not.toHaveBeenCalled()
   })
 
-  it('mostra só as visões Em andamento e Aguardando, com o título no cabeçalho', async () => {
+  it('mostra só as visões Em andamento e Aguardando, com título e presença na página', async () => {
     const { fetchFn } = apiFalsa(rotas(detalhe()))
     await montarApp(fetchFn, '/atendimento')
 
@@ -141,12 +141,29 @@ describe('Atendimento', () => {
       ]),
     )
     expect(screen.queryByRole('button', { name: /Meus atendimentos|Encerrados/ })).toBeNull()
-    // Um só seletor de presença e o título no cabeçalho global, sem o bloco grande da página.
-    expect(screen.getAllByText('Disponível')).toHaveLength(1)
-    expect(
-      screen.getByRole('heading', { name: 'Atendimento', level: 1 }).closest('header'),
-    ).toBeTruthy()
-    expect(screen.queryByText('Converse e acompanhe seus associados.')).toBeNull()
+    // Um só seletor de presença (no topo da fila); o título da página mostra a situação, sem seletor.
+    expect(screen.getAllByRole('combobox', { name: 'Sua presença' })).toHaveLength(1)
+    const titulo = screen.getByRole('heading', { name: 'Atendimento', level: 1 })
+    expect(titulo.closest('main')).toBeTruthy()
+    expect(screen.getByText('Converse e acompanhe seus associados.')).toBeInTheDocument()
+    expect(screen.getByText('Sua presença:').parentElement).toHaveTextContent('Disponível')
+  })
+
+  it('alterna a fila entre mais antigos (padrão da API) e mais recentes', async () => {
+    const { fetchFn, chamadas } = apiFalsa(rotas(detalhe()))
+    await montarApp(fetchFn, '/atendimento')
+
+    const ordem = await screen.findByRole('group', { name: 'Ordem da fila' })
+    expect(within(ordem).getByRole('button', { name: 'Mais antigos' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await fireEvent.click(within(ordem).getByRole('button', { name: 'Mais recentes' }))
+    await waitFor(() =>
+      expect(
+        chamadas.some((c) => c.includes('/atendimentos?') && c.includes('maisAntigos=false')),
+      ).toBe(true),
+    )
   })
 
   it.each([

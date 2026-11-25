@@ -76,7 +76,19 @@ function escolherPresenca(valor: string) {
 
 <template>
   <main class="atendimento">
-    <!-- O título fica no cabeçalho global (meta.tituloCabecalho); aqui só o aviso real do canal. -->
+    <!-- Pranchas "🎧 Atendimento — Conversas" (1672 × 1100): título e subtítulo na página e, à
+         direita, a situação de presença (o seletor fica no topo da fila). -->
+    <header class="cabecalho-atendimento">
+      <div>
+        <h1>Atendimento</h1>
+        <p>Converse e acompanhe seus associados.</p>
+      </div>
+      <p v-if="presenca.data.value" class="situacao-presenca">
+        <span class="ponto" :class="{ ausente: !disponivel }" aria-hidden="true"></span>
+        <span class="visualmente-oculto">Sua presença:</span>
+        {{ disponivel ? 'Disponível' : 'Ausente' }}
+      </p>
+    </header>
     <p v-if="canal.data.value && !canal.data.value.configurado" class="aviso-canal" role="status">
       <IconeTraco nome="informacao" :tamanho="18" />
       <span>
@@ -143,7 +155,7 @@ function escolherPresenca(valor: string) {
 </template>
 
 <style scoped>
-/* Fila, conversa e painel logo abaixo do cabeçalho global, até o fim da janela. */
+/* Título a 26 px do menu; fila, conversa e painel a 15 px das bordas, até o fim da janela. */
 .atendimento {
   display: flex;
   flex-direction: column;
@@ -151,7 +163,39 @@ function escolherPresenca(valor: string) {
   height: 100%;
   min-height: 28rem;
   box-sizing: border-box;
-  padding: 12px 15px 15px;
+  padding: 16px 15px 15px;
+}
+
+.cabecalho-atendimento {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 16px;
+  padding: 0 0 4px 11px;
+}
+
+.cabecalho-atendimento h1 {
+  margin: 0;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 46px;
+  letter-spacing: -0.01em;
+}
+
+.cabecalho-atendimento > div > p {
+  margin: 0;
+  color: var(--cor-texto-2);
+  font-size: 16px;
+}
+
+.situacao-presenca {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 22px 0;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 /* Canal desligado: uma linha compacta acima das colunas, que quebra em telas estreitas. */

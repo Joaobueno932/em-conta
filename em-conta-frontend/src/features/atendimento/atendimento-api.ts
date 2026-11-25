@@ -27,8 +27,12 @@ export const eventosConversa = (atendimento: number) =>
 
 export const chavesAtendimento = {
   todos: ['atendimento'] as const,
-  fila: (visao: Visao, busca: string, pagina: number) =>
-    ['atendimento', 'fila', visao, busca, pagina] as const,
+  // Mais antigos primeiro é o padrão da API; a chave só muda na ordem inversa, para o contador do
+  // menu e o Painel continuarem compartilhando a mesma consulta da fila.
+  fila: (visao: Visao, busca: string, pagina: number, maisAntigos = true) =>
+    maisAntigos
+      ? (['atendimento', 'fila', visao, busca, pagina] as const)
+      : (['atendimento', 'fila', visao, busca, pagina, 'recentes'] as const),
   detalhe: (id: number) => ['atendimento', 'detalhe', id] as const,
   linha: (id: number, somenteEste: boolean) => ['atendimento', 'linha', id, somenteEste] as const,
   midia: (id: number, somenteEste: boolean, categoria: string) =>
@@ -104,9 +108,16 @@ export const ROTULO_TIPO_EXTERNO: Record<string, string> = {
   unsupported: 'não reconhecido pelo WhatsApp',
 }
 
-export function listarFila(http: HttpClient, visao: Visao, busca: string, pagina: number) {
+export function listarFila(
+  http: HttpClient,
+  visao: Visao,
+  busca: string,
+  pagina: number,
+  maisAntigos = true,
+) {
   const params = new URLSearchParams({ visao, pagina: String(pagina), tamanho: '20' })
   if (busca.trim()) params.set('busca', busca.trim())
+  if (!maisAntigos) params.set('maisAntigos', 'false')
   return http.get<Pagina>(`/v1/atendimento/atendimentos?${params}`)
 }
 

@@ -270,10 +270,6 @@ async function encerrar() {
               placeholder="Buscar associados por nome ou CPF/CNPJ…"
             />
           </form>
-          <!-- Páginas de área inteira (ex.: Atendimento) levam o título aqui, para liberar altura. -->
-          <h1 v-if="route.meta.tituloCabecalho" class="titulo-contexto">
-            {{ route.meta.tituloCabecalho }}
-          </h1>
         </div>
         <div ref="areaConta" class="conta" @keydown.esc="fecharConta(true)">
           <button
@@ -569,16 +565,6 @@ async function encerrar() {
   color: var(--cor-texto-3);
 }
 
-.titulo-contexto {
-  margin: 0;
-  overflow: hidden;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 button.recolher {
   display: inline-flex;
   align-items: center;
@@ -733,10 +719,6 @@ button.botao-conta .icone {
   .topo {
     gap: 12px;
     padding: 0 16px;
-  }
-
-  .titulo-contexto {
-    font-size: 20px;
   }
 
   button.botao-conta .nome {

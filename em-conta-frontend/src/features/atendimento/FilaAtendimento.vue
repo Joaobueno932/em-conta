@@ -82,10 +82,18 @@ if (pedida !== undefined) {
 const termo = ref('')
 const busca = ref('')
 const pagina = ref(0)
+// "Mais recentes | Mais antigos" (prancha AT): ordem pelo início do atendimento.
+const maisAntigos = ref(true)
+function ordenar(antigos: boolean) {
+  maisAntigos.value = antigos
+  pagina.value = 0
+}
 
 const fila = useQuery({
-  queryKey: computed(() => chavesAtendimento.fila(visao.value, busca.value, pagina.value)),
-  queryFn: () => listarFila(http, visao.value, busca.value, pagina.value),
+  queryKey: computed(() =>
+    chavesAtendimento.fila(visao.value, busca.value, pagina.value, maisAntigos.value),
+  ),
+  queryFn: () => listarFila(http, visao.value, busca.value, pagina.value, maisAntigos.value),
   placeholderData: keepPreviousData,
   refetchInterval: INTERVALO_MS,
 })
@@ -154,6 +162,16 @@ defineExpose({ mostrarVisao: trocar })
         >
           {{ v.rotulo }}<span v-if="v.total !== undefined" class="contagem">{{ v.total }}</span>
         </button>
+      </div>
+      <div class="ordem" role="group" aria-label="Ordem da fila">
+        <button type="button" :aria-pressed="!maisAntigos" @click="ordenar(false)">
+          Mais recentes
+        </button>
+        <span aria-hidden="true">|</span>
+        <button type="button" :aria-pressed="maisAntigos" @click="ordenar(true)">
+          Mais antigos
+        </button>
+        <IconeTraco nome="filtro" :tamanho="14" />
       </div>
     </div>
 
@@ -562,5 +580,33 @@ button.ver-opcoes:hover {
     white-space: normal;
     text-align: right;
   }
+}
+
+/* Ordem da fila: dois botões de texto, o ativo em negrito (prancha: "Mais recentes | Mais antigos"). */
+.ordem {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--cor-texto-3);
+  font-size: 12px;
+}
+
+.ordem button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--cor-texto-2);
+  font-size: 12px;
+}
+
+.ordem button[aria-pressed='true'] {
+  color: var(--cor-texto);
+  font-weight: 600;
+}
+
+.ordem .icone {
+  color: var(--cor-texto-2);
 }
 </style>
