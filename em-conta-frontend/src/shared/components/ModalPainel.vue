@@ -85,17 +85,19 @@ watch(
   background: rgb(30 36 32 / 35%);
 }
 
+/* Pranchas de overlay: título de 20 px com divisória abaixo, corpo e rodapé a 24 px das bordas. */
 .topo {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  padding: 20px 22px 0;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--cor-divisoria);
 }
 
 h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
 }
 
@@ -119,7 +121,14 @@ button.fechar:hover {
 }
 
 .corpo {
-  padding: 16px 22px;
+  padding: 18px 24px 4px;
+}
+
+.corpo :deep(input[type='text']),
+.corpo :deep(input[type='email']),
+.corpo :deep(input[type='password']),
+.corpo :deep(select) {
+  height: 42px;
 }
 
 .rodape {
@@ -127,7 +136,7 @@ button.fechar:hover {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
-  padding: 14px 22px 20px;
+  padding: 14px 24px 18px;
   border-top: 1px solid var(--cor-divisoria);
 }
 </style>

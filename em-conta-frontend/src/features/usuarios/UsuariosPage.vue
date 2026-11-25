@@ -56,13 +56,12 @@ const SELO: Record<Usuario['situacao'], { tom: 'sucesso' | 'aviso' | 'neutro'; i
 const modalConvite = ref(false)
 const nome = ref('')
 const email = ref('')
-const administrador = ref(false)
+const perfil = ref<Perfil | ''>('')
 const resultado = ref<{ tipo: 'sucesso' | 'aviso'; texto: string } | null>(null)
 
 const convite = useMutation({
   mutationFn: () => {
-    const perfis: Perfil[] =
-      podeAtribuirPerfis.value && administrador.value ? ['ADMINISTRADOR'] : []
+    const perfis: Perfil[] = podeAtribuirPerfis.value && perfil.value ? [perfil.value] : []
     return convidarUsuario(http, nome.value, email.value, perfis)
   },
   onSuccess: (criado) => {
@@ -83,7 +82,7 @@ const convite = useMutation({
 function abrirConvite() {
   nome.value = ''
   email.value = ''
-  administrador.value = false
+  perfil.value = ''
   convite.reset()
   modalConvite.value = true
 }
@@ -181,27 +180,48 @@ function abrirConvite() {
     Desativar preserva histórico e autoria; não há exclusão de usuários.
   </AlertaMensagem>
 
-  <ModalPainel
-    :aberto="modalConvite"
-    titulo="Convidar usuário"
-    subtitulo="A pessoa recebe um e-mail para definir a senha de acesso."
-    @fechar="modalConvite = false"
-  >
+  <ModalPainel :aberto="modalConvite" titulo="Convidar usuário" @fechar="modalConvite = false">
     <form id="form-convite" novalidate @submit.prevent="convite.mutate()">
       <AlertaMensagem v-if="convite.isError.value" tipo="erro">
         {{ describeApiError(convite.error.value) }}
       </AlertaMensagem>
       <div class="campo">
-        <label for="convite-nome">Nome</label>
-        <input id="convite-nome" v-model="nome" type="text" autocomplete="off" required />
+        <label for="convite-nome">Nome <span class="obrigatorio" aria-hidden="true">*</span></label>
+        <input
+          id="convite-nome"
+          v-model="nome"
+          type="text"
+          autocomplete="off"
+          required
+          aria-required="true"
+        />
       </div>
       <div class="campo">
-        <label for="convite-email">E-mail</label>
-        <input id="convite-email" v-model="email" type="email" autocomplete="off" required />
+        <label for="convite-email"
+          >E-mail <span class="obrigatorio" aria-hidden="true">*</span></label
+        >
+        <input
+          id="convite-email"
+          v-model="email"
+          type="email"
+          autocomplete="off"
+          required
+          aria-required="true"
+        />
       </div>
       <div v-if="podeAtribuirPerfis" class="campo">
-        <label><input v-model="administrador" type="checkbox" /> Perfil Administrador</label>
+        <label for="convite-perfil">Perfil de acesso</label>
+        <select id="convite-perfil" v-model="perfil">
+          <option value="">Sem perfil</option>
+          <option v-for="(rotulo, valor) in ROTULO_PERFIL" :key="valor" :value="valor">
+            {{ rotulo }}
+          </option>
+        </select>
       </div>
+      <AlertaMensagem tipo="info">
+        O convite fica pendente até o primeiro acesso: a pessoa recebe um e-mail para definir a
+        senha.
+      </AlertaMensagem>
     </form>
     <template #rodape>
       <button type="button" class="botao-contorno" @click="modalConvite = false">Cancelar</button>
@@ -211,6 +231,7 @@ function abrirConvite() {
         class="botao-primario"
         :disabled="convite.isPending.value || !nome || !email"
       >
+        <IconeTraco nome="enviar" :tamanho="18" />
         {{ convite.isPending.value ? 'Enviando…' : 'Enviar convite' }}
       </button>
     </template>

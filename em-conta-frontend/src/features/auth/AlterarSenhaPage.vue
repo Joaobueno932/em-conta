@@ -1,43 +1,61 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 import { useHttpClient } from '@/app/injection'
+import MinhaContaPage from '@/features/configuracoes/MinhaContaPage.vue'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
 import CampoSenha from '@/shared/components/CampoSenha.vue'
 import IconeTraco from '@/shared/components/IconeTraco.vue'
+import ModalPainel from '@/shared/components/ModalPainel.vue'
+import { avisar } from '@/shared/components/use-avisos'
 
 import { alterarSenha } from './auth-api'
 import { problemaNaSenha, SENHA_MAXIMO, SENHA_MINIMO } from './politica-senha'
 
+/**
+ * Alterar senha (prancha "🪟 Configurações… Overlays", quadros 6 a 8): modal sobre Minha conta. A rota
+ * /conta/senha continua existindo (menu da conta e links antigos); fechar volta para Minha conta.
+ * Os requisitos listados são os da política real (politica-senha.ts, espelho do backend).
+ */
 const http = useHttpClient()
+const router = useRouter()
 const atual = ref('')
 const nova = ref('')
 const confirmacao = ref('')
 const enviando = ref(false)
 const erro = ref<string | null>(null)
-const sucesso = ref(false)
 const mostrarProblemas = ref(false)
 
 const problemaNova = computed(() => (mostrarProblemas.value ? problemaNaSenha(nova.value) : null))
 const problemaConfirmacao = computed(() =>
   mostrarProblemas.value && confirmacao.value !== nova.value ? 'As senhas não conferem.' : null,
 )
+const requisitos = computed(() => [
+  {
+    texto: `De ${SENHA_MINIMO} a ${SENHA_MAXIMO} caracteres (pode usar espaços, como numa frase)`,
+    ok: !!nova.value && !problemaNaSenha(nova.value),
+  },
+  {
+    texto: 'Confirmação igual à nova senha',
+    ok: !!confirmacao.value && confirmacao.value === nova.value,
+  },
+])
+
+function fechar() {
+  void router.push({ name: 'minha-conta' })
+}
 
 async function enviar() {
   mostrarProblemas.value = true
-  sucesso.value = false
   if (!atual.value || problemaNaSenha(nova.value) || confirmacao.value !== nova.value) return
   enviando.value = true
   erro.value = null
   try {
     await alterarSenha(http, atual.value, nova.value)
-    atual.value = ''
-    nova.value = ''
-    confirmacao.value = ''
-    mostrarProblemas.value = false
-    sucesso.value = true
+    avisar('Senha alterada', 'As sessões abertas em outros dispositivos foram encerradas.')
+    fechar()
   } catch (error) {
     erro.value = describeApiError(error)
   } finally {
@@ -47,67 +65,97 @@ async function enviar() {
 </script>
 
 <template>
-  <!-- Seção de Configurações (abre pelo "Alterar senha" do cartão Segurança). -->
-  <section class="painel" aria-labelledby="titulo-senha">
-    <nav aria-label="Trilha" class="trilha">
-      <RouterLink :to="{ name: 'minha-conta' }">
-        <IconeTraco nome="seta-esquerda" :tamanho="16" />
-        Minha conta
-      </RouterLink>
-    </nav>
-    <h2 id="titulo-senha" class="painel__titulo">Alterar senha</h2>
-    <p class="painel__subtitulo">
-      Esta sessão continuará ativa. As sessões abertas em outros dispositivos serão encerradas.
-    </p>
-    <AlertaMensagem v-if="sucesso" tipo="sucesso">Senha alterada.</AlertaMensagem>
-    <AlertaMensagem v-if="erro" tipo="erro">{{ erro }}</AlertaMensagem>
-
-    <form class="formulario" novalidate @submit.prevent="enviar">
+  <MinhaContaPage />
+  <ModalPainel
+    :aberto="true"
+    titulo="Alterar senha"
+    subtitulo="Esta sessão continuará ativa. As sessões abertas em outros dispositivos serão encerradas."
+    :largura="520"
+    @fechar="fechar"
+  >
+    <form id="form-senha" novalidate @submit.prevent="enviar">
+      <AlertaMensagem v-if="erro" tipo="erro"
+        >{{ erro }} Nenhuma alteração foi feita.</AlertaMensagem
+      >
       <CampoSenha
         id="senha-atual"
         v-model="atual"
         rotulo="Senha atual"
+        obrigatorio
         autocomplete="current-password"
       />
       <CampoSenha
         id="senha-nova"
         v-model="nova"
         rotulo="Nova senha"
+        obrigatorio
         autocomplete="new-password"
-        :descricao="`De ${SENHA_MINIMO} a ${SENHA_MAXIMO} caracteres. Pode usar espaços, como numa frase.`"
         :erro="problemaNova"
       />
       <CampoSenha
         id="senha-confirmacao"
         v-model="confirmacao"
-        rotulo="Repita a nova senha"
+        rotulo="Confirmar nova senha"
+        obrigatorio
         autocomplete="new-password"
         :erro="problemaConfirmacao"
       />
-      <button type="submit" class="botao-primario" :disabled="enviando">
+      <p class="titulo-requisitos">Requisitos</p>
+      <ul class="requisitos">
+        <li v-for="r in requisitos" :key="r.texto" :class="{ ok: r.ok }">
+          <IconeTraco :nome="r.ok ? 'check-circulo' : 'informacao'" :tamanho="18" />
+          <span>{{ r.texto }}</span>
+          <span class="situacao">{{ r.ok ? 'Concluído' : 'Pendente' }}</span>
+        </li>
+      </ul>
+    </form>
+    <template #rodape>
+      <button type="button" class="botao-contorno" @click="fechar">Cancelar</button>
+      <button type="submit" form="form-senha" class="botao-primario" :disabled="enviando">
+        <IconeTraco nome="chave" :tamanho="18" />
         {{ enviando ? 'Salvando…' : 'Alterar senha' }}
       </button>
-    </form>
-  </section>
+    </template>
+  </ModalPainel>
 </template>
 
 <style scoped>
-.painel {
-  padding: 18px 22px 22px;
-}
-
-.trilha a {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
+.titulo-requisitos {
+  margin: 4px 0 6px;
   color: var(--cor-texto-2);
-  font-size: 13px;
-  text-decoration: none;
+  font-size: 12px;
 }
 
-.formulario {
-  max-width: 482px;
-  margin-top: 18px;
+.requisitos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requisitos li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  color: var(--cor-texto-2);
+  font-size: 14px;
+}
+
+.requisitos li span:first-of-type {
+  flex: 1;
+}
+
+.requisitos li.ok {
+  color: var(--cor-texto);
+}
+
+.requisitos li.ok .icone,
+.requisitos li.ok .situacao {
+  color: var(--cor-destaque-forte);
+}
+
+.situacao {
+  font-size: 12px;
+  font-weight: 500;
 }
 </style>

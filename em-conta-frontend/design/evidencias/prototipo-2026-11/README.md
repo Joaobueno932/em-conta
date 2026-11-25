@@ -101,11 +101,15 @@ Pendências destas telas (motivo específico):
 | 🌗 Tema — Demonstração (7) | Tema escuro não existe; as pranchas mostram telas de outros módulos no tema escuro |
 | 🪟 Overlays dos módulos acima | Seguem a situação do módulo |
 
-**Overlays dos módulos existentes** (🪟 Associados, Configurações, Usinas): as seções têm até 60 Mpx e o
-render quadro a quadro ainda não tinha terminado ao fechar esta entrega. Os overlays com função real já
-existentes (convite de usuário, confirmação de desativação, vínculo e encerramento de vínculo de UC, editor de
-contato) usam o modal, o diálogo de confirmação e os botões do protótipo, mas **não foram comparados quadro a
-quadro** — pendência para a próxima rodada (rodar `render.mjs` com `EXCLUIR="Detalhes e cadastro"`).
+**Overlays (11 seções, 168 quadros; 🧾 Financeiro — Faturas tem 8 e Detalhe da fatura 4):**
+
+| Seção (quadros) | Situação |
+| --- | --- |
+| 🪟 Configurações, notificações e conta (22) | **Alterar senha** (q6–q8) virou modal sobre Minha conta (a URL `/conta/senha` continua) e **Convidar usuário** (q9) ganhou cabeçalho com divisória, perfil em lista, asteriscos e nota — comparados em `comparacao/senha-modal.png` e `convite-modal.png`: C. Editar usuário e Desativar acesso (q10–q11) continuam na página do usuário, com o diálogo de confirmação do sistema: P. Notificações (q1–q5), parâmetros, empresa, suporte e menu da conta com tema (q12–q22): B |
+| 🪟 Usinas — Overlays e painéis (11) | Nova usina em modal (q4–q6), exportar (q1) e detalhe de UC em painel lateral (q10): P/B — o cadastro continua em página própria (com aviso de nome duplicado já existente); exportar não existe. Vincular UC (q7–q9) e Descartar alterações (q11) seguem como painel e diálogo já existentes, sem comparação quadro a quadro |
+| 🪟 Associados — Overlays (19), Página do associado (10) | Filtros, menu de ações da linha e da ficha, importação e exportação: os filtros existentes ficaram no painel do botão Filtros; o restante (importar, exportar, novo contrato, vincular negócio/produto, criar atividade, cobrança) não existe: B |
+| 🪟 Associados — Pendências e histórico (29), Pendências: painéis de revisão (17) | B (módulo de pendências e histórico geral não existem) |
+| 🪟 Documentos (14), Financeiro (13 + 12), Funil de vendas (12 + 9) | B |
 
 ### Fora de escopo (não são telas aprovadas)
 

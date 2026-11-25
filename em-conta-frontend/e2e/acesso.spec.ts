@@ -118,7 +118,7 @@ test('desativação encerra a sessão aberta e a próxima ação leva ao login',
   await page.getByRole('link', { name: 'Alterar senha' }).click()
   await page.getByLabel('Senha atual').fill(SENHA_PADRAO)
   await page.getByLabel('Nova senha', { exact: true }).fill('qualquer outra senha longa')
-  await page.getByLabel('Repita a nova senha').fill('qualquer outra senha longa')
+  await page.getByLabel('Confirmar nova senha').fill('qualquer outra senha longa')
   await page.getByRole('button', { name: 'Alterar senha' }).click()
 
   await expect(page).toHaveURL(/\/entrar\?.*motivo=expirada/)
