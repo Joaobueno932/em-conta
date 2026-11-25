@@ -7,6 +7,10 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import BotaoFiltros from '@/shared/components/BotaoFiltros.vue'
+import CabecalhoPagina from '@/shared/components/CabecalhoPagina.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
+import PaginacaoLista from '@/shared/components/PaginacaoLista.vue'
 
 import {
   chaves,
@@ -25,8 +29,10 @@ const router = useRouter()
 const { data: sessao } = useSessao()
 
 /**
- * O filtro vive na URL (`?busca=&tipo=&pagina=`): ao abrir um associado e voltar, a listagem
- * reaparece na mesma página e com os mesmos filtros.
+ * Listagem (prancha "👥 Associados — Visão geral e listagem", quadros 2 a 12). O filtro vive na URL
+ * (`?busca=&tipo=&pagina=`): ao abrir um associado e voltar, a listagem reaparece na mesma página e
+ * com os mesmos filtros. Usina, situação do cliente, pendências e responsável do protótipo não
+ * existem no cadastro e não ganham colunas; importar e exportar também não existem.
  */
 function filtroDaUrl(query: LocationQuery): FiltroAssociados {
   const texto = (valor: unknown) => (typeof valor === 'string' ? valor : '')
@@ -73,92 +79,157 @@ const lista = useQuery({
 
 const podeCadastrar = computed(() => temPermissao(sessao.value, 'associados:cadastrar'))
 const criado = computed(() => route.query.criado === '1')
+const filtrosAtivos = computed(() => (filtro.value.tipo ? 1 : 0))
+const temFiltro = computed(() => !!(filtro.value.busca || filtro.value.tipo))
 
-const intervalo = computed(() => {
-  const dados = lista.data.value
-  if (!dados || dados.totalItens === 0) return ''
-  const inicio = dados.pagina * dados.tamanho + 1
-  const fim = inicio + dados.itens.length - 1
-  return `Mostrando ${inicio}–${fim} de ${dados.totalItens} associados`
-})
+// "Associado" no cabeçalho alterna entre nome (A–Z) e cadastro mais recente.
+function alternarOrdenacao() {
+  aplicar({ ordenacao: filtro.value.ordenacao === 'NOME' ? 'CADASTRO_RECENTE' : 'NOME' })
+}
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
-    <div class="topo">
-      <div>
-        <h1>Todos os associados</h1>
-        <p class="subtitulo">Consulte e gerencie os cadastros dos clientes da Em Conta.</p>
-      </div>
-      <RouterLink v-if="podeCadastrar" class="botao" :to="{ name: 'associado-novo' }">
-        Novo associado
-      </RouterLink>
-    </div>
+  <main class="pagina-modulo">
+    <CabecalhoPagina
+      titulo="Todos os associados"
+      subtitulo="Consulte e gerencie os cadastros dos clientes da Em Conta."
+    >
+      <template #acoes>
+        <RouterLink v-if="podeCadastrar" class="botao-primario" :to="{ name: 'associado-novo' }">
+          <IconeTraco nome="mais-circulo" :tamanho="18" />
+          Novo associado
+        </RouterLink>
+      </template>
+    </CabecalhoPagina>
 
-    <section class="cartao" aria-labelledby="titulo-lista">
-      <h2 id="titulo-lista">
+    <AlertaMensagem v-if="criado" tipo="sucesso">Associado cadastrado.</AlertaMensagem>
+
+    <section class="painel lista" aria-labelledby="titulo-lista">
+      <h2 id="titulo-lista" class="titulo-lista">
         Associados cadastrados
-        <span v-if="lista.data.value" class="ajuda total">
-          {{ lista.data.value.totalItens }} no total
+        <span v-if="lista.data.value" class="total">
+          {{ lista.data.value.totalItens }} {{ temFiltro ? 'resultados' : 'no total' }}
         </span>
       </h2>
 
-      <form class="filtros" role="search" @submit.prevent="aplicar({ busca: busca.trim() })">
-        <label for="busca-associados" class="visualmente-oculto">Buscar associados</label>
-        <input
-          id="busca-associados"
-          v-model="busca"
-          type="search"
-          maxlength="100"
-          placeholder="Buscar por nome, razão social ou CPF/CNPJ…"
-        />
-        <button type="submit" class="secundario">Buscar</button>
-        <label for="filtro-tipo" class="visualmente-oculto">Tipo de pessoa</label>
-        <select
-          id="filtro-tipo"
-          :value="filtro.tipo"
-          @change="aplicar({ tipo: ($event.target as HTMLSelectElement).value as TipoPessoa | '' })"
-        >
-          <option value="">PF e PJ</option>
-          <option value="PF">Pessoa física</option>
-          <option value="PJ">Pessoa jurídica</option>
-        </select>
-        <label for="ordenacao" class="visualmente-oculto">Ordenar por</label>
-        <select
-          id="ordenacao"
-          :value="filtro.ordenacao"
-          @change="aplicar({ ordenacao: ($event.target as HTMLSelectElement).value as Ordenacao })"
-        >
-          <option value="NOME">Nome (A–Z)</option>
-          <option value="CADASTRO_RECENTE">Cadastro mais recente</option>
-        </select>
-      </form>
+      <div class="barra-lista">
+        <form class="busca-lista" role="search" @submit.prevent="aplicar({ busca: busca.trim() })">
+          <label for="busca-associados" class="visualmente-oculto">Buscar associados</label>
+          <IconeTraco nome="busca" :tamanho="18" />
+          <input
+            id="busca-associados"
+            v-model="busca"
+            type="search"
+            maxlength="100"
+            placeholder="Buscar por nome, razão social ou CPF/CNPJ…"
+          />
+        </form>
+        <BotaoFiltros :ativos="filtrosAtivos">
+          <div class="campo">
+            <label for="filtro-tipo">Tipo de pessoa</label>
+            <select
+              id="filtro-tipo"
+              :value="filtro.tipo"
+              @change="
+                aplicar({ tipo: ($event.target as HTMLSelectElement).value as TipoPessoa | '' })
+              "
+            >
+              <option value="">PF e PJ</option>
+              <option value="PF">Pessoa física</option>
+              <option value="PJ">Pessoa jurídica</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="ordenacao">Ordenar por</label>
+            <select
+              id="ordenacao"
+              :value="filtro.ordenacao"
+              @change="
+                aplicar({ ordenacao: ($event.target as HTMLSelectElement).value as Ordenacao })
+              "
+            >
+              <option value="NOME">Nome (A–Z)</option>
+              <option value="CADASTRO_RECENTE">Cadastro mais recente</option>
+            </select>
+          </div>
+        </BotaoFiltros>
+      </div>
 
-      <p v-if="lista.isPending.value" role="status">Carregando associados…</p>
-      <div v-else-if="lista.isError.value">
+      <div v-if="filtro.tipo" class="filtros-aplicados">
+        Filtros aplicados:
+        <span class="chip-filtro">
+          Tipo: {{ filtro.tipo }}
+          <button type="button" aria-label="Remover filtro de tipo" @click="aplicar({ tipo: '' })">
+            <IconeTraco nome="fechar" :tamanho="12" />
+          </button>
+        </span>
+        <button type="button" class="link" @click="aplicar({ busca: '', tipo: '' })">
+          Limpar filtros
+        </button>
+      </div>
+
+      <div v-if="lista.isPending.value" role="status">
+        <span class="visualmente-oculto">Carregando associados…</span>
+        <table class="tabela-dados" aria-hidden="true">
+          <tbody>
+            <tr v-for="n in 8" :key="n">
+              <td v-for="m in 5" :key="m"><span class="esqueleto" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else-if="lista.isError.value" class="estado-vazio estado-vazio--erro">
+        <span class="estado-vazio__icone"><IconeTraco nome="alerta" :tamanho="24" /></span>
+        <strong>Não foi possível carregar os associados</strong>
         <AlertaMensagem tipo="erro">{{ describeApiError(lista.error.value) }}</AlertaMensagem>
-        <button type="button" class="secundario" @click="lista.refetch()">Tentar novamente</button>
+        <button type="button" class="botao-contorno" @click="lista.refetch()">
+          Tentar novamente
+        </button>
       </div>
       <template v-else-if="lista.data.value">
-        <AlertaMensagem v-if="criado" tipo="sucesso">Associado cadastrado.</AlertaMensagem>
-        <p v-if="lista.data.value.totalItens === 0" class="vazio" role="status">
-          <template v-if="filtro.busca || filtro.tipo">
-            Nenhum associado encontrado para os filtros informados.
-            <button type="button" class="link" @click="aplicar({ busca: '', tipo: '' })">
+        <div v-if="lista.data.value.totalItens === 0" class="estado-vazio" role="status">
+          <span class="estado-vazio__icone"><IconeTraco nome="busca" :tamanho="24" /></span>
+          <template v-if="temFiltro">
+            <strong>Nenhum associado encontrado</strong>
+            <p>Nenhum associado corresponde à busca ou aos filtros informados.</p>
+            <button type="button" class="botao-contorno" @click="aplicar({ busca: '', tipo: '' })">
               Limpar filtros
             </button>
           </template>
-          <template v-else>Nenhum associado cadastrado ainda.</template>
-        </p>
+          <template v-else>
+            <strong>Nenhum associado cadastrado ainda</strong>
+            <p>Os cadastros aparecem aqui assim que forem criados.</p>
+          </template>
+        </div>
         <div v-else class="tabela-rolavel">
-          <table>
+          <table class="tabela-dados">
             <thead>
               <tr>
-                <th scope="col">Associado</th>
+                <th scope="col" :aria-sort="filtro.ordenacao === 'NOME' ? 'ascending' : undefined">
+                  <button type="button" class="ordenar" @click="alternarOrdenacao">
+                    Associado
+                    <IconeTraco
+                      :nome="filtro.ordenacao === 'NOME' ? 'seta-abaixo' : 'seta-acima'"
+                      :tamanho="12"
+                    />
+                    <span class="visualmente-oculto">
+                      {{
+                        filtro.ordenacao === 'NOME'
+                          ? '(ordenar por cadastro mais recente)'
+                          : '(ordenar por nome)'
+                      }}
+                    </span>
+                  </button>
+                </th>
                 <th scope="col">Tipo</th>
                 <th scope="col">CPF/CNPJ</th>
                 <th scope="col">UCs</th>
-                <th scope="col">Cadastrado em</th>
+                <th
+                  scope="col"
+                  :aria-sort="filtro.ordenacao === 'CADASTRO_RECENTE' ? 'descending' : undefined"
+                >
+                  Cadastrado em
+                </th>
               </tr>
             </thead>
             <tbody :aria-busy="lista.isFetching.value">
@@ -167,96 +238,92 @@ const intervalo = computed(() => {
                   <RouterLink :to="{ name: 'associado', params: { id: associado.id } }">
                     {{ associado.nome }}
                   </RouterLink>
-                  <span v-if="associado.nomeFantasia" class="ajuda">
+                  <span v-if="associado.nomeFantasia" class="fantasia">
                     {{ associado.nomeFantasia }}
                   </span>
                 </td>
-                <td :title="ROTULO_TIPO[associado.tipo]">{{ associado.tipo }}</td>
-                <td>{{ associado.documentoMascarado }}</td>
+                <td class="texto-secundario" :title="ROTULO_TIPO[associado.tipo]">
+                  {{ associado.tipo }}
+                </td>
+                <td class="texto-secundario">{{ associado.documentoMascarado }}</td>
                 <td>{{ associado.quantidadeUcs }}</td>
-                <td>{{ formatarData(associado.criadoEm) }}</td>
+                <td class="texto-secundario">{{ formatarData(associado.criadoEm) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <nav v-if="lista.data.value.totalItens > 0" class="acoes paginacao" aria-label="Paginação">
-          <span class="ajuda">{{ intervalo }}</span>
-          <label for="tamanho-pagina" class="ajuda">Linhas por página</label>
-          <select
-            id="tamanho-pagina"
-            :value="filtro.tamanho"
-            @change="aplicar({ tamanho: Number(($event.target as HTMLSelectElement).value) })"
-          >
-            <option v-for="t in TAMANHOS_PAGINA" :key="t" :value="t">{{ t }}</option>
-          </select>
-          <button
-            type="button"
-            class="secundario"
-            :disabled="filtro.pagina === 0"
-            @click="aplicar({ pagina: filtro.pagina - 1 })"
-          >
-            Anterior
-          </button>
-          <span
-            >Página {{ filtro.pagina + 1 }} de
-            {{ Math.max(lista.data.value.totalPaginas, 1) }}</span
-          >
-          <button
-            type="button"
-            class="secundario"
-            :disabled="filtro.pagina + 1 >= lista.data.value.totalPaginas"
-            @click="aplicar({ pagina: filtro.pagina + 1 })"
-          >
-            Próxima
-          </button>
-        </nav>
+        <PaginacaoLista
+          v-if="lista.data.value.totalItens > 0"
+          :pagina="filtro.pagina"
+          :total-paginas="lista.data.value.totalPaginas"
+          :total-itens="lista.data.value.totalItens"
+          :itens-na-pagina="lista.data.value.itens.length"
+          :tamanho="filtro.tamanho"
+          :tamanhos="TAMANHOS_PAGINA"
+          rotulo="associados"
+          @ir="aplicar({ pagina: $event })"
+          @tamanho="aplicar({ tamanho: $event })"
+        />
       </template>
     </section>
   </main>
 </template>
 
 <style scoped>
-.topo {
+.lista {
+  padding: 22px 20px 20px;
+}
+
+.titulo-lista {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .total {
+  color: var(--cor-texto-2);
+  font-size: 12px;
   font-weight: 400;
-  margin-left: 0.5rem;
 }
 
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+.campo {
+  margin: 0;
 }
 
-.filtros input {
-  flex: 1 1 20rem;
+.tabela-dados tbody td {
+  height: 37px;
 }
 
-td .ajuda {
+.tabela-dados td a {
+  font-weight: 500;
+}
+
+.fantasia {
   display: block;
+  color: var(--cor-texto-2);
+  font-size: 12px;
 }
 
-.vazio {
-  padding: 2rem 0;
-  text-align: center;
+.texto-secundario {
   color: var(--cor-texto-2);
 }
 
-.paginacao {
-  justify-content: flex-end;
-  margin-top: 1rem;
+button.ordenar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
 }
 
-.paginacao > .ajuda:first-child {
-  margin-right: auto;
+.estado-vazio :deep(.alerta) {
+  margin: 0 0 8px;
 }
 </style>

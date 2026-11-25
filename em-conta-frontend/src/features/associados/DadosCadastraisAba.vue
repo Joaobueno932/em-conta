@@ -6,6 +6,7 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { codigoDoErro, describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
 
 import {
   chaves,
@@ -58,110 +59,147 @@ const erroRemocao = computed(() => {
 </script>
 
 <template>
-  <h2>Dados do associado</h2>
-  <dl class="dados">
-    <div>
-      <dt>Tipo</dt>
-      <dd>{{ ROTULO_TIPO[associado.tipo] }}</dd>
-    </div>
-    <div>
-      <dt>{{ associado.tipo === 'PF' ? 'Nome completo' : 'Razão social' }}</dt>
-      <dd>{{ associado.nome }}</dd>
-    </div>
-    <div v-if="associado.tipo === 'PJ'">
-      <dt>Nome fantasia</dt>
-      <dd>{{ associado.nomeFantasia || '—' }}</dd>
-    </div>
-    <div>
-      <dt>{{ associado.tipo === 'PF' ? 'CPF' : 'CNPJ' }}</dt>
-      <dd>{{ associado.documento }}</dd>
-    </div>
-    <div>
-      <dt>Cadastrado por</dt>
-      <dd>{{ associado.criadoPor.nome }} em {{ formatarDataHora(associado.criadoEm) }}</dd>
-    </div>
-    <div>
-      <dt>Última alteração</dt>
-      <dd>{{ associado.atualizadoPor.nome }} em {{ formatarDataHora(associado.atualizadoEm) }}</dd>
-    </div>
-  </dl>
+  <p class="introducao">Dados do cadastro. Campos com cadeado são preenchidos pelo sistema.</p>
+  <div class="cartoes">
+    <section class="painel" aria-labelledby="titulo-identificacao">
+      <h2 id="titulo-identificacao" class="painel__titulo">Identificação</h2>
+      <dl class="ficha">
+        <div class="ficha__linha">
+          <dt>Tipo de pessoa</dt>
+          <dd>{{ ROTULO_TIPO[associado.tipo] }} ({{ associado.tipo }})</dd>
+        </div>
+        <div class="ficha__linha">
+          <dt>{{ associado.tipo === 'PF' ? 'Nome completo' : 'Razão social' }}</dt>
+          <dd>{{ associado.nome }}</dd>
+        </div>
+        <div v-if="associado.tipo === 'PJ'" class="ficha__linha">
+          <dt>Nome fantasia</dt>
+          <dd>{{ associado.nomeFantasia || '—' }}</dd>
+        </div>
+        <div class="ficha__linha">
+          <dt>{{ associado.tipo === 'PF' ? 'CPF' : 'CNPJ' }}</dt>
+          <dd>{{ associado.documento }}</dd>
+        </div>
+      </dl>
+    </section>
 
-  <div class="titulo-contatos">
-    <h2>Contatos</h2>
-    <button
-      v-if="podeEditar && editando === null"
-      type="button"
-      class="secundario"
-      @click="editando = 'novo'"
-    >
-      Adicionar contato
-    </button>
-  </div>
-  <AlertaMensagem v-if="erroRemocao" tipo="erro">{{ erroRemocao }}</AlertaMensagem>
-  <ContatoEditor
-    v-if="editando === 'novo'"
-    :associado-id="associado.id"
-    @concluido="editando = null"
-    @cancelado="editando = null"
-  />
-  <p v-if="associado.contatos.length === 0 && editando !== 'novo'" class="ajuda">
-    Nenhum contato cadastrado.
-  </p>
-  <ul class="contatos">
-    <li v-for="contato in associado.contatos" :key="contato.id">
+    <section class="painel" aria-labelledby="titulo-registro">
+      <h2 id="titulo-registro" class="painel__titulo">Registro</h2>
+      <dl class="ficha">
+        <div class="ficha__linha">
+          <dt>Cadastrado por</dt>
+          <dd class="sistema">
+            <IconeTraco nome="cadeado" :tamanho="13" />
+            {{ associado.criadoPor.nome }} em {{ formatarDataHora(associado.criadoEm) }}
+          </dd>
+        </div>
+        <div class="ficha__linha">
+          <dt>Última alteração</dt>
+          <dd class="sistema">
+            <IconeTraco nome="cadeado" :tamanho="13" />
+            {{ associado.atualizadoPor.nome }} em {{ formatarDataHora(associado.atualizadoEm) }}
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="painel contatos-painel" aria-labelledby="titulo-contatos">
+      <div class="titulo-contatos">
+        <h2 id="titulo-contatos" class="painel__titulo">Contatos</h2>
+        <button
+          v-if="podeEditar && editando === null"
+          type="button"
+          class="botao-contorno"
+          @click="editando = 'novo'"
+        >
+          <IconeTraco nome="mais-circulo" :tamanho="16" />
+          Adicionar contato
+        </button>
+      </div>
+      <AlertaMensagem v-if="erroRemocao" tipo="erro">{{ erroRemocao }}</AlertaMensagem>
       <ContatoEditor
-        v-if="editando === contato.id"
+        v-if="editando === 'novo'"
         :associado-id="associado.id"
-        :contato="contato"
         @concluido="editando = null"
         @cancelado="editando = null"
       />
-      <template v-else>
-        <div>
-          <strong>{{ contato.nome }}</strong>
-          <span class="ajuda">
-            {{ formatarTelefone(contato.telefone) }} · {{ contato.email || '—' }}
-          </span>
-        </div>
-        <div v-if="podeEditar && editando === null" class="acoes">
-          <button type="button" class="link" @click="editando = contato.id">
-            Editar<span class="visualmente-oculto"> contato {{ contato.nome }}</span>
-          </button>
-          <button
-            type="button"
-            class="link"
-            :disabled="remocao.isPending.value"
-            @click="remover(contato)"
-          >
-            Remover<span class="visualmente-oculto"> contato {{ contato.nome }}</span>
-          </button>
-        </div>
-      </template>
-    </li>
-  </ul>
+      <p v-if="associado.contatos.length === 0 && editando !== 'novo'" class="ajuda">
+        Nenhum contato cadastrado.
+      </p>
+      <ul class="contatos">
+        <li v-for="contato in associado.contatos" :key="contato.id">
+          <ContatoEditor
+            v-if="editando === contato.id"
+            :associado-id="associado.id"
+            :contato="contato"
+            @concluido="editando = null"
+            @cancelado="editando = null"
+          />
+          <template v-else>
+            <div>
+              <strong>{{ contato.nome }}</strong>
+              <span class="ajuda">
+                {{ formatarTelefone(contato.telefone) }} · {{ contato.email || '—' }}
+              </span>
+            </div>
+            <div v-if="podeEditar && editando === null" class="acoes">
+              <button type="button" class="link" @click="editando = contato.id">
+                Editar<span class="visualmente-oculto"> contato {{ contato.nome }}</span>
+              </button>
+              <button
+                type="button"
+                class="link"
+                :disabled="remocao.isPending.value"
+                @click="remover(contato)"
+              >
+                Remover<span class="visualmente-oculto"> contato {{ contato.nome }}</span>
+              </button>
+            </div>
+          </template>
+        </li>
+      </ul>
+    </section>
+  </div>
 </template>
 
 <style scoped>
-.dados {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 0.75rem 1.5rem;
-  margin: 0 0 1.5rem;
-}
-
-.dados dt {
+.introducao {
+  margin: 0 0 16px;
   color: var(--cor-texto-2);
-  font-size: 0.8rem;
+  font-size: 13px;
 }
 
-.dados dd {
-  margin: 0;
+/* Prancha "Dados cadastrais": duas colunas de cartões com 18 px entre eles. */
+.cartoes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.cartoes .painel {
+  padding: 22px 20px 12px;
+}
+
+.contatos-painel {
+  grid-column: 1 / -1;
+}
+
+.sistema {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sistema .icone {
+  color: var(--cor-texto-3);
 }
 
 .titulo-contatos {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 4px;
 }
 
 .contatos {
@@ -176,7 +214,12 @@ const erroRemocao = computed(() => {
   gap: 1rem;
   flex-wrap: wrap;
   padding: 0.75rem 0;
-  border-bottom: 1px solid var(--cor-borda);
+  border-bottom: 1px solid var(--cor-divisoria);
+  font-size: 14px;
+}
+
+.contatos > li:last-child {
+  border-bottom: none;
 }
 
 .contatos > li > div:first-child .ajuda {
@@ -185,5 +228,11 @@ const erroRemocao = computed(() => {
 
 .contatos > li:has(form) {
   display: block;
+}
+
+@media (max-width: 60rem) {
+  .cartoes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

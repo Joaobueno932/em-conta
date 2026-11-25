@@ -7,6 +7,10 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import BotaoFiltros from '@/shared/components/BotaoFiltros.vue'
+import CabecalhoPagina from '@/shared/components/CabecalhoPagina.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
+import PaginacaoLista from '@/shared/components/PaginacaoLista.vue'
 
 import {
   AVISO_VINCULO_CADASTRAL,
@@ -25,7 +29,11 @@ const { data: sessao } = useSessao()
 
 const TAMANHOS = [20, 50, 100]
 
-/** Filtro na URL: ao abrir uma usina e voltar, a lista reaparece igual. */
+/**
+ * Listagem (prancha "⚡ Usinas — Listagem"). Filtro na URL: ao abrir uma usina e voltar, a lista
+ * reaparece igual. Responsável e potência do protótipo não existem no cadastro (a coluna Fazenda,
+ * que existe, entra no lugar); exportar também não existe.
+ */
 function filtroDaUrl(query: LocationQuery): FiltroUsinas {
   const texto = (valor: unknown) => (typeof valor === 'string' ? valor : '')
   const inteiro = (valor: unknown, padrao: number) => {
@@ -75,86 +83,143 @@ const lista = useQuery({
 })
 
 const podeCadastrar = computed(() => temPermissao(sessao.value, 'usinas:cadastrar'))
-const intervalo = computed(() => {
-  const dados = lista.data.value
-  if (!dados || dados.totalItens === 0) return ''
-  const inicio = dados.pagina * dados.tamanho + 1
-  return `Mostrando ${inicio}–${inicio + dados.itens.length - 1} de ${dados.totalItens} usinas`
-})
+const temFiltro = computed(() => !!(filtro.value.busca || filtro.value.uf))
+const filtrosAtivos = computed(
+  () => (filtro.value.uf ? 1 : 0) + (filtro.value.ordenacao !== 'NOME' ? 1 : 0),
+)
+const ROTULO_ORDENACAO: Record<OrdenacaoUsinas, string> = {
+  NOME: 'Nome (A–Z)',
+  CADASTRO_RECENTE: 'Cadastro mais recente',
+  UCS_VINCULADAS: 'Mais UCs vinculadas',
+}
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
-    <div class="topo">
-      <div>
-        <h1>Usinas</h1>
-        <p class="subtitulo">
-          Cadastro e consulta das usinas e de seus vínculos cadastrais com unidades consumidoras.
-        </p>
-      </div>
-      <div class="acoes">
-        <RouterLink class="botao-secundario" :to="{ name: 'fazendas' }">Fazendas</RouterLink>
-        <RouterLink v-if="podeCadastrar" class="botao" :to="{ name: 'usina-nova' }">
+  <main class="pagina-modulo">
+    <CabecalhoPagina
+      titulo="Usinas"
+      subtitulo="Cadastro e consulta das usinas e de seus vínculos cadastrais com unidades consumidoras."
+    >
+      <template #acoes>
+        <RouterLink class="botao-contorno" :to="{ name: 'fazendas' }">Fazendas</RouterLink>
+        <RouterLink v-if="podeCadastrar" class="botao-primario" :to="{ name: 'usina-nova' }">
+          <IconeTraco nome="mais-circulo" :tamanho="18" />
           Nova usina
         </RouterLink>
-      </div>
-    </div>
+      </template>
+    </CabecalhoPagina>
 
-    <section class="cartao" aria-labelledby="titulo-usinas">
+    <AlertaMensagem v-if="route.query.criada === '1'" tipo="sucesso"
+      >Usina cadastrada.</AlertaMensagem
+    >
+
+    <section class="painel lista" aria-labelledby="titulo-usinas">
       <h2 id="titulo-usinas" class="visualmente-oculto">Usinas cadastradas</h2>
-      <form class="filtros" role="search" @submit.prevent="aplicar({ busca: busca.trim() })">
-        <label for="busca-usinas" class="visualmente-oculto">Buscar usinas</label>
-        <input
-          id="busca-usinas"
-          v-model="busca"
-          type="search"
-          maxlength="100"
-          placeholder="Buscar por nome, fazenda ou identificador (USN-0001)…"
-        />
-        <button type="submit" class="secundario">Buscar</button>
-        <label for="filtro-uf" class="visualmente-oculto">UF</label>
-        <select
-          id="filtro-uf"
-          :value="filtro.uf"
-          @change="aplicar({ uf: ($event.target as HTMLSelectElement).value })"
-        >
-          <option value="">Todas as UFs</option>
-          <option v-for="uf in UFS" :key="uf" :value="uf">{{ uf }}</option>
-        </select>
-        <label for="ordenacao-usinas" class="visualmente-oculto">Ordenar por</label>
-        <select
-          id="ordenacao-usinas"
-          :value="filtro.ordenacao"
-          @change="
-            aplicar({ ordenacao: ($event.target as HTMLSelectElement).value as OrdenacaoUsinas })
-          "
-        >
-          <option value="NOME">Nome (A–Z)</option>
-          <option value="CADASTRO_RECENTE">Cadastro mais recente</option>
-          <option value="UCS_VINCULADAS">Mais UCs vinculadas</option>
-        </select>
-      </form>
+      <div class="barra-lista">
+        <form class="busca-lista" role="search" @submit.prevent="aplicar({ busca: busca.trim() })">
+          <label for="busca-usinas" class="visualmente-oculto">Buscar usinas</label>
+          <IconeTraco nome="busca" :tamanho="18" />
+          <input
+            id="busca-usinas"
+            v-model="busca"
+            type="search"
+            maxlength="100"
+            placeholder="Buscar por nome, fazenda ou identificador…"
+          />
+        </form>
+        <BotaoFiltros :ativos="filtrosAtivos">
+          <div class="campo">
+            <label for="filtro-uf">UF</label>
+            <select
+              id="filtro-uf"
+              :value="filtro.uf"
+              @change="aplicar({ uf: ($event.target as HTMLSelectElement).value })"
+            >
+              <option value="">Todas as UFs</option>
+              <option v-for="uf in UFS" :key="uf" :value="uf">{{ uf }}</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="ordenacao-usinas">Ordenar por</label>
+            <select
+              id="ordenacao-usinas"
+              :value="filtro.ordenacao"
+              @change="
+                aplicar({
+                  ordenacao: ($event.target as HTMLSelectElement).value as OrdenacaoUsinas,
+                })
+              "
+            >
+              <option v-for="(rotulo, valor) in ROTULO_ORDENACAO" :key="valor" :value="valor">
+                {{ rotulo }}
+              </option>
+            </select>
+          </div>
+        </BotaoFiltros>
+      </div>
 
-      <p v-if="lista.isPending.value" role="status">Carregando usinas…</p>
-      <div v-else-if="lista.isError.value">
+      <div v-if="filtrosAtivos" class="filtros-aplicados">
+        Filtros aplicados:
+        <span v-if="filtro.uf" class="chip-filtro">
+          UF: {{ filtro.uf }}
+          <button type="button" aria-label="Remover filtro de UF" @click="aplicar({ uf: '' })">
+            <IconeTraco nome="fechar" :tamanho="12" />
+          </button>
+        </span>
+        <span v-if="filtro.ordenacao !== 'NOME'" class="chip-filtro">
+          {{ ROTULO_ORDENACAO[filtro.ordenacao] }}
+          <button
+            type="button"
+            aria-label="Voltar à ordenação por nome"
+            @click="aplicar({ ordenacao: 'NOME' })"
+          >
+            <IconeTraco nome="fechar" :tamanho="12" />
+          </button>
+        </span>
+        <button
+          type="button"
+          class="link"
+          @click="aplicar({ busca: '', uf: '', ordenacao: 'NOME' })"
+        >
+          Limpar filtros
+        </button>
+      </div>
+
+      <div v-if="lista.isPending.value" role="status">
+        <span class="visualmente-oculto">Carregando usinas…</span>
+        <table class="tabela-dados" aria-hidden="true">
+          <tbody>
+            <tr v-for="n in 7" :key="n">
+              <td v-for="m in 6" :key="m"><span class="esqueleto" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else-if="lista.isError.value" class="estado-vazio estado-vazio--erro">
+        <span class="estado-vazio__icone"><IconeTraco nome="alerta" :tamanho="24" /></span>
+        <strong>Não foi possível carregar as usinas</strong>
         <AlertaMensagem tipo="erro">{{ describeApiError(lista.error.value) }}</AlertaMensagem>
-        <button type="button" class="secundario" @click="lista.refetch()">Tentar novamente</button>
+        <button type="button" class="botao-contorno" @click="lista.refetch()">
+          Tentar novamente
+        </button>
       </div>
       <template v-else-if="lista.data.value">
-        <AlertaMensagem v-if="route.query.criada === '1'" tipo="sucesso"
-          >Usina cadastrada.</AlertaMensagem
-        >
-        <p v-if="lista.data.value.totalItens === 0" class="vazio" role="status">
-          <template v-if="filtro.busca || filtro.uf">
-            Nenhuma usina encontrada para os filtros informados.
-            <button type="button" class="link" @click="aplicar({ busca: '', uf: '' })">
-              Limpar filtros
+        <div v-if="lista.data.value.totalItens === 0" class="estado-vazio" role="status">
+          <span class="estado-vazio__icone"><IconeTraco nome="busca" :tamanho="24" /></span>
+          <template v-if="temFiltro">
+            <strong>Nenhuma usina encontrada</strong>
+            <p>Nenhuma usina corresponde à busca ou aos filtros informados.</p>
+            <button type="button" class="botao-contorno" @click="aplicar({ busca: '', uf: '' })">
+              Limpar busca
             </button>
           </template>
-          <template v-else>Nenhuma usina cadastrada ainda.</template>
-        </p>
+          <template v-else>
+            <strong>Nenhuma usina cadastrada ainda</strong>
+            <p>As usinas aparecem aqui assim que forem cadastradas.</p>
+          </template>
+        </div>
         <div v-else class="tabela-rolavel">
-          <table>
+          <table class="tabela-dados">
             <thead>
               <tr>
                 <th scope="col">Usina</th>
@@ -168,88 +233,80 @@ const intervalo = computed(() => {
             <tbody :aria-busy="lista.isFetching.value">
               <tr v-for="usina in lista.data.value.itens" :key="usina.id">
                 <td>
-                  <RouterLink :to="{ name: 'usina', params: { id: usina.id } }">
-                    {{ usina.nome }}
-                  </RouterLink>
+                  <span class="usina">
+                    <span class="icone-usina" aria-hidden="true">
+                      <IconeTraco nome="usina" :tamanho="18" />
+                    </span>
+                    <RouterLink :to="{ name: 'usina', params: { id: usina.id } }">
+                      {{ usina.nome }}
+                    </RouterLink>
+                  </span>
                 </td>
-                <td>{{ usina.codigo }}</td>
+                <td class="texto-secundario">{{ usina.codigo }}</td>
                 <td>{{ usina.fazendaNome || '—' }}</td>
                 <td>{{ localizacao(usina.cidade, usina.uf) }}</td>
-                <td>{{ usina.ucsVinculadas }}</td>
+                <td class="numero-forte">{{ usina.ucsVinculadas }}</td>
                 <td>{{ usina.associadosDistintos }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <nav v-if="lista.data.value.totalItens > 0" class="acoes paginacao" aria-label="Paginação">
-          <span class="ajuda">{{ intervalo }}</span>
-          <label for="tamanho-usinas" class="ajuda">Linhas por página</label>
-          <select
-            id="tamanho-usinas"
-            :value="filtro.tamanho"
-            @change="aplicar({ tamanho: Number(($event.target as HTMLSelectElement).value) })"
-          >
-            <option v-for="t in TAMANHOS" :key="t" :value="t">{{ t }}</option>
-          </select>
-          <button
-            type="button"
-            class="secundario"
-            :disabled="filtro.pagina === 0"
-            @click="aplicar({ pagina: filtro.pagina - 1 })"
-          >
-            Anterior
-          </button>
-          <span
-            >Página {{ filtro.pagina + 1 }} de
-            {{ Math.max(lista.data.value.totalPaginas, 1) }}</span
-          >
-          <button
-            type="button"
-            class="secundario"
-            :disabled="filtro.pagina + 1 >= lista.data.value.totalPaginas"
-            @click="aplicar({ pagina: filtro.pagina + 1 })"
-          >
-            Próxima
-          </button>
-        </nav>
+        <PaginacaoLista
+          v-if="lista.data.value.totalItens > 0"
+          :pagina="filtro.pagina"
+          :total-paginas="lista.data.value.totalPaginas"
+          :total-itens="lista.data.value.totalItens"
+          :itens-na-pagina="lista.data.value.itens.length"
+          :tamanho="filtro.tamanho"
+          :tamanhos="TAMANHOS"
+          rotulo="usinas"
+          @ir="aplicar({ pagina: $event })"
+          @tamanho="aplicar({ tamanho: $event })"
+        />
       </template>
     </section>
-    <p class="ajuda">{{ AVISO_VINCULO_CADASTRAL }}</p>
+    <p class="nota-rodape">
+      <IconeTraco nome="informacao" :tamanho="14" />
+      {{ AVISO_VINCULO_CADASTRAL }}
+    </p>
   </main>
 </template>
 
 <style scoped>
-.topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
+.lista {
+  padding: 16px 18px;
 }
 
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+.campo {
+  margin: 0;
 }
 
-.filtros input {
-  flex: 1 1 20rem;
+.usina {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.vazio {
-  padding: 2rem 0;
-  text-align: center;
+.icone-usina {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--cor-destaque-suave);
+  color: var(--cor-destaque-forte);
+}
+
+.texto-secundario {
   color: var(--cor-texto-2);
 }
 
-.paginacao {
-  justify-content: flex-end;
-  margin-top: 1rem;
+.numero-forte {
+  font-weight: 600;
 }
 
-.paginacao > .ajuda:first-child {
-  margin-right: auto;
+.estado-vazio :deep(.alerta) {
+  margin: 0 0 8px;
 }
 </style>

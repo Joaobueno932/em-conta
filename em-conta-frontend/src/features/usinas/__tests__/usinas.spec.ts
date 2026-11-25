@@ -122,7 +122,7 @@ describe('listagem de usinas', () => {
       'GET /api/v1/usinas': paginaVazia,
     })
     await montarApp(vazia.fetchFn, '/usinas')
-    expect(await screen.findByText('Nenhuma usina cadastrada ainda.')).toBeInTheDocument()
+    expect(await screen.findByText('Nenhuma usina cadastrada ainda')).toBeInTheDocument()
 
     const falha = apiFalsa({
       'GET /api/v1/auth/sessao': sessao(),

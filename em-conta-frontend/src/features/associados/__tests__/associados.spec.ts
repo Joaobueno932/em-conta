@@ -98,9 +98,7 @@ describe('listagem de associados', () => {
       'GET /api/v1/associados': () => pagina([]),
     })
     await montarApp(fetchFn, '/associados?busca=ninguem')
-    expect(
-      await screen.findByText(/Nenhum associado encontrado para os filtros informados/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Nenhum associado encontrado')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Novo associado' })).not.toBeInTheDocument()
 
     const falha = apiFalsa({
