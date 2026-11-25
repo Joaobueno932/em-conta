@@ -1,5 +1,8 @@
 # Evidências visuais — estrutura global e Atendimento
 
+> **Protótipo completo (export de 25/11/2026):** inventário de todas as seções, situação de cada tela,
+> medidas da estrutura global, pendências e validação: [prototipo-2026-11/](prototipo-2026-11/README.md).
+
 > Auditoria completa do Atendimento (checklist, inventário do protótipo, capturas e comparações):
 > [auditoria-atendimento/](auditoria-atendimento/README.md).
 
