@@ -7,6 +7,9 @@ import { useHttpClient } from '@/app/injection'
 import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import CabecalhoPagina from '@/shared/components/CabecalhoPagina.vue'
+import IconeTraco from '@/shared/components/IconeTraco.vue'
+import PaginacaoLista from '@/shared/components/PaginacaoLista.vue'
 
 import { chavesUsinas, listarFazendas, localizacao } from './usinas-api'
 
@@ -29,20 +32,26 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
-    <nav aria-label="Trilha" class="ajuda">
-      <RouterLink :to="{ name: 'usinas' }">Usinas</RouterLink> / Fazendas
-    </nav>
-    <div class="topo">
-      <h1>Fazendas</h1>
-      <RouterLink v-if="podeCadastrar" class="botao" :to="{ name: 'fazenda-nova' }"
-        >Nova fazenda</RouterLink
-      >
-    </div>
+  <main class="pagina-modulo">
+    <CabecalhoPagina titulo="Fazendas" subtitulo="Cadastro simples que agrupa usinas.">
+      <template #trilha>
+        <nav aria-label="Trilha" class="trilha">
+          <RouterLink :to="{ name: 'usinas' }">Usinas</RouterLink>
+          <span aria-hidden="true">›</span>
+          <span aria-current="page">Fazendas</span>
+        </nav>
+      </template>
+      <template #acoes>
+        <RouterLink v-if="podeCadastrar" class="botao-primario" :to="{ name: 'fazenda-nova' }">
+          <IconeTraco nome="mais-circulo" :tamanho="18" />
+          Nova fazenda
+        </RouterLink>
+      </template>
+    </CabecalhoPagina>
     <AlertaMensagem v-if="route.query.salva === '1'" tipo="sucesso">Fazenda salva.</AlertaMensagem>
-    <section class="cartao">
+    <section class="painel lista">
       <form
-        class="acoes filtros"
+        class="barra-lista"
         role="search"
         @submit.prevent="
           () => {
@@ -51,14 +60,17 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
           }
         "
       >
-        <label for="busca-fazendas" class="visualmente-oculto">Buscar fazendas</label>
-        <input
-          id="busca-fazendas"
-          v-model="termo"
-          type="search"
-          maxlength="100"
-          placeholder="Buscar por nome ou identificador (FZD-0001)…"
-        />
+        <div class="busca-lista">
+          <label for="busca-fazendas" class="visualmente-oculto">Buscar fazendas</label>
+          <IconeTraco nome="busca" :tamanho="18" />
+          <input
+            id="busca-fazendas"
+            v-model="termo"
+            type="search"
+            maxlength="100"
+            placeholder="Buscar por nome ou identificador (FZD-0001)…"
+          />
+        </div>
         <button type="submit" class="botao-contorno">Buscar</button>
       </form>
       <p v-if="lista.isPending.value" role="status">Carregando fazendas…</p>
@@ -69,10 +81,13 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
         </button>
       </div>
       <template v-else-if="lista.data.value">
-        <p v-if="lista.data.value.totalItens === 0" class="ajuda" role="status">
-          {{ busca ? 'Nenhuma fazenda encontrada.' : 'Nenhuma fazenda cadastrada ainda.' }}
-        </p>
-        <table v-else>
+        <div v-if="lista.data.value.totalItens === 0" class="estado-vazio" role="status">
+          <span class="estado-vazio__icone"><IconeTraco nome="busca" :tamanho="24" /></span>
+          <strong>{{
+            busca ? 'Nenhuma fazenda encontrada.' : 'Nenhuma fazenda cadastrada ainda.'
+          }}</strong>
+        </div>
+        <table v-else class="tabela-dados">
           <thead>
             <tr>
               <th scope="col">Fazenda</th>
@@ -84,7 +99,9 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
           </thead>
           <tbody>
             <tr v-for="f in lista.data.value.itens" :key="f.id">
-              <td>{{ f.nome }}</td>
+              <td>
+                <strong>{{ f.nome }}</strong>
+              </td>
               <td>{{ f.codigo }}</td>
               <td>{{ localizacao(f.cidade, f.uf) }}</td>
               <td>{{ f.usinas }}</td>
@@ -96,42 +113,27 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
             </tr>
           </tbody>
         </table>
-        <nav
+        <PaginacaoLista
           v-if="lista.data.value.totalPaginas > 1"
-          class="acoes acoes--fim"
-          aria-label="Paginação"
-        >
-          <button type="button" class="botao-contorno" :disabled="pagina === 0" @click="pagina--">
-            Anterior
-          </button>
-          <span>Página {{ pagina + 1 }} de {{ lista.data.value.totalPaginas }}</span>
-          <button
-            type="button"
-            class="botao-contorno"
-            :disabled="pagina + 1 >= lista.data.value.totalPaginas"
-            @click="pagina++"
-          >
-            Próxima
-          </button>
-        </nav>
+          :pagina="pagina"
+          :total-paginas="lista.data.value.totalPaginas"
+          :total-itens="lista.data.value.totalItens"
+          :itens-na-pagina="lista.data.value.itens.length"
+          :tamanho="20"
+          rotulo="fazendas"
+          @ir="pagina = $event"
+        />
       </template>
     </section>
   </main>
 </template>
 
 <style scoped>
-.topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+.lista {
+  padding: 16px 18px;
 }
 
-.filtros {
-  margin-bottom: 1rem;
-}
-
-.filtros input {
-  flex: 1 1 20rem;
+.trilha {
+  margin-bottom: 4px;
 }
 </style>

@@ -52,7 +52,10 @@ test('cadastra PJ com CNPJ alfanumérico, UCs, edita e consulta o histórico', a
   const razao = `Cooperativa ${marcador()}`
   const cnpj = cnpjDeTeste()
 
-  await page.getByRole('link', { name: 'Associados', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Associados' })
+    .click()
   await expect(page.getByRole('heading', { name: 'Todos os associados' })).toBeVisible()
 
   await cadastrarPj(page, razao, cnpj.toLowerCase())
@@ -114,11 +117,16 @@ test('cadastra PJ com CNPJ alfanumérico, UCs, edita e consulta o histórico', a
   await expect(historico.getByText('Cadastro criado')).toHaveCount(0)
 
   // Busca por documento e por nome; filtros preservados ao voltar da ficha.
-  await page.getByRole('link', { name: 'Associados', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Associados' })
+    .click()
   await page.getByRole('searchbox', { name: 'Buscar associados' }).fill(razao)
-  await page.getByRole('button', { name: 'Buscar' }).click()
+  await page.getByRole('searchbox', { name: 'Buscar associados' }).press('Enter')
+  // Tipo de pessoa fica no painel do botão Filtros (prancha da listagem).
+  await page.getByRole('button', { name: /^Filtros/ }).click()
   await page.getByLabel('Tipo de pessoa').selectOption('PJ')
-  await expect(page.getByText('1 no total')).toBeVisible()
+  await expect(page.getByText('1 resultado', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: `${razao} Ltda.` }).click()
   await page.goBack()
   await expect(page.getByRole('searchbox', { name: 'Buscar associados' })).toHaveValue(razao)
@@ -126,7 +134,7 @@ test('cadastra PJ com CNPJ alfanumérico, UCs, edita e consulta o histórico', a
   await expect(page.getByRole('link', { name: `${razao} Ltda.` })).toBeVisible()
 
   await page.getByRole('searchbox', { name: 'Buscar associados' }).fill(cnpj.slice(0, 8))
-  await page.getByRole('button', { name: 'Buscar' }).click()
+  await page.getByRole('searchbox', { name: 'Buscar associados' }).press('Enter')
   await expect(page.getByRole('link', { name: `${razao} Ltda.` })).toBeVisible()
 
   // Nada pessoal fica no armazenamento do navegador.

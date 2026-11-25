@@ -108,7 +108,10 @@ function alternarOrdenacao() {
       <h2 id="titulo-lista" class="titulo-lista">
         Associados cadastrados
         <span v-if="lista.data.value" class="total">
-          {{ lista.data.value.totalItens }} {{ temFiltro ? 'resultados' : 'no total' }}
+          {{ lista.data.value.totalItens }}
+          {{
+            !temFiltro ? 'no total' : lista.data.value.totalItens === 1 ? 'resultado' : 'resultados'
+          }}
         </span>
       </h2>
 

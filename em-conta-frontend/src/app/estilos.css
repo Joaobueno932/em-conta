@@ -477,6 +477,13 @@ a {
   padding: 0;
 }
 
+/* Título dessas páginas com o tamanho das pranchas (38 px), como as demais páginas de módulo. */
+.pagina--area-util h1 {
+  font-size: 38px;
+  line-height: 46px;
+  letter-spacing: -0.01em;
+}
+
 .subtitulo {
   margin: 0 0 1.5rem;
   color: var(--cor-texto-2);

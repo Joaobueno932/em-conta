@@ -149,7 +149,9 @@ test('cadastra usina, vincula UC existente e confere pelos dois lados e no hist√
   // Listagem: busca e filtro preservados ao voltar.
   await page.goto('/usinas')
   await page.getByRole('searchbox', { name: 'Buscar usinas' }).fill(nomeUsina)
-  await page.getByRole('button', { name: 'Buscar' }).click()
+  await page.getByRole('searchbox', { name: 'Buscar usinas' }).press('Enter')
+  // UF fica no painel do bot√£o Filtros (prancha da listagem).
+  await page.getByRole('button', { name: /^Filtros/ }).click()
   await page.getByLabel('UF', { exact: true }).selectOption('MS')
   await page.getByRole('link', { name: nomeUsina }).click()
   await page.goBack()
