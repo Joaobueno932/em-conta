@@ -93,7 +93,7 @@ function confirmar() {
         maxlength="100"
         placeholder="Nº da UC, nome do titular ou CPF/CNPJ…"
       />
-      <button type="submit" class="secundario" :disabled="termo.trim().length < 2">
+      <button type="submit" class="botao-contorno" :disabled="termo.trim().length < 2">
         Buscar UC
       </button>
     </form>
@@ -201,14 +201,14 @@ function confirmar() {
       </AlertaMensagem>
       <p class="ajuda">{{ AVISO_VINCULO_CADASTRAL }}</p>
       <div class="acoes">
-        <button type="submit" :disabled="vincular.isPending.value">
+        <button type="submit" class="botao-primario" :disabled="vincular.isPending.value">
           {{ vincular.isPending.value ? 'Vinculando…' : 'Vincular UC' }}
         </button>
-        <button type="button" class="secundario" @click="emit('cancelado')">Cancelar</button>
+        <button type="button" class="botao-contorno" @click="emit('cancelado')">Cancelar</button>
       </div>
     </form>
     <div v-else class="acoes">
-      <button type="button" class="secundario" @click="emit('cancelado')">Cancelar</button>
+      <button type="button" class="botao-contorno" @click="emit('cancelado')">Cancelar</button>
     </div>
   </section>
 </template>

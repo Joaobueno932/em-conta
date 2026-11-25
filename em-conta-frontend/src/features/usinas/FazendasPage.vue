@@ -59,12 +59,14 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
           maxlength="100"
           placeholder="Buscar por nome ou identificador (FZD-0001)…"
         />
-        <button type="submit" class="secundario">Buscar</button>
+        <button type="submit" class="botao-contorno">Buscar</button>
       </form>
       <p v-if="lista.isPending.value" role="status">Carregando fazendas…</p>
       <div v-else-if="lista.isError.value">
         <AlertaMensagem tipo="erro">{{ describeApiError(lista.error.value) }}</AlertaMensagem>
-        <button type="button" class="secundario" @click="lista.refetch()">Tentar novamente</button>
+        <button type="button" class="botao-contorno" @click="lista.refetch()">
+          Tentar novamente
+        </button>
       </div>
       <template v-else-if="lista.data.value">
         <p v-if="lista.data.value.totalItens === 0" class="ajuda" role="status">
@@ -99,13 +101,13 @@ const podeEditar = computed(() => temPermissao(sessao.value, 'usinas:editar'))
           class="acoes acoes--fim"
           aria-label="Paginação"
         >
-          <button type="button" class="secundario" :disabled="pagina === 0" @click="pagina--">
+          <button type="button" class="botao-contorno" :disabled="pagina === 0" @click="pagina--">
             Anterior
           </button>
           <span>Página {{ pagina + 1 }} de {{ lista.data.value.totalPaginas }}</span>
           <button
             type="button"
-            class="secundario"
+            class="botao-contorno"
             :disabled="pagina + 1 >= lista.data.value.totalPaginas"
             @click="pagina++"
           >

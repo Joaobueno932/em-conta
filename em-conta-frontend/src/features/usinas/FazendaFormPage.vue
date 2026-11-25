@@ -97,8 +97,8 @@ async function recarregar() {
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
-    <nav aria-label="Trilha" class="ajuda">
+  <main class="pagina-modulo pagina-formulario">
+    <nav aria-label="Trilha" class="trilha">
       <RouterLink :to="{ name: 'usinas' }">Usinas</RouterLink> /
       <RouterLink :to="{ name: 'fazendas' }">Fazendas</RouterLink> /
       {{ id === null ? 'Nova fazenda' : 'Editar fazenda' }}
@@ -111,7 +111,7 @@ async function recarregar() {
     <p v-if="id !== null && existente.isPending.value" role="status">Carregando fazenda…</p>
     <form
       v-else
-      class="cartao"
+      class="painel formulario-modulo"
       novalidate
       :aria-busy="salvar.isPending.value"
       @submit.prevent="enviar(false)"
@@ -124,7 +124,7 @@ async function recarregar() {
         Nada foi salvo.
         <button
           type="button"
-          class="secundario"
+          class="botao-contorno"
           :disabled="salvar.isPending.value"
           @click="enviar(true)"
         >
@@ -176,8 +176,8 @@ async function recarregar() {
         :erro="erros.observacoes"
       />
       <div class="acoes acoes--fim">
-        <RouterLink :to="{ name: 'fazendas' }">Cancelar</RouterLink>
-        <button type="submit" :disabled="salvar.isPending.value">
+        <RouterLink class="botao-contorno" :to="{ name: 'fazendas' }">Cancelar</RouterLink>
+        <button type="submit" class="botao-primario" :disabled="salvar.isPending.value">
           {{ salvar.isPending.value ? 'Salvando…' : 'Salvar fazenda' }}
         </button>
       </div>

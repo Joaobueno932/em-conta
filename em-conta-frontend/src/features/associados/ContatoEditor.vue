@@ -103,10 +103,10 @@ async function recarregar() {
       />
     </div>
     <div class="acoes">
-      <button type="submit" :disabled="salvar.isPending.value">
+      <button type="submit" class="botao-primario" :disabled="salvar.isPending.value">
         {{ salvar.isPending.value ? 'Salvando…' : 'Salvar contato' }}
       </button>
-      <button type="button" class="secundario" @click="emit('cancelado')">Cancelar</button>
+      <button type="button" class="botao-contorno" @click="emit('cancelado')">Cancelar</button>
     </div>
   </form>
 </template>

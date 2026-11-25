@@ -383,6 +383,82 @@ a {
   }
 }
 
+/* Trilha (breadcrumb) das pranchas: 13 px, links verdes separados por barras. */
+.trilha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--cor-texto-3);
+  font-size: 13px;
+}
+
+.trilha a {
+  color: var(--cor-destaque-forte);
+  text-decoration: none;
+}
+
+.trilha a:hover {
+  text-decoration: underline;
+}
+
+.trilha [aria-current] {
+  color: var(--cor-texto);
+}
+
+/*
+ * Formulários de cadastro (prancha "Novo associado"): um cartão branco com seções separadas por
+ * divisórias, títulos de 16 px, campos de 42 px em duas colunas e ações no rodapé.
+ */
+.formulario-modulo {
+  padding: 20px 22px 18px;
+}
+
+.formulario-modulo h2,
+.formulario-modulo legend {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.formulario-modulo h2:not(:first-child) {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--cor-divisoria);
+}
+
+.formulario-modulo input[type='text'],
+.formulario-modulo input[type='email'],
+.formulario-modulo input[type='tel'],
+.formulario-modulo input[type='date'],
+.formulario-modulo select {
+  height: 42px;
+}
+
+.formulario-modulo .acoes--fim {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cor-divisoria);
+}
+
+/* Páginas de formulário: título e subtítulo como o CabecalhoPagina, cartão limitado a 1100 px. */
+.pagina-formulario > h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 40px;
+  letter-spacing: -0.01em;
+}
+
+.pagina-formulario > .subtitulo {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.pagina-formulario > form {
+  max-width: 1100px;
+}
+
 /* Nota de rodapé com ícone de informação (abaixo dos cartões). */
 .nota-rodape {
   display: flex;

@@ -73,7 +73,7 @@ const descricao = computed(() =>
         placeholder="Nome ou identificador (FZD-0001)…"
         @keydown.enter.prevent="buscar"
       />
-      <button type="button" class="secundario" @click="buscar">Buscar fazenda</button>
+      <button type="button" class="botao-contorno" @click="buscar">Buscar fazenda</button>
     </div>
 
     <p v-if="resultados.isPending.value" role="status">Carregando fazendas…</p>
@@ -112,13 +112,13 @@ const descricao = computed(() =>
         class="acoes"
         :aria-label="`Páginas de fazendas`"
       >
-        <button type="button" class="secundario" :disabled="pagina === 0" @click="pagina--">
+        <button type="button" class="botao-contorno" :disabled="pagina === 0" @click="pagina--">
           Anterior
         </button>
         <span>Página {{ pagina + 1 }} de {{ resultados.data.value.totalPaginas }}</span>
         <button
           type="button"
-          class="secundario"
+          class="botao-contorno"
           :disabled="pagina + 1 >= resultados.data.value.totalPaginas"
           @click="pagina++"
         >

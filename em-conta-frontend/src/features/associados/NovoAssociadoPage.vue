@@ -108,8 +108,8 @@ function salvar() {
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
-    <nav aria-label="Trilha" class="ajuda trilha">
+  <main class="pagina-modulo pagina-formulario">
+    <nav aria-label="Trilha" class="trilha">
       <RouterLink :to="{ name: 'associados' }">Todos os associados</RouterLink> / Novo associado
     </nav>
     <h1>Novo associado</h1>
@@ -117,7 +117,12 @@ function salvar() {
       Cadastre um cliente PF ou PJ. Campos com <span class="obrigatorio">*</span> são obrigatórios.
     </p>
 
-    <form class="cartao" novalidate :aria-busy="cadastro.isPending.value" @submit.prevent="salvar">
+    <form
+      class="painel formulario-modulo"
+      novalidate
+      :aria-busy="cadastro.isPending.value"
+      @submit.prevent="salvar"
+    >
       <AlertaMensagem v-if="erroGeral" tipo="erro">
         {{ erroGeral }}
         <RouterLink v-if="existenteId" :to="{ name: 'associado', params: { id: existenteId } }">
@@ -206,11 +211,13 @@ function salvar() {
             :erro="erroContato(indice, 'email')"
           />
         </div>
-        <button type="button" class="secundario" @click="removerContato(contato.chave)">
+        <button type="button" class="botao-contorno" @click="removerContato(contato.chave)">
           Remover contato {{ indice + 1 }}
         </button>
       </fieldset>
-      <button type="button" class="secundario" @click="adicionarContato">Adicionar contato</button>
+      <button type="button" class="botao-contorno" @click="adicionarContato">
+        Adicionar contato
+      </button>
 
       <AlertaMensagem tipo="info">
         Endereço, dados pessoais, equipe responsável, usina, situação e datas do cliente ainda não
@@ -219,8 +226,8 @@ function salvar() {
       </AlertaMensagem>
 
       <div class="acoes acoes--fim">
-        <RouterLink class="cancelar" :to="{ name: 'associados' }">Cancelar</RouterLink>
-        <button type="submit" :disabled="cadastro.isPending.value">
+        <RouterLink class="botao-contorno" :to="{ name: 'associados' }">Cancelar</RouterLink>
+        <button type="submit" class="botao-primario" :disabled="cadastro.isPending.value">
           {{ cadastro.isPending.value ? 'Salvando…' : 'Salvar associado' }}
         </button>
       </div>

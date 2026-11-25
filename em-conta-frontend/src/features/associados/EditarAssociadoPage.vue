@@ -87,8 +87,8 @@ async function recarregar() {
 </script>
 
 <template>
-  <main class="pagina pagina--larga">
-    <nav aria-label="Trilha" class="ajuda">
+  <main class="pagina-modulo pagina-formulario">
+    <nav aria-label="Trilha" class="trilha">
       <RouterLink :to="{ name: 'associados' }">Todos os associados</RouterLink> /
       <RouterLink :to="{ name: 'associado', params: { id } }">
         {{ ficha.data.value?.nome ?? 'Associado' }}
@@ -103,7 +103,7 @@ async function recarregar() {
     </AlertaMensagem>
     <form
       v-else-if="ficha.data.value"
-      class="cartao"
+      class="painel formulario-modulo"
       novalidate
       :aria-busy="salvar.isPending.value"
       @submit.prevent="!salvar.isPending.value && salvar.mutate()"
@@ -150,8 +150,10 @@ async function recarregar() {
       </div>
       <p class="ajuda">Contatos e unidades consumidoras são editados na página do associado.</p>
       <div class="acoes acoes--fim">
-        <RouterLink :to="{ name: 'associado', params: { id } }">Cancelar</RouterLink>
-        <button type="submit" :disabled="salvar.isPending.value">
+        <RouterLink class="botao-contorno" :to="{ name: 'associado', params: { id } }"
+          >Cancelar</RouterLink
+        >
+        <button type="submit" class="botao-primario" :disabled="salvar.isPending.value">
           {{ salvar.isPending.value ? 'Salvando…' : 'Salvar alterações' }}
         </button>
       </div>

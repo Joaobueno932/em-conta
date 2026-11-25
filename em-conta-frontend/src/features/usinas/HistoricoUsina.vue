@@ -39,7 +39,9 @@ function valor(campo: string, texto?: string | null) {
   <p v-if="historico.isPending.value" role="status">Carregando histórico…</p>
   <div v-else-if="historico.isError.value">
     <AlertaMensagem tipo="erro">{{ describeApiError(historico.error.value) }}</AlertaMensagem>
-    <button type="button" class="secundario" @click="historico.refetch()">Tentar novamente</button>
+    <button type="button" class="botao-contorno" @click="historico.refetch()">
+      Tentar novamente
+    </button>
   </div>
   <template v-else-if="historico.data.value">
     <p v-if="historico.data.value.totalItens === 0" class="ajuda">Nenhum registro.</p>
@@ -87,13 +89,13 @@ function valor(campo: string, texto?: string | null) {
       class="acoes acoes--fim"
       aria-label="Paginação do histórico"
     >
-      <button type="button" class="secundario" :disabled="pagina === 0" @click="pagina--">
+      <button type="button" class="botao-contorno" :disabled="pagina === 0" @click="pagina--">
         Anterior
       </button>
       <span>Página {{ pagina + 1 }} de {{ historico.data.value.totalPaginas }}</span>
       <button
         type="button"
-        class="secundario"
+        class="botao-contorno"
         :disabled="pagina + 1 >= historico.data.value.totalPaginas"
         @click="pagina++"
       >

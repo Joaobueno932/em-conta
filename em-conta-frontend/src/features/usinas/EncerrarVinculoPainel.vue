@@ -121,7 +121,7 @@ async function recarregar() {
       <button type="submit" class="perigo" :disabled="encerrar.isPending.value">
         {{ encerrar.isPending.value ? 'Encerrando…' : 'Encerrar vínculo' }}
       </button>
-      <button type="button" class="secundario" @click="emit('cancelado')">Cancelar</button>
+      <button type="button" class="botao-contorno" @click="emit('cancelado')">Cancelar</button>
     </div>
   </form>
 </template>

@@ -6,6 +6,7 @@ import { temPermissao, useSessao } from '@/features/auth/auth-api'
 import { AVISO_VINCULO_CADASTRAL, formatarDataNegocio } from '@/features/usinas/usinas-api'
 import { describeApiError } from '@/shared/api/errors'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import SeloSituacao from '@/shared/components/SeloSituacao.vue'
 
 import { useVinculosUsina } from './vinculos-usina'
 
@@ -28,7 +29,7 @@ const { vinculos } = useVinculosUsina(computed(() => props.associadoId))
       Nenhuma UC deste associado tem ou teve vínculo com usina.
     </p>
     <div v-else-if="vinculos.data.value" class="tabela-rolavel">
-      <table>
+      <table class="tabela-dados">
         <thead>
           <tr>
             <th scope="col">Nº UC</th>
@@ -51,9 +52,9 @@ const { vinculos } = useVinculosUsina(computed(() => props.associadoId))
               <span class="ajuda">{{ v.usina.codigo }}</span>
             </td>
             <td>
-              <span class="etiqueta" :class="{ 'etiqueta--vigente': v.vigente }">
+              <SeloSituacao :tom="v.vigente ? 'sucesso' : 'neutro'">
                 {{ v.vigente ? 'Vigente' : 'Encerrado' }}
-              </span>
+              </SeloSituacao>
               <span class="ajuda">
                 desde {{ formatarDataNegocio(v.inicio) }}
                 <template v-if="v.fim"> até {{ formatarDataNegocio(v.fim) }}</template>
@@ -84,8 +85,14 @@ td .ajuda {
   display: block;
 }
 
-.etiqueta--vigente {
-  background: var(--cor-destaque-suave);
-  color: var(--cor-destaque-forte);
+.vinculos h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
 }
 </style>

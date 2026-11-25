@@ -18,14 +18,15 @@ import {
 } from './usinas-api'
 import VincularUcPainel from './VincularUcPainel.vue'
 
-const props = defineProps<{ usinaId: number }>()
+// `vincularAoAbrir`: o botão "Vincular unidade consumidora" do cabeçalho da usina abre o painel.
+const props = defineProps<{ usinaId: number; vincularAoAbrir?: boolean }>()
 
 const http = useHttpClient()
 const { data: sessao } = useSessao()
 
 const situacao = ref<SituacaoVinculo>('VIGENTES')
 const pagina = ref(0)
-const vinculando = ref(false)
+const vinculando = ref(props.vincularAoAbrir === true)
 const encerrando = ref<number | null>(null)
 const mensagem = ref('')
 
@@ -62,6 +63,7 @@ function aoEncerrar() {
     <button
       v-if="podeCriar && !vinculando"
       type="button"
+      class="botao-primario"
       @click="
         () => {
           mensagem = ''
@@ -102,7 +104,9 @@ function aoEncerrar() {
   <p v-if="vinculos.isPending.value" role="status">Carregando vínculos…</p>
   <div v-else-if="vinculos.isError.value">
     <AlertaMensagem tipo="erro">{{ describeApiError(vinculos.error.value) }}</AlertaMensagem>
-    <button type="button" class="secundario" @click="vinculos.refetch()">Tentar novamente</button>
+    <button type="button" class="botao-contorno" @click="vinculos.refetch()">
+      Tentar novamente
+    </button>
   </div>
   <template v-else-if="vinculos.data.value">
     <p v-if="vinculos.data.value.totalItens === 0" class="vazio" role="status">
@@ -200,13 +204,13 @@ function aoEncerrar() {
       class="acoes acoes--fim"
       aria-label="Paginação dos vínculos"
     >
-      <button type="button" class="secundario" :disabled="pagina === 0" @click="pagina--">
+      <button type="button" class="botao-contorno" :disabled="pagina === 0" @click="pagina--">
         Anterior
       </button>
       <span>Página {{ pagina + 1 }} de {{ vinculos.data.value.totalPaginas }}</span>
       <button
         type="button"
-        class="secundario"
+        class="botao-contorno"
         :disabled="pagina + 1 >= vinculos.data.value.totalPaginas"
         @click="pagina++"
       >
