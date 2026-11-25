@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 import {
   abrirMenuConta,
   abrirUsuarioNaLista,
+  botaoConta,
   ADMIN_EMAIL,
   ADMIN_SENHA,
   criarUsuarioAtivo,
@@ -27,7 +28,8 @@ test('login, sessão, rota protegida e logout', async ({ page, context }) => {
 
   await entrar(page, ADMIN_EMAIL, ADMIN_SENHA)
   await expect(page).toHaveURL('/admin/usuarios')
-  await expect(page.getByRole('heading', { name: 'Usuários', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Configurações', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Usuários e permissões' })).toBeVisible()
 
   const cookies = await context.cookies()
   expect(cookies.find((c) => c.name === 'EMCONTA_SESSION')?.httpOnly).toBe(true)
@@ -55,8 +57,10 @@ test('convite, definição de senha, acesso negado e link de uso único', async 
   const { email, page, link } = await criarUsuarioAtivo(browser, admin, 'Pessoa Convidada')
 
   await entrar(page, email, SENHA_PADRAO)
-  await expect(page.getByTestId('usuario-email')).toHaveText(email)
-  await expect(page.getByRole('link', { name: 'Usuários' })).toHaveCount(0)
+  await expect(botaoConta(page)).toContainText('Pessoa Convidada')
+  await page.goto('/configuracoes/conta')
+  await expect(page.getByText(email)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Usuários e permissões' })).toHaveCount(0)
 
   await page.goto('/admin/usuarios')
   await expect(page.getByRole('heading', { name: 'Acesso negado' })).toBeVisible()
@@ -91,7 +95,8 @@ test('recuperação e redefinição de senha pelo e-mail', async ({ browser }) =
   await entrar(page, email, SENHA_PADRAO)
   await expect(page.getByRole('alert')).toHaveText(CREDENCIAIS_INCORRETAS)
   await entrar(page, email, nova)
-  await expect(page.getByTestId('usuario-email')).toHaveText(email)
+  await page.goto('/configuracoes/conta')
+  await expect(page.getByText(email)).toBeVisible()
 })
 
 test('desativação encerra a sessão aberta e a próxima ação leva ao login', async ({ browser }) => {
@@ -99,12 +104,13 @@ test('desativação encerra a sessão aberta e a próxima ação leva ao login',
   const nome = `Pessoa Desativada ${Date.now()}`
   const { email, page } = await criarUsuarioAtivo(browser, admin, nome)
   await entrar(page, email, SENHA_PADRAO)
-  await expect(page.getByTestId('usuario-email')).toHaveText(email)
+  await page.goto('/configuracoes/conta')
+  await expect(page.getByText(email)).toBeVisible()
 
   await admin.goto('/admin/usuarios')
   await abrirUsuarioNaLista(admin, nome)
-  admin.once('dialog', (dialogo) => void dialogo.accept())
   await admin.getByRole('button', { name: 'Desativar' }).click()
+  await admin.getByRole('dialog').getByRole('button', { name: 'Desativar' }).click()
   await expect(admin.getByTestId('situacao')).toHaveText('Desativado')
 
   // A pessoa ainda vê a tela, mas a próxima chamada à API é recusada pelo servidor.

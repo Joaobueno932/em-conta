@@ -11,6 +11,8 @@ import HistoricoGeralPage from '@/features/atendimento/HistoricoGeralPage.vue'
 import RespostasRapidasPage from '@/features/atendimento/RespostasRapidasPage.vue'
 import SetoresEtiquetasPage from '@/features/atendimento/SetoresEtiquetasPage.vue'
 import TriagemPage from '@/features/atendimento/TriagemPage.vue'
+import ConfiguracoesLayout from '@/features/configuracoes/ConfiguracoesLayout.vue'
+import MinhaContaPage from '@/features/configuracoes/MinhaContaPage.vue'
 import AcessoNegadoPage from '@/features/auth/AcessoNegadoPage.vue'
 import FazendaFormPage from '@/features/usinas/FazendaFormPage.vue'
 import FazendasPage from '@/features/usinas/FazendasPage.vue'
@@ -35,19 +37,29 @@ export const routes: RouteRecordRaw[] = [
     component: AreaAutenticadaLayout,
     children: [
       { path: '', name: 'inicio', component: InicioPage },
-      { path: 'conta/senha', name: 'alterar-senha', component: AlterarSenhaPage },
       {
-        path: 'admin/usuarios',
-        name: 'usuarios',
-        component: UsuariosPage,
-        meta: { permissao: 'usuarios:consultar' },
-      },
-      {
-        path: 'admin/usuarios/:id(\\d+)',
-        name: 'usuario',
-        component: UsuarioPage,
-        props: true,
-        meta: { permissao: 'usuarios:consultar' },
+        // Configurações agrupa a conta, a senha e os usuários. Os filhos com caminho absoluto
+        // mantêm as URLs que já existiam (/conta/senha, /admin/usuarios).
+        path: 'configuracoes',
+        component: ConfiguracoesLayout,
+        children: [
+          { path: '', name: 'configuracoes', redirect: { name: 'minha-conta' } },
+          { path: 'conta', name: 'minha-conta', component: MinhaContaPage },
+          { path: '/conta/senha', name: 'alterar-senha', component: AlterarSenhaPage },
+          {
+            path: '/admin/usuarios',
+            name: 'usuarios',
+            component: UsuariosPage,
+            meta: { permissao: 'usuarios:consultar' },
+          },
+          {
+            path: '/admin/usuarios/:id(\\d+)',
+            name: 'usuario',
+            component: UsuarioPage,
+            props: true,
+            meta: { permissao: 'usuarios:consultar' },
+          },
+        ],
       },
       {
         path: 'associados',

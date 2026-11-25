@@ -14,15 +14,17 @@ import { describeApiError } from '@/shared/api/errors'
 import logo from '@/shared/assets/logo-em-conta.png'
 import simbolo from '@/shared/assets/logo-em-conta-simbolo.png'
 import AlertaMensagem from '@/shared/components/AlertaMensagem.vue'
+import AvisosFlutuantes from '@/shared/components/AvisosFlutuantes.vue'
 import IconeTraco, { type NomeIcone } from '@/shared/components/IconeTraco.vue'
 
 import { descartarSessao } from './guards'
 import { useHttpClient } from './injection'
 
 /**
- * Estrutura da área autenticada (frames AT-01 a AT-06): menu lateral com grupos, recolhível, e
- * cabeçalho com a conta. Só aparecem módulos já implementados e permitidos; os itens futuros do
- * protótipo (Funil, Financeiro, O&M, busca global, notificações…) não ganham links nem páginas.
+ * Estrutura da área autenticada (pranchas de 1672 × 1100): menu lateral com grupos, recolhível, e
+ * cabeçalho com a busca e a conta. Só aparecem módulos já implementados e permitidos; os itens
+ * futuros do protótipo (Funil, Financeiro, O&M, Ajuda, notificações…) não ganham links nem páginas.
+ * A busca do cabeçalho procura associados, a única entidade da busca do protótipo que existe hoje.
  */
 const http = useHttpClient()
 const router = useRouter()
@@ -60,18 +62,19 @@ const ITENS: (Item & { grupo: 'principal' | 'plataforma' | 'rodape'; permissao?:
   {
     grupo: 'plataforma',
     nome: 'usinas',
-    rotulo: 'Usinas',
+    // O protótipo chama o módulo de "Geradoras" no menu; as páginas continuam tratando de usinas.
+    rotulo: 'Geradoras',
     icone: 'usina',
     permissao: 'usinas:consultar',
     ativo: (c) => /^\/(usinas|fazendas)/.test(c),
   },
   {
     grupo: 'rodape',
-    nome: 'usuarios',
-    rotulo: 'Usuários',
-    icone: 'usuarios',
-    permissao: 'usuarios:consultar',
-    ativo: (c) => c.startsWith('/admin/usuarios'),
+    nome: 'configuracoes',
+    rotulo: 'Configurações',
+    icone: 'engrenagem',
+    // Minha conta, senha e usuários ficam dentro de Configurações (URLs antigas preservadas).
+    ativo: (c) => /^\/(configuracoes|conta|admin)(\/|$)/.test(c),
   },
 ]
 const doGrupo = (grupo: string) =>
@@ -127,6 +130,14 @@ watch(
   () => fecharConta(),
 )
 
+// Busca do cabeçalho: abre a listagem de associados já filtrada (mesmo filtro da página).
+const podeBuscar = computed(() => pode('associados:consultar'))
+const termoBusca = ref('')
+function buscar() {
+  const busca = termoBusca.value.trim().slice(0, 100)
+  void router.push({ name: 'associados', query: busca ? { busca } : {} })
+}
+
 const saindo = ref(false)
 const erroSaida = ref<string | null>(null)
 
@@ -166,7 +177,7 @@ async function encerrar() {
               "
               :title="recolhido ? i.rotulo : undefined"
             >
-              <IconeTraco :nome="i.icone" :tamanho="20" />
+              <IconeTraco :nome="i.icone" :tamanho="24" :espessura="1.7" />
               <span class="rotulo">{{ i.rotulo }}</span>
               <span
                 v-if="i.nome === 'atendimento' && aguardando"
@@ -191,7 +202,7 @@ async function encerrar() {
                 :aria-current="i.ativo(route.path) ? 'page' : undefined"
                 :title="recolhido ? i.rotulo : undefined"
               >
-                <IconeTraco :nome="i.icone" :tamanho="20" />
+                <IconeTraco :nome="i.icone" :tamanho="24" :espessura="1.7" />
                 <span class="rotulo">{{ i.rotulo }}</span>
               </RouterLink>
             </li>
@@ -206,7 +217,7 @@ async function encerrar() {
               :aria-current="i.ativo(route.path) ? 'page' : undefined"
               :title="recolhido ? i.rotulo : undefined"
             >
-              <IconeTraco :nome="i.icone" :tamanho="20" />
+              <IconeTraco :nome="i.icone" :tamanho="24" :espessura="1.7" />
               <span class="rotulo">{{ i.rotulo }}</span>
             </RouterLink>
           </li>
@@ -247,6 +258,18 @@ async function encerrar() {
           >
             <IconeTraco :nome="recolhido ? 'expandir' : 'recolher'" :tamanho="20" />
           </button>
+          <form v-if="podeBuscar" class="busca-global" role="search" @submit.prevent="buscar">
+            <label for="busca-global" class="visualmente-oculto">Busca rápida de associados</label>
+            <IconeTraco nome="busca" :tamanho="20" />
+            <input
+              id="busca-global"
+              v-model="termoBusca"
+              type="search"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="Buscar associados por nome ou CPF/CNPJ…"
+            />
+          </form>
           <!-- Páginas de área inteira (ex.: Atendimento) levam o título aqui, para liberar altura. -->
           <h1 v-if="route.meta.tituloCabecalho" class="titulo-contexto">
             {{ route.meta.tituloCabecalho }}
@@ -269,6 +292,12 @@ async function encerrar() {
           </button>
           <ul v-if="menuConta" id="menu-conta" class="menu-conta">
             <li>
+              <RouterLink :to="{ name: 'minha-conta' }" class="opcao">
+                <IconeTraco nome="pessoa" />
+                Minha conta
+              </RouterLink>
+            </li>
+            <li>
               <RouterLink :to="{ name: 'alterar-senha' }" class="opcao">
                 <IconeTraco nome="cadeado" />
                 Alterar senha
@@ -287,6 +316,7 @@ async function encerrar() {
       <div class="conteudo">
         <RouterView />
       </div>
+      <AvisosFlutuantes />
     </div>
   </div>
 </template>
@@ -322,7 +352,7 @@ async function encerrar() {
   display: flex;
   align-items: center;
   height: 55px;
-  margin: 39px 0 31px 6px;
+  margin: 39px 0 35px 6px;
 }
 
 .recolhido .marca {
@@ -355,19 +385,19 @@ async function encerrar() {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .grupo--rodape {
   margin-top: auto;
-  padding-top: 16px;
+  padding: 18px 0 20px;
   border-top: 1px solid var(--cor-borda);
 }
 
 .titulo-grupo {
-  margin: 27px 0 12px 13px;
+  margin: 28px 0 13px 13px;
   color: var(--cor-texto-3);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -384,8 +414,8 @@ async function encerrar() {
 .item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 50px;
+  gap: 12px;
+  height: 38px;
   padding: 0 18px;
   border: 1px solid transparent;
   border-radius: var(--raio-controle);
@@ -418,9 +448,22 @@ async function encerrar() {
 }
 
 .contador {
-  font-size: 16px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  margin-right: -6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cor-destaque-suave);
   color: var(--cor-destaque-forte);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.item.ativo .contador {
+  background: var(--cor-superficie);
 }
 
 .recolhido .item {
@@ -440,8 +483,12 @@ async function encerrar() {
 
 .recolhido .contador {
   position: absolute;
-  top: 4px;
-  right: 6px;
+  top: -6px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0 4px;
   font-size: 12px;
 }
 
@@ -478,16 +525,48 @@ async function encerrar() {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  gap: 16px;
   height: 72px;
-  padding: 0 32px 0 27px;
+  padding: 0 32px 0 26px;
   border-bottom: 1px solid var(--cor-borda);
 }
 
 .inicio-topo {
   display: flex;
+  flex: 1;
   align-items: center;
-  gap: 20px;
+  gap: 22px;
   min-width: 0;
+}
+
+/* Busca do cabeçalho: pílula de 406 × 48 px, lupa de 20 px. */
+.busca-global {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 406px;
+  min-width: 0;
+}
+
+.busca-global .icone {
+  position: absolute;
+  left: 26px;
+  color: var(--cor-texto-2);
+  pointer-events: none;
+}
+
+.busca-global input {
+  width: 100%;
+  height: 48px;
+  padding: 0 20px 0 62px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 999px;
+  background: var(--cor-superficie);
+  font-size: 15px;
+}
+
+.busca-global input::placeholder {
+  color: var(--cor-texto-3);
 }
 
 .titulo-contexto {
@@ -504,8 +583,9 @@ button.recolher {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 1px solid var(--cor-borda);
   border-radius: 999px;
@@ -719,6 +799,16 @@ button.botao-conta .icone {
 
   .topo {
     height: 56px;
+  }
+
+  .busca-global input {
+    height: 40px;
+    padding-left: 44px;
+    font-size: 14px;
+  }
+
+  .busca-global .icone {
+    left: 14px;
   }
 
   .curvas {

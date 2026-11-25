@@ -91,7 +91,7 @@ describe('guardas e ciclo de sessão', () => {
     })
     const { router, queryClient } = await montarApp(fetchFn, '/')
 
-    expect(await screen.findByTestId('usuario-email')).toHaveTextContent('ana@x.br')
+    expect(await screen.findByRole('button', { name: /Pessoa ana@x\.br/ })).toBeInTheDocument()
     await fireEvent.click(screen.getByRole('button', { name: /menu da conta/ }))
     await fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
 
@@ -104,9 +104,10 @@ describe('guardas e ciclo de sessão', () => {
     await fireEvent.update(screen.getByLabelText(/^Senha/), 'senha do bruno, longa')
     await fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
-    expect(await screen.findByTestId('usuario-email')).toHaveTextContent('bruno@x.br')
-    expect(screen.queryByText('ana@x.br')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Usuários' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Pessoa bruno@x\.br/ })).toBeInTheDocument()
+    expect(screen.queryByText(/ana@x\.br/)).not.toBeInTheDocument()
+    await router.push('/configuracoes/conta')
+    expect(await screen.findByRole('link', { name: 'Usuários e permissões' })).toBeInTheDocument()
   })
 
   it('não redireciona em ciclo: o login sem sessão permanece no login', async () => {

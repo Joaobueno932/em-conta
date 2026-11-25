@@ -77,17 +77,17 @@ export async function sairDaConta(page: Page) {
  */
 export async function abrirUsuarioNaLista(admin: Page, nome: string) {
   const link = admin.getByRole('link', { name: nome, exact: true })
-  const indicador = admin.getByText(/^Página \d+ de \d+$/)
-  await expect(indicador).toBeVisible()
-  while ((await link.count()) === 0) {
-    const atual = (await indicador.textContent()) ?? ''
-    const [, pagina, total] = atual.match(/Página (\d+) de (\d+)/) ?? []
-    if (pagina === total) break
+  const tabela = admin.getByRole('table')
+  await expect(tabela).toBeVisible()
+  // A paginação só aparece com mais de uma página; "Próxima página" fica desabilitada na última.
+  const proxima = admin.getByRole('button', { name: 'Próxima página' })
+  while ((await link.count()) === 0 && (await proxima.count()) > 0 && (await proxima.isEnabled())) {
+    const primeira = await tabela.locator('tbody tr').first().textContent()
     // A tabela mantém a página anterior até a resposta chegar: espera a nova página carregar.
     const resposta = admin.waitForResponse((r) => r.url().includes('/api/v1/usuarios?') && r.ok())
-    await admin.getByRole('button', { name: 'Próxima' }).click()
+    await proxima.click()
     await resposta
-    await expect(indicador).not.toHaveText(atual)
+    await expect(tabela.locator('tbody tr').first()).not.toHaveText(primeira ?? '')
   }
   await link.click()
 }
@@ -96,6 +96,7 @@ export async function abrirUsuarioNaLista(admin: Page, nome: string) {
 export async function criarUsuarioAtivo(browser: Browser, admin: Page, nome: string) {
   const email = emailUnico('usuario')
   await admin.goto('/admin/usuarios')
+  await admin.getByRole('button', { name: 'Convidar usuário' }).click()
   await admin.getByLabel('Nome').fill(nome)
   await admin.getByLabel('E-mail').fill(email)
   await admin.getByRole('button', { name: 'Enviar convite' }).click()
