@@ -42,8 +42,19 @@ export type NomeIcone =
   | 'tique-duplo'
   | 'exclamacao'
   | 'interrogacao'
+  | 'engrenagem'
+  | 'filtro'
+  | 'mais-circulo'
+  | 'lapis'
+  | 'chave'
+  | 'tabela'
+  | 'reticencias'
+  | 'check-circulo'
+  | 'proibido'
+  | 'imagem'
+  | 'mapa-pino'
 
-defineProps<{ nome: NomeIcone; tamanho?: number }>()
+defineProps<{ nome: NomeIcone; tamanho?: number; espessura?: number }>()
 
 const TRACOS: Record<NomeIcone, string[]> = {
   fechar: ['M6 6l12 12', 'M18 6L6 18'],
@@ -74,13 +85,19 @@ const TRACOS: Record<NomeIcone, string[]> = {
   alerta: ['M12 3.5L2.5 20h19z', 'M12 10v4.5', 'M12 17.3h.01'],
   informacao: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 11v5', 'M12 8h.01'],
   cadeado: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
-  casa: ['M3 10.5L12 3l9 7.5', 'M5 9v11h14V9', 'M10 20v-6h4v6'],
-  fone: ['M4 15v-3a8 8 0 0 1 16 0v3', 'M4 14h3v6H5a1 1 0 0 1-1-1z', 'M20 14h-3v6h2a1 1 0 0 0 1-1z'],
+  // Casa, fone e pessoas ocupam a caixa inteira (como os ícones do menu nas pranchas).
+  casa: [
+    'M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+    'M9 21v-7a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7',
+  ],
+  fone: [
+    'M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3',
+  ],
   pessoas: [
     'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-    'M2 21a7 7 0 0 1 14 0',
-    'M16 3.5a4 4 0 0 1 0 7',
-    'M18 14.5a6 6 0 0 1 4 6.5',
+    'M2 21v-1.5A4.5 4.5 0 0 1 6.5 15h5a4.5 4.5 0 0 1 4.5 4.5V21',
+    'M16 3.1a4 4 0 0 1 0 7.8',
+    'M22 21v-1.5a4.5 4.5 0 0 0-3.4-4.4',
   ],
   usina: [
     'M3 13l2-9h14l2 9z',
@@ -118,6 +135,28 @@ const TRACOS: Record<NomeIcone, string[]> = {
     'M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6',
     'M12 17h.01',
   ],
+  engrenagem: [
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+  ],
+  filtro: ['M4 7h16', 'M7 12h10', 'M10 17h4'],
+  'mais-circulo': ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 8v8', 'M8 12h8'],
+  lapis: ['M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z', 'M13.5 6.5l4 4'],
+  chave: [
+    'M7.5 19.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M10.3 12.7L19 4',
+    'M16 7l2.5 2.5',
+    'M14 9l2 2',
+  ],
+  tabela: ['M4 5h16v14H4z', 'M4 10h16', 'M4 15h16', 'M10 5v14'],
+  reticencias: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
+  'check-circulo': ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M8.5 12.5l2.5 2.5 4.5-5'],
+  proibido: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M5.6 5.6l12.8 12.8'],
+  imagem: ['M4 5h16v14H4z', 'M4 16l5-5 4 4 2-2 5 5', 'M15 9.5h.01'],
+  'mapa-pino': [
+    'M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21z',
+    'M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  ],
 }
 </script>
 
@@ -129,7 +168,7 @@ const TRACOS: Record<NomeIcone, string[]> = {
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    stroke-width="1.8"
+    :stroke-width="espessura ?? 1.8"
     stroke-linecap="round"
     stroke-linejoin="round"
     aria-hidden="true"

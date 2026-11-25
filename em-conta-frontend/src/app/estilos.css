@@ -32,6 +32,15 @@
   /* Selo de planilha XLSX (texto branco a 6,2:1). */
   --cor-planilha: #1d6f42;
   --sombra-menu: 0 12px 32px rgb(30 36 32 / 12%);
+  /* Banners e selos do protótipo (pranchas de 2026-11): informação azul, erro e aviso. */
+  --cor-info-fundo: #eaf1fd;
+  --cor-info: #2f6fd6;
+  --cor-erro-fundo: #fdeceb;
+  --cor-erro-icone: #d93a32;
+  --cor-aviso-fundo: #fdf3e1;
+  --cor-cabecalho-tabela: #f2f4f2;
+  --cor-divisoria: #eef1ef;
+  --sombra-flutuante: 0 8px 24px rgb(30 36 32 / 10%);
   --largura-lateral: 294px;
   --largura-lateral-recolhida: 84px;
   --altura-topo: 73px;
@@ -75,6 +84,313 @@ a {
 /* Páginas da área autenticada com conteúdo largo (listagens, fichas). */
 .pagina--larga {
   max-width: 76rem;
+}
+
+/*
+ * Páginas de módulo (Usinas, Associados, Configurações…), pelas pranchas de 1672 × 1100: conteúdo a
+ * 33 px do menu e 32 px da borda direita, título de 38 px e cartões brancos de 12 px de raio.
+ */
+.pagina-modulo {
+  padding: 22px 32px 32px 33px;
+}
+
+.painel {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+  padding: 18px;
+}
+
+.painel__titulo {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.painel__subtitulo {
+  margin: 2px 0 0;
+  color: var(--cor-texto-2);
+  font-size: 12px;
+}
+
+/* Tabela de listagem: cabeçalho cinza arredondado (12 px) e linhas de 57 px com divisória. */
+.tabela-dados {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tabela-dados thead th {
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  background: var(--cor-cabecalho-tabela);
+  color: var(--cor-texto-2);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.tabela-dados thead th:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.tabela-dados thead th:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.tabela-dados tbody td {
+  height: 56px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--cor-divisoria);
+  font-size: 13px;
+}
+
+.tabela-dados tbody tr:hover td {
+  background: #fafbfa;
+}
+
+.tabela-dados td a {
+  color: var(--cor-texto);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Botão principal das pranchas: gradiente verde (contraste do texto branco ≥ 3:1), 40 px. */
+.botao-primario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--cor-destaque), var(--cor-destaque-forte));
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.botao-primario:hover:not(:disabled) {
+  background: var(--cor-destaque-forte);
+}
+
+/* Botão secundário das pranchas: branco, borda clara, 40 px. */
+.botao-contorno {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.botao-contorno:hover:not(:disabled) {
+  background: var(--cor-superficie-2);
+}
+
+/* Campo de busca com lupa (listagens). */
+.busca-lista {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 480px;
+  min-width: 12rem;
+}
+
+.busca-lista .icone {
+  position: absolute;
+  left: 16px;
+  color: var(--cor-texto-2);
+  pointer-events: none;
+}
+
+.busca-lista input[type='search'] {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px 0 46px;
+  border-color: var(--cor-borda);
+  font-size: 14px;
+}
+
+/* Botão quadrado de 42 px (filtros e ações de ícone ao lado da busca). */
+.botao-quadrado {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--cor-borda);
+  border-radius: 8px;
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+}
+
+.botao-quadrado:hover {
+  background: var(--cor-superficie-2);
+}
+
+/* Barra acima das tabelas: busca à esquerda, botões à direita. */
+.barra-lista {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.barra-lista .busca-lista {
+  flex: 1 1 auto;
+}
+
+/* "Filtros aplicados" com chips removíveis. */
+.filtros-aplicados {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 12px;
+  color: var(--cor-texto-2);
+  font-size: 12px;
+}
+
+.chip-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--cor-destaque-borda);
+  border-radius: 999px;
+  background: var(--cor-destaque-suave);
+  color: var(--cor-destaque-forte);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chip-filtro button {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* Estado vazio das listagens: ícone num círculo verde-claro, título e ação. */
+.estado-vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 56px 16px;
+  text-align: center;
+}
+
+.estado-vazio__icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: var(--cor-destaque-suave);
+  color: var(--cor-destaque);
+}
+
+.estado-vazio--erro .estado-vazio__icone {
+  background: var(--cor-erro-fundo);
+  color: var(--cor-erro-icone);
+}
+
+.estado-vazio strong {
+  font-size: 16px;
+}
+
+.estado-vazio p {
+  margin: 0 0 8px;
+  color: var(--cor-texto-2);
+  font-size: 13px;
+}
+
+/* Linha de esqueleto do carregamento das tabelas. */
+.esqueleto {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #eef1ef, #f6f8f6, #eef1ef);
+  background-size: 200% 100%;
+  animation: esqueleto 1.4s ease-in-out infinite;
+}
+
+@keyframes esqueleto {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* Fichas (Dados cadastrais, Minha conta): linhas rótulo/valor com divisória, rótulo de 198 px. */
+.ficha {
+  margin: 8px 0 0;
+}
+
+.ficha__linha {
+  display: grid;
+  grid-template-columns: 198px minmax(0, 1fr);
+  gap: 0 12px;
+  align-items: center;
+  min-height: 36px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--cor-divisoria);
+}
+
+.ficha__linha:last-child {
+  border-bottom: none;
+}
+
+.ficha__linha dt {
+  color: var(--cor-texto-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.ficha__linha dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+@media (max-width: 40rem) {
+  .ficha__linha {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Nota de rodapé com ícone de informação (abaixo dos cartões). */
+.nota-rodape {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 0;
+  color: var(--cor-texto-2);
+  font-size: 12px;
 }
 
 /* Páginas do Atendimento com frame (histórico geral e detalhe): toda a área abaixo do cabeçalho,
