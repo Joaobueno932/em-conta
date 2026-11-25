@@ -13,6 +13,8 @@ import {
   SENHA_PADRAO,
 } from './apoio'
 
+const CREDENCIAIS_INCORRETAS = 'E-mail ou senha incorretos. Confira os dados e tente novamente.'
+
 // eslint-disable-next-line playwright/no-skipped-test -- sem credenciais do bootstrap, as jornadas não podem rodar
 test.skip(!ADMIN_EMAIL || !ADMIN_SENHA, 'Defina E2E_ADMIN_EMAIL e E2E_ADMIN_SENHA (ver README)')
 
@@ -21,7 +23,7 @@ test('login, sessão, rota protegida e logout', async ({ page, context }) => {
   await expect(page).toHaveURL(/\/entrar\?redirect=(%2F|\/)admin(%2F|\/)usuarios/)
 
   await entrar(page, ADMIN_EMAIL, 'senha errada, porém comprida')
-  await expect(page.getByRole('alert')).toHaveText('E-mail ou senha inválidos.')
+  await expect(page.getByRole('alert')).toHaveText(CREDENCIAIS_INCORRETAS)
 
   await entrar(page, ADMIN_EMAIL, ADMIN_SENHA)
   await expect(page).toHaveURL('/admin/usuarios')
@@ -71,20 +73,23 @@ test('recuperação e redefinição de senha pelo e-mail', async ({ browser }) =
 
   await page.goto('/recuperar-senha')
   await page.getByLabel('E-mail').fill(email)
-  await page.getByRole('button', { name: 'Enviar link' }).click()
-  await expect(page.getByRole('status')).toContainText('Se houver uma conta ativa')
+  await page.getByRole('button', { name: 'Enviar' }).click()
+  await expect(page.getByRole('status')).toContainText(
+    `Se houver uma conta vinculada ao e-mail ${email}`,
+  )
 
   const link = await linkDoEmail(email, '/redefinir-senha')
   await page.goto(link)
   await expect(page).not.toHaveURL(/token=/)
   const nova = 'nova senha escolhida na recuperação'
-  await page.getByLabel('Nova senha', { exact: true }).fill(nova)
-  await page.getByLabel('Repita a nova senha').fill(nova)
-  await page.getByRole('button', { name: 'Salvar nova senha' }).click()
-  await expect(page).toHaveURL(/motivo=senha-redefinida/)
+  await page.getByLabel(/^Nova senha/).fill(nova)
+  await page.getByLabel('Confirmar nova senha').fill(nova)
+  await page.getByRole('button', { name: 'Redefinir senha' }).click()
+  await expect(page.getByRole('heading', { name: 'Senha alterada com sucesso' })).toBeVisible()
+  await page.getByRole('link', { name: 'Voltar ao login' }).click()
 
   await entrar(page, email, SENHA_PADRAO)
-  await expect(page.getByRole('alert')).toHaveText('E-mail ou senha inválidos.')
+  await expect(page.getByRole('alert')).toHaveText(CREDENCIAIS_INCORRETAS)
   await entrar(page, email, nova)
   await expect(page.getByTestId('usuario-email')).toHaveText(email)
 })
@@ -114,5 +119,5 @@ test('desativação encerra a sessão aberta e a próxima ação leva ao login',
   await expect(page.getByText('Sua sessão expirou ou foi encerrada')).toBeVisible()
   await expect(page.getByText(email)).toHaveCount(0)
   await entrar(page, email, SENHA_PADRAO)
-  await expect(page.getByRole('alert')).toHaveText('E-mail ou senha inválidos.')
+  await expect(page.getByRole('alert')).toHaveText(CREDENCIAIS_INCORRETAS)
 })

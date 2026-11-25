@@ -15,6 +15,11 @@ export type NomeIcone =
   | 'voltar'
   | 'seta-acima'
   | 'seta-abaixo'
+  | 'seta-direita'
+  | 'seta-esquerda'
+  | 'olho'
+  | 'olho-cortado'
+  | 'alerta'
   | 'informacao'
   | 'cadeado'
   | 'documento'
@@ -54,6 +59,19 @@ const TRACOS: Record<NomeIcone, string[]> = {
   voltar: ['M19 12H5', 'M11 6l-6 6 6 6'],
   'seta-acima': ['M6 15l6-6 6 6'],
   'seta-abaixo': ['M6 9l6 6 6-6'],
+  'seta-direita': ['M9 6l6 6-6 6'],
+  'seta-esquerda': ['M15 6l-6 6 6 6'],
+  olho: [
+    'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z',
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  ],
+  'olho-cortado': [
+    'M3 3l18 18',
+    'M10.6 5.6a9.6 9.6 0 0 1 1.4-.1c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.9 3.6',
+    'M6.6 6.6C3.9 8.3 2.5 12 2.5 12s3.5 6.5 9.5 6.5a9 9 0 0 0 4.5-1.2',
+    'M9.9 9.9a3 3 0 0 0 4.2 4.2',
+  ],
+  alerta: ['M12 3.5L2.5 20h19z', 'M12 10v4.5', 'M12 17.3h.01'],
   informacao: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 11v5', 'M12 8h.01'],
   cadeado: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
   casa: ['M3 10.5L12 3l9 7.5', 'M5 9v11h14V9', 'M10 20v-6h4v6'],

@@ -194,9 +194,9 @@ test('sessão encerrada durante o cadastro leva ao login', async ({ browser }) =
 
   await outraAba.goto('/')
   await sairDaConta(outraAba)
-  await expect(outraAba.getByRole('heading', { name: 'Entrar no Em Conta' })).toBeVisible()
+  await expect(outraAba.getByRole('heading', { name: 'Entrar' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Salvar associado' }).click()
   await expect(page).toHaveURL(/\/entrar\?/)
-  await expect(page.getByRole('heading', { name: 'Entrar no Em Conta' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
 })

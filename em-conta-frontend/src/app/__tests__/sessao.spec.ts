@@ -41,7 +41,7 @@ describe('guardas e ciclo de sessão', () => {
 
     expect(router.currentRoute.value.name).toBe('entrar')
     expect(router.currentRoute.value.query.redirect).toBe('/admin/usuarios')
-    expect(await screen.findByRole('heading', { name: 'Entrar no Em Conta' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Usuários' })).not.toBeInTheDocument()
   })
 
@@ -100,8 +100,8 @@ describe('guardas e ciclo de sessão', () => {
     expect(queryClient.getQueryData(chaveSessao)).toBeNull()
     expect(screen.queryByText('ana@x.br')).not.toBeInTheDocument()
 
-    await fireEvent.update(screen.getByLabelText('E-mail'), 'bruno@x.br')
-    await fireEvent.update(screen.getByLabelText('Senha'), 'senha do bruno, longa')
+    await fireEvent.update(screen.getByLabelText(/^E-mail/), 'bruno@x.br')
+    await fireEvent.update(screen.getByLabelText(/^Senha/), 'senha do bruno, longa')
     await fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
     expect(await screen.findByTestId('usuario-email')).toHaveTextContent('bruno@x.br')

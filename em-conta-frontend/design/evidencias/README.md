@@ -3,6 +3,9 @@
 > Auditoria completa do Atendimento (checklist, inventário do protótipo, capturas e comparações):
 > [auditoria-atendimento/](auditoria-atendimento/README.md).
 
+> Telas de sessão (Entrar, Esqueceu sua senha?, Criar nova senha) comparadas com as pranchas:
+> [sessao/](sessao/README.md).
+
 > Balão do cliente destacado do fundo branco da conversa: [balao-cliente/](balao-cliente/README.md).
 
 > Indicadores de situação nas mensagens enviadas: [indicadores-situacao/](indicadores-situacao/README.md).

@@ -16,7 +16,7 @@ export function emailUnico(prefixo: string) {
 
 export async function entrar(page: Page, email: string, senha: string) {
   await page.getByLabel('E-mail').fill(email)
-  await page.getByLabel('Senha', { exact: true }).fill(senha)
+  await page.getByLabel(/^Senha/).fill(senha)
   await page.getByRole('button', { name: 'Entrar' }).click()
 }
 
@@ -106,9 +106,11 @@ export async function criarUsuarioAtivo(browser: Browser, admin: Page, nome: str
   const page = await contexto.newPage()
   await page.goto(link)
   await expect(page.getByText(`Olá, ${nome}.`)).toBeVisible()
-  await page.getByLabel('Nova senha', { exact: true }).fill(SENHA_PADRAO)
-  await page.getByLabel('Repita a nova senha').fill(SENHA_PADRAO)
+  await page.getByLabel(/^Nova senha/).fill(SENHA_PADRAO)
+  await page.getByLabel('Confirmar nova senha').fill(SENHA_PADRAO)
   await page.getByRole('button', { name: 'Ativar acesso' }).click()
-  await expect(page).toHaveURL(/\/entrar\?motivo=convite-aceito/)
+  await expect(page.getByRole('heading', { name: 'Acesso ativado' })).toBeVisible()
+  await page.getByRole('link', { name: 'Ir para o login' }).click()
+  await expect(page).toHaveURL('/entrar')
   return { email, page, link }
 }

@@ -4,6 +4,8 @@ import { computed } from 'vue'
 /**
  * Campo de texto com rótulo, ajuda e erro ligados ao input (`aria-describedby`, `aria-invalid`).
  * Não aplica máscara durante a digitação: colar com ou sem pontuação funciona igual.
+ * `invalido` marca o campo sem mensagem própria; `descritoPor` liga uma mensagem de fora do campo
+ * (ex.: "E-mail ou senha incorretos", que vale para os dois campos do login).
  */
 const props = withDefaults(
   defineProps<{
@@ -13,7 +15,9 @@ const props = withDefaults(
     obrigatorio?: boolean
     somenteLeitura?: boolean
     maximo?: number
-    erro?: string
+    erro?: string | null
+    invalido?: boolean
+    descritoPor?: string
     ajuda?: string
     autocomplete?: string
   }>(),
@@ -25,7 +29,11 @@ defineEmits<{ blur: [] }>()
 
 const descricao = computed(
   () =>
-    [props.erro ? `${props.id}-erro` : '', props.ajuda ? `${props.id}-ajuda` : '']
+    [
+      props.erro ? `${props.id}-erro` : '',
+      props.ajuda ? `${props.id}-ajuda` : '',
+      props.descritoPor ?? '',
+    ]
       .filter(Boolean)
       .join(' ') || undefined,
 )
@@ -44,7 +52,7 @@ const descricao = computed(
       :required="obrigatorio"
       :readonly="somenteLeitura"
       :aria-required="obrigatorio || undefined"
-      :aria-invalid="erro ? 'true' : undefined"
+      :aria-invalid="erro || invalido ? 'true' : undefined"
       :aria-describedby="descricao"
       :autocomplete="autocomplete"
       @blur="$emit('blur')"

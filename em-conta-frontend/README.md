@@ -170,6 +170,24 @@ stores porque nada precisou disso. Regras financeiras ficam no backend.
   (`#token=`) e apagado da barra de endereço na abertura da página; `Referrer-Policy: no-referrer`
   vale no HTML e no Nginx.
 
+### Telas de sessão
+
+Entrar, Esqueceu sua senha? e Criar nova senha (também usada no convite) seguem as pranchas
+"Sessão" do protótipo (quadros de 1672 × 1100) e compartilham `features/auth/LayoutSessao.vue`:
+fundo com curvas, cartão de 440 px com logo, divisória e título. Evidências e comparação com as
+pranchas: [`design/evidencias/sessao/`](design/evidencias/sessao/README.md).
+
+- Os campos obrigatórios são conferidos no envio: cada campo vazio recebe a própria mensagem e um
+  resumo aparece acima do botão (`role="alert"`), ligado aos campos por `aria-describedby`. O foco
+  vai para o primeiro campo com problema.
+- Credenciais recusadas marcam os dois campos com a mesma mensagem genérica; o servidor não diz qual
+  campo está errado nem se o e-mail existe.
+- A recuperação mostra a mesma confirmação ("Verifique seu e-mail") para qualquer endereço aceito.
+- A nova senha mostra os requisitos da política vigente (`politica-senha.ts`), aponta senhas
+  diferentes e termina numa tela de sucesso com o caminho para o login. Link inválido, expirado ou
+  já usado leva a "Link expirado", com o caminho para pedir outro.
+- Quando o título muda (envio concluído, link expirado, sucesso), o foco vai para ele.
+
 ## Cliente HTTP e sessão
 
 - URLs sempre relativas (`/api/...`, mesma origem), com `credentials: 'same-origin'`. O cookie de
